@@ -1,0 +1,179 @@
+kagglehub
+
+# ========================
+# Core / Math / Data
+# ========================
+numpy
+pandas
+scipy
+sympy
+numexpr
+bottleneck
+
+# ========================
+# Deep Learning (CPU)
+# ========================
+torch
+torchvision
+torchaudio
+
+# ========================
+# Computer Vision
+# ========================
+opencv-python
+opencv-contrib-python
+Pillow
+imageio
+imageio-ffmpeg
+scikit-image
+albumentations
+
+# ========================
+# Object Detection / ML Utils
+# ========================
+ultralytics
+timm
+einops
+
+# ========================
+# Visualization
+# ========================
+matplotlib
+seaborn
+plotly
+bokeh
+
+# ========================
+# Machine Learning (classical)
+# ========================
+scikit-learn
+xgboost
+lightgbm
+
+# ========================
+# Reinforcement Learning
+# ========================
+gym
+gymnasium
+stable-baselines3
+
+# ========================
+# Data Handling / Formats
+# ========================
+h5py
+pyyaml
+jsonschema
+msgpack
+orjson
+
+# ========================
+# File / System Utilities
+# ========================
+tqdm
+joblib
+psutil
+python-dotenv
+click
+
+# ========================
+# Networking / APIs
+# ========================
+requests
+httpx
+aiohttp
+websockets
+
+# ========================
+# FastAPI Backend (your stack)
+# ========================
+fastapi
+uvicorn
+pydantic
+starlette
+
+# ========================
+# Databases
+# ========================
+sqlalchemy
+sqlite-utils
+aiosqlite
+redis
+
+# ========================
+# Async / Concurrency
+# ========================
+anyio
+async-timeout
+
+# ========================
+# Logging / Debugging
+# ========================
+loguru
+rich
+icecream
+
+# ========================
+# Testing
+# ========================
+pytest
+pytest-asyncio
+hypothesis
+
+# ========================
+# CLI / Dev Tools
+# ========================
+typer
+argparse
+colorama
+
+# ========================
+# Config / Serialization
+# ========================
+toml
+configparser
+
+# ========================
+# Geometry / Robotics Math
+# ========================
+shapely
+networkx
+
+# ========================
+# Path Planning / Graphs
+# ========================
+heapdict
+
+# ========================
+# Time / Scheduling
+# ========================
+schedule
+
+# ========================
+# Compression / IO
+# ========================
+lz4
+zstandard
+
+# ========================
+# Security / Auth
+# ========================
+bcrypt
+passlib
+
+# ========================
+# Misc Helpful
+# ========================
+six
+packaging
+python-dateutil
+pytz
+
+# ========================
+# Optional: Simulation (heavy)
+# ========================
+# carla
+
+# ========================
+# Kaggle
+# ========================
+kaggle
