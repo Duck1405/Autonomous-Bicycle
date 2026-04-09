@@ -1,2 +1,8 @@
 .venv
-bdd100k-models
+.bdd100k-models
+/bdd100k-models
+100k
+bdd100k_drivable_maps
+bdd100k_drivable_maps.zip
+bdd100k_images_100k.zip
+bdd100k_labels.zip
