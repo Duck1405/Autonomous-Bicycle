@@ -1,7 +1,10 @@
+from __future__ import annotations
+
 import argparse
 import json
 import math
 import os
+import sys
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterable
@@ -12,6 +15,11 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torch.utils.data import DataLoader, Dataset
+
+try:
+    from tqdm.auto import tqdm
+except ImportError:
+    tqdm = None
 
 
 DEFAULT_BDD100K_CATEGORIES = [
@@ -57,7 +65,7 @@ def default_data_root() -> Path:
     sm_training = os.environ.get("SM_CHANNEL_TRAINING")
     if sm_training:
         return Path(sm_training)
-    return Path("/Users/amannindra/Projects/Auto")
+    return Path(__file__).resolve().parent
 
 
 def conv3x3(
@@ -692,6 +700,32 @@ def metrics_from_confusion_matrix(confusion: np.ndarray) -> dict[str, float]:
     }
 
 
+def progress_write(message: str, show_progress: bool) -> None:
+    if show_progress and tqdm is not None:
+        tqdm.write(message)
+    else:
+        print(message)
+
+
+def build_progress_desc(split_name: str, epoch_index: int, total_epochs: int) -> str:
+    return f"{split_name.capitalize()} {epoch_index}/{total_epochs}"
+
+
+def format_metric_line(split_name: str, metrics: dict[str, float]) -> str:
+    return (
+        f"{split_name:<5} "
+        f"loss={metrics['loss']:.4f} "
+        f"acc={metrics['accuracy']:.4f} "
+        f"precision_w={metrics['precision_weighted']:.4f} "
+        f"recall_w={metrics['recall_weighted']:.4f} "
+        f"f1_w={metrics['f1_weighted']:.4f} "
+        f"precision_macro={metrics['precision_macro']:.4f} "
+        f"recall_macro={metrics['recall_macro']:.4f} "
+        f"f1_macro={metrics['f1_macro']:.4f} "
+        f"miou={metrics['mean_iou']:.4f}"
+    )
+
+
 def run_epoch(
     model: nn.Module,
     dataloader: DataLoader,
@@ -699,6 +733,10 @@ def run_epoch(
     device: torch.device,
     num_classes: int,
     ignore_index: int,
+    epoch_index: int,
+    total_epochs: int,
+    split_name: str,
+    show_progress: bool,
     optimizer: torch.optim.Optimizer | None = None,
 ) -> dict[str, float]:
     is_training = optimizer is not None
@@ -707,8 +745,22 @@ def run_epoch(
     total_loss = 0.0
     total_batches = 0
     confusion = np.zeros((num_classes, num_classes), dtype=np.int64)
+    progress_bar = None
+    iterable: Iterable[tuple[torch.Tensor, torch.Tensor]] = dataloader
 
-    for images, targets in dataloader:
+    if show_progress and tqdm is not None:
+        progress_bar = tqdm(
+            dataloader,
+            desc=build_progress_desc(split_name, epoch_index, total_epochs),
+            total=len(dataloader),
+            unit="batch",
+            leave=False,
+            dynamic_ncols=True,
+            file=sys.stdout,
+        )
+        iterable = progress_bar
+
+    for images, targets in iterable:
         images = images.to(device, non_blocking=device.type == "cuda")
         targets = targets.to(device, non_blocking=device.type == "cuda")
 
@@ -728,8 +780,21 @@ def run_epoch(
         total_batches += 1
         confusion += build_confusion_matrix(predictions, targets, num_classes, ignore_index)
 
+        if progress_bar is not None:
+            running_metrics = metrics_from_confusion_matrix(confusion)
+            progress_bar.set_postfix(
+                loss=f"{total_loss / total_batches:.4f}",
+                acc=f"{running_metrics['accuracy']:.4f}",
+                f1=f"{running_metrics['f1_weighted']:.4f}",
+                miou=f"{running_metrics['mean_iou']:.4f}",
+            )
+
     metrics = metrics_from_confusion_matrix(confusion)
     metrics["loss"] = total_loss / max(total_batches, 1)
+
+    if progress_bar is not None:
+        progress_bar.close()
+
     return metrics
 
 
@@ -737,7 +802,8 @@ def save_model(model: nn.Module, model_dir: str | Path, save_file: str) -> Path:
     model_dir = Path(model_dir)
     model_dir.mkdir(parents=True, exist_ok=True)
     save_path = model_dir / save_file
-    torch.save(model.state_dict(), save_path)
+    model_to_save = model.module if isinstance(model, nn.DataParallel) else model
+    torch.save(model_to_save.state_dict(), save_path)
     return save_path
 
 
@@ -767,6 +833,7 @@ def fit(
     model_dir: str | Path,
     save_file: str,
     device: str | torch.device = "cpu",
+    show_progress: bool = True,
 ) -> list[dict]:
     device = torch.device(device)
     model.to(device)
@@ -774,8 +841,34 @@ def fit(
     metrics_history: list[dict] = []
     best_val_f1 = -1.0
     metrics_path = Path(output_dir) / "metrics_history.json"
+    epoch_progress = None
 
-    for epoch in range(config.epochs):
+    if show_progress and tqdm is not None:
+        epoch_progress = tqdm(
+            range(config.epochs),
+            desc="Epochs",
+            total=config.epochs,
+            unit="epoch",
+            leave=True,
+            dynamic_ncols=True,
+            file=sys.stdout,
+        )
+        epoch_iterable: Iterable[int] = epoch_progress
+    else:
+        epoch_iterable = range(config.epochs)
+
+    progress_write(
+        (
+            f"Starting training: epochs={config.epochs} "
+            f"train_batches_per_epoch={len(train_loader)} "
+            f"val_batches_per_epoch={len(val_loader)} "
+            f"planned_train_steps={config.epochs * len(train_loader)}"
+        ),
+        show_progress=show_progress,
+    )
+
+    for epoch in epoch_iterable:
+        epoch_index = epoch + 1
         current_lr = poly_learning_rate(
             base_lr=config.base_lr,
             current_iter=min(global_step, config.max_iters),
@@ -792,6 +885,10 @@ def fit(
             device=device,
             num_classes=config.num_classes,
             ignore_index=config.ignore_index,
+            epoch_index=epoch_index,
+            total_epochs=config.epochs,
+            split_name="train",
+            show_progress=show_progress,
             optimizer=optimizer,
         )
         val_metrics = run_epoch(
@@ -801,13 +898,17 @@ def fit(
             device=device,
             num_classes=config.num_classes,
             ignore_index=config.ignore_index,
+            epoch_index=epoch_index,
+            total_epochs=config.epochs,
+            split_name="val",
+            show_progress=show_progress,
             optimizer=None,
         )
 
         global_step += len(train_loader)
 
         record = {
-            "epoch": epoch + 1,
+            "epoch": epoch_index,
             "lr": current_lr,
             "train": train_metrics,
             "val": val_metrics,
@@ -815,24 +916,31 @@ def fit(
         metrics_history.append(record)
         append_metrics(metrics_path, record)
 
-        print(
-            f"epoch={epoch + 1:03d} "
-            f"train_loss={train_metrics['loss']:.4f} "
-            f"train_acc={train_metrics['accuracy']:.4f} "
-            f"train_f1={train_metrics['f1_weighted']:.4f} "
-            f"val_loss={val_metrics['loss']:.4f} "
-            f"val_acc={val_metrics['accuracy']:.4f} "
-            f"val_f1={val_metrics['f1_weighted']:.4f} "
-            f"val_miou={val_metrics['mean_iou']:.4f}"
+        progress_write(
+            f"Epoch {epoch_index:03d}/{config.epochs:03d} lr={current_lr:.6f}",
+            show_progress=show_progress,
         )
+        progress_write(format_metric_line("train", train_metrics), show_progress=show_progress)
+        progress_write(format_metric_line("val", val_metrics), show_progress=show_progress)
+
+        if epoch_progress is not None:
+            epoch_progress.set_postfix(
+                lr=f"{current_lr:.6f}",
+                train_loss=f"{train_metrics['loss']:.4f}",
+                val_f1=f"{val_metrics['f1_weighted']:.4f}",
+                val_miou=f"{val_metrics['mean_iou']:.4f}",
+            )
 
         if val_metrics["f1_weighted"] > best_val_f1:
             best_val_f1 = val_metrics["f1_weighted"]
             best_path = save_model(model, model_dir, f"best_{save_file}")
-            print(f"Saved best checkpoint to {best_path}")
+            progress_write(f"Saved best checkpoint to {best_path}", show_progress=show_progress)
 
     final_path = save_model(model, model_dir, save_file)
-    print(f"Saved final checkpoint to {final_path}")
+    if epoch_progress is not None:
+        epoch_progress.close()
+
+    progress_write(f"Saved final checkpoint to {final_path}", show_progress=show_progress)
     return metrics_history
 
 
@@ -947,11 +1055,11 @@ def create_argparser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--json-root",
         type=str,
-        default=str(data_root / "100k_json"),
+        default=str(data_root / "100k"),
         help="Root folder that contains split subfolders like train/, val/, and test/ for JSON annotations.",
     )
     parser.add_argument("--train-split", type=str, default="train", help="Dataset split name for training.")
-    parser.add_argument("--test-split", type=str, default="test", help="Dataset split name for evaluation/testing.")
+    parser.add_argument("--test-split", type=str, default="val", help="Dataset split name for evaluation/testing.")
     parser.add_argument("--image-height", type=int, default=513, help="Resized training/eval image height.")
     parser.add_argument("--image-width", type=int, default=513, help="Resized training/eval image width.")
     parser.add_argument("--epochs", type=int, default=5, help="Number of full training epochs.")
@@ -1014,6 +1122,12 @@ def create_argparser() -> argparse.ArgumentParser:
         default=True,
         help="Run the training loop after building the dataloaders.",
     )
+    parser.add_argument(
+        "--progress",
+        type=str2bool,
+        default=True,
+        help="Show tqdm progress bars during training and evaluation.",
+    )
     return parser
 
 
@@ -1063,8 +1177,17 @@ def main() -> None:
     train_loader, test_loader = build_dataloaders(args, class_to_idx, device)
     print(f"Train samples: {len(train_loader.dataset)}")
     print(f"Test samples:  {len(test_loader.dataset)}")
+    print(f"Train batches: {len(train_loader)}")
+    print(f"Test batches:  {len(test_loader)}")
 
-    model = build_model(config).to(device)
+    model = build_model(config)
+    if device.type == "cuda":
+        visible_gpus = torch.cuda.device_count()
+        print(f"CUDA devices visible: {visible_gpus}")
+        if visible_gpus > 1:
+            model = nn.DataParallel(model)
+            print(f"Enabled DataParallel across {visible_gpus} GPUs")
+    model = model.to(device)
     print(f"Model classes: {config.num_classes}")
 
     if args.smoke_test or not args.train:
@@ -1099,6 +1222,7 @@ def main() -> None:
         model_dir=args.model_dir,
         save_file=args.save_file,
         device=device,
+        show_progress=args.progress,
     )
 
 
