@@ -1,0 +1,23 @@
+# Core PyTorch stack for this project.
+# macOS:
+#   pip install -r requirements.txt
+# Linux/Windows with NVIDIA CUDA 12.8:
+#   pip install --index-url https://download.pytorch.org/whl/cu128 torch==2.8.0 torchvision==0.23.0
+#   pip install -r requirements.txt --no-deps
+
+# torch==2.8.0
+# torchvision==0.23.0
+
+numpy==2.2.6
+pandas==2.2.3
+Pillow==11.2.1
+opencv-python-headless==4.12.0.88
+
+timm==1.0.19
+psutil==7.0.0
+tqdm==4.67.1
+scikit-learn==1.7.1
+matplotlib
+seaborn
+pillow
+requests

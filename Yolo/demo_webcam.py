@@ -37,7 +37,31 @@ def make_parser():
     parser.add_argument('--project', default='runs/webcam', help='save results to project/name')
     parser.add_argument('--name', default='exp', help='save results to project/name')
     parser.add_argument('--exist-ok', action='store_true', help='existing project/name ok, do not increment')
-    parser.add_argument('--save-video', action='store_true', help='save annotated webcam video')
+    parser.add_argument(
+        '--record',
+        '--save-video',
+        dest='save_video',
+        action='store_true',
+        help='record annotated webcam video',
+    )
+    parser.add_argument(
+        '--record-path',
+        type=str,
+        default='',
+        help='optional output video path; defaults to project/name/webcam.mp4 when recording',
+    )
+    parser.add_argument(
+        '--record-fps',
+        type=float,
+        default=0.0,
+        help='output video FPS; defaults to camera FPS, or 30 if unavailable',
+    )
+    parser.add_argument(
+        '--record-codec',
+        type=str,
+        default='mp4v',
+        help='fourcc codec for recorded video, e.g. mp4v or XVID',
+    )
     parser.add_argument('--view-width', type=int, default=1280, help='capture/display width')
     parser.add_argument('--view-height', type=int, default=720, help='capture/display height')
     return parser
@@ -56,6 +80,20 @@ def preprocess_frame(frame, img_size, stride):
     img = img[:, :, ::-1].transpose(2, 0, 1)
     img = torch.from_numpy(img.copy())
     return img, frame
+
+
+def resolve_recording_params(opt, cap, save_dir):
+    output_path = Path(opt.record_path) if opt.record_path else save_dir / 'webcam.mp4'
+    fps = opt.record_fps if opt.record_fps > 0 else cap.get(cv2.CAP_PROP_FPS)
+    if fps <= 0:
+        fps = 30.0
+
+    codec = opt.record_codec.strip() or 'mp4v'
+    if len(codec) != 4:
+        raise ValueError(f'--record-codec must be exactly 4 characters, got: {codec!r}')
+
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    return output_path, fps, codec
 
 
 def main(opt):
@@ -85,17 +123,9 @@ def main(opt):
         model(torch.zeros(1, 3, opt.img_size, opt.img_size).to(device).type_as(next(model.parameters())))
 
     video_writer = None
+    output_path = None
     if opt.save_video:
-        output_path = str(save_dir / 'webcam.mp4')
-        fps = cap.get(cv2.CAP_PROP_FPS)
-        if fps <= 0:
-            fps = 30
-        video_writer = cv2.VideoWriter(
-            output_path,
-            cv2.VideoWriter_fourcc(*'mp4v'),
-            fps,
-            (opt.view_width, opt.view_height),
-        )
+        output_path, output_fps, output_codec = resolve_recording_params(opt, cap, save_dir)
 
     inf_time = AverageMeter()
     nms_time = AverageMeter()
@@ -170,6 +200,18 @@ def main(opt):
                 cv2.LINE_AA,
             )
 
+            if opt.save_video and video_writer is None:
+                frame_height, frame_width = im0.shape[:2]
+                video_writer = cv2.VideoWriter(
+                    str(output_path),
+                    cv2.VideoWriter_fourcc(*output_codec),
+                    output_fps,
+                    (frame_width, frame_height),
+                )
+                if not video_writer.isOpened():
+                    raise RuntimeError(f'Unable to open video writer for: {output_path}')
+                print(f'Recording webcam video to: {output_path}')
+
             cv2.imshow(window_name, im0)
             if video_writer is not None:
                 video_writer.write(im0)
@@ -181,7 +223,7 @@ def main(opt):
     cap.release()
     if video_writer is not None:
         video_writer.release()
-        print(f'Saved webcam video to: {save_dir / "webcam.mp4"}')
+        print(f'Saved webcam video to: {output_path}')
     cv2.destroyAllWindows()
     print('inf : (%.4fs/frame)   nms : (%.4fs/frame)   waste : (%.4fs/frame)' % (inf_time.avg, nms_time.avg, waste_time.avg))
 

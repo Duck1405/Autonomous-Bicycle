@@ -46,7 +46,7 @@ def detect():
     nms_time = AverageMeter()
 
     # Load model
-    stride =32
+    stride = 32
     device = select_device(opt.device)
     model  = torch.jit.load(weights, map_location=device)
     half = device.type != 'cpu'  # half precision only supported on CUDA
@@ -74,7 +74,7 @@ def detect():
 
         # Inference
         t1 = time_synchronized()
-        [pred,anchor_grid],seg,ll= model(img)
+        [pred,anchor_grid],seg,ll = model(img) # model stuff
         t2 = time_synchronized()
 
         # waste time: the incompatibility of  torch.jit.trace causes extra time consumption in demo version 
