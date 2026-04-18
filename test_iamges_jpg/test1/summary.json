@@ -1,0 +1,554 @@
+[
+  {
+    "image": "test_images_jpg/IMG_5068.jpg",
+    "overlay": "test_iamges_jpg/test1/overlays/IMG_5068_overlay.png",
+    "mask": "test_iamges_jpg/test1/masks/IMG_5068_mask.png",
+    "color_mask": "test_iamges_jpg/test1/masks_color/IMG_5068_mask_color.png",
+    "classes": {
+      "background": {
+        "class_index": 0,
+        "pixel_count": 23753406,
+        "pixel_ratio": 0.9707071554111841
+      },
+      "area/alternative": {
+        "class_index": 1,
+        "pixel_count": 0,
+        "pixel_ratio": 0.0
+      },
+      "area/drivable": {
+        "class_index": 2,
+        "pixel_count": 716802,
+        "pixel_ratio": 0.029292844588815918
+      }
+    }
+  },
+  {
+    "image": "test_images_jpg/IMG_5069.jpg",
+    "overlay": "test_iamges_jpg/test1/overlays/IMG_5069_overlay.png",
+    "mask": "test_iamges_jpg/test1/masks/IMG_5069_mask.png",
+    "color_mask": "test_iamges_jpg/test1/masks_color/IMG_5069_mask_color.png",
+    "classes": {
+      "background": {
+        "class_index": 0,
+        "pixel_count": 21566904,
+        "pixel_ratio": 0.8813535218008772
+      },
+      "area/alternative": {
+        "class_index": 1,
+        "pixel_count": 0,
+        "pixel_ratio": 0.0
+      },
+      "area/drivable": {
+        "class_index": 2,
+        "pixel_count": 2903304,
+        "pixel_ratio": 0.11864647819912279
+      }
+    }
+  },
+  {
+    "image": "test_images_jpg/IMG_5070.jpg",
+    "overlay": "test_iamges_jpg/test1/overlays/IMG_5070_overlay.png",
+    "mask": "test_iamges_jpg/test1/masks/IMG_5070_mask.png",
+    "color_mask": "test_iamges_jpg/test1/masks_color/IMG_5070_mask_color.png",
+    "classes": {
+      "background": {
+        "class_index": 0,
+        "pixel_count": 21614092,
+        "pixel_ratio": 0.8832819075342555
+      },
+      "area/alternative": {
+        "class_index": 1,
+        "pixel_count": 0,
+        "pixel_ratio": 0.0
+      },
+      "area/drivable": {
+        "class_index": 2,
+        "pixel_count": 2856116,
+        "pixel_ratio": 0.11671809246574447
+      }
+    }
+  },
+  {
+    "image": "test_images_jpg/IMG_5071.jpg",
+    "overlay": "test_iamges_jpg/test1/overlays/IMG_5071_overlay.png",
+    "mask": "test_iamges_jpg/test1/masks/IMG_5071_mask.png",
+    "color_mask": "test_iamges_jpg/test1/masks_color/IMG_5071_mask_color.png",
+    "classes": {
+      "background": {
+        "class_index": 0,
+        "pixel_count": 17387105,
+        "pixel_ratio": 0.7105417738991021
+      },
+      "area/alternative": {
+        "class_index": 1,
+        "pixel_count": 0,
+        "pixel_ratio": 0.0
+      },
+      "area/drivable": {
+        "class_index": 2,
+        "pixel_count": 7083103,
+        "pixel_ratio": 0.2894582261008979
+      }
+    }
+  },
+  {
+    "image": "test_images_jpg/IMG_5072.jpg",
+    "overlay": "test_iamges_jpg/test1/overlays/IMG_5072_overlay.png",
+    "mask": "test_iamges_jpg/test1/masks/IMG_5072_mask.png",
+    "color_mask": "test_iamges_jpg/test1/masks_color/IMG_5072_mask_color.png",
+    "classes": {
+      "background": {
+        "class_index": 0,
+        "pixel_count": 20997814,
+        "pixel_ratio": 0.8580970787007614
+      },
+      "area/alternative": {
+        "class_index": 1,
+        "pixel_count": 0,
+        "pixel_ratio": 0.0
+      },
+      "area/drivable": {
+        "class_index": 2,
+        "pixel_count": 3472394,
+        "pixel_ratio": 0.14190292129923865
+      }
+    }
+  },
+  {
+    "image": "test_images_jpg/IMG_5073.jpg",
+    "overlay": "test_iamges_jpg/test1/overlays/IMG_5073_overlay.png",
+    "mask": "test_iamges_jpg/test1/masks/IMG_5073_mask.png",
+    "color_mask": "test_iamges_jpg/test1/masks_color/IMG_5073_mask_color.png",
+    "classes": {
+      "background": {
+        "class_index": 0,
+        "pixel_count": 20237502,
+        "pixel_ratio": 0.8270261535986944
+      },
+      "area/alternative": {
+        "class_index": 1,
+        "pixel_count": 0,
+        "pixel_ratio": 0.0
+      },
+      "area/drivable": {
+        "class_index": 2,
+        "pixel_count": 4232706,
+        "pixel_ratio": 0.17297384640130561
+      }
+    }
+  },
+  {
+    "image": "test_images_jpg/IMG_5074.jpg",
+    "overlay": "test_iamges_jpg/test1/overlays/IMG_5074_overlay.png",
+    "mask": "test_iamges_jpg/test1/masks/IMG_5074_mask.png",
+    "color_mask": "test_iamges_jpg/test1/masks_color/IMG_5074_mask_color.png",
+    "classes": {
+      "background": {
+        "class_index": 0,
+        "pixel_count": 17005948,
+        "pixel_ratio": 0.6949654044624386
+      },
+      "area/alternative": {
+        "class_index": 1,
+        "pixel_count": 0,
+        "pixel_ratio": 0.0
+      },
+      "area/drivable": {
+        "class_index": 2,
+        "pixel_count": 7464260,
+        "pixel_ratio": 0.3050345955375614
+      }
+    }
+  },
+  {
+    "image": "test_images_jpg/IMG_5075.jpg",
+    "overlay": "test_iamges_jpg/test1/overlays/IMG_5075_overlay.png",
+    "mask": "test_iamges_jpg/test1/masks/IMG_5075_mask.png",
+    "color_mask": "test_iamges_jpg/test1/masks_color/IMG_5075_mask_color.png",
+    "classes": {
+      "background": {
+        "class_index": 0,
+        "pixel_count": 20845275,
+        "pixel_ratio": 0.8518634169354016
+      },
+      "area/alternative": {
+        "class_index": 1,
+        "pixel_count": 0,
+        "pixel_ratio": 0.0
+      },
+      "area/drivable": {
+        "class_index": 2,
+        "pixel_count": 3624933,
+        "pixel_ratio": 0.1481365830645984
+      }
+    }
+  },
+  {
+    "image": "test_images_jpg/IMG_5076.jpg",
+    "overlay": "test_iamges_jpg/test1/overlays/IMG_5076_overlay.png",
+    "mask": "test_iamges_jpg/test1/masks/IMG_5076_mask.png",
+    "color_mask": "test_iamges_jpg/test1/masks_color/IMG_5076_mask_color.png",
+    "classes": {
+      "background": {
+        "class_index": 0,
+        "pixel_count": 20108195,
+        "pixel_ratio": 0.8217418912009248
+      },
+      "area/alternative": {
+        "class_index": 1,
+        "pixel_count": 0,
+        "pixel_ratio": 0.0
+      },
+      "area/drivable": {
+        "class_index": 2,
+        "pixel_count": 4362013,
+        "pixel_ratio": 0.1782581087990752
+      }
+    }
+  },
+  {
+    "image": "test_images_jpg/IMG_5077.jpg",
+    "overlay": "test_iamges_jpg/test1/overlays/IMG_5077_overlay.png",
+    "mask": "test_iamges_jpg/test1/masks/IMG_5077_mask.png",
+    "color_mask": "test_iamges_jpg/test1/masks_color/IMG_5077_mask_color.png",
+    "classes": {
+      "background": {
+        "class_index": 0,
+        "pixel_count": 21664988,
+        "pixel_ratio": 0.8853618244683494
+      },
+      "area/alternative": {
+        "class_index": 1,
+        "pixel_count": 0,
+        "pixel_ratio": 0.0
+      },
+      "area/drivable": {
+        "class_index": 2,
+        "pixel_count": 2805220,
+        "pixel_ratio": 0.11463817553165057
+      }
+    }
+  },
+  {
+    "image": "test_images_jpg/IMG_5078.jpg",
+    "overlay": "test_iamges_jpg/test1/overlays/IMG_5078_overlay.png",
+    "mask": "test_iamges_jpg/test1/masks/IMG_5078_mask.png",
+    "color_mask": "test_iamges_jpg/test1/masks_color/IMG_5078_mask_color.png",
+    "classes": {
+      "background": {
+        "class_index": 0,
+        "pixel_count": 16880931,
+        "pixel_ratio": 0.6898564572887979
+      },
+      "area/alternative": {
+        "class_index": 1,
+        "pixel_count": 0,
+        "pixel_ratio": 0.0
+      },
+      "area/drivable": {
+        "class_index": 2,
+        "pixel_count": 7589277,
+        "pixel_ratio": 0.31014354271120215
+      }
+    }
+  },
+  {
+    "image": "test_images_jpg/IMG_5079.jpg",
+    "overlay": "test_iamges_jpg/test1/overlays/IMG_5079_overlay.png",
+    "mask": "test_iamges_jpg/test1/masks/IMG_5079_mask.png",
+    "color_mask": "test_iamges_jpg/test1/masks_color/IMG_5079_mask_color.png",
+    "classes": {
+      "background": {
+        "class_index": 0,
+        "pixel_count": 21328728,
+        "pixel_ratio": 0.8716202167141366
+      },
+      "area/alternative": {
+        "class_index": 1,
+        "pixel_count": 0,
+        "pixel_ratio": 0.0
+      },
+      "area/drivable": {
+        "class_index": 2,
+        "pixel_count": 3141480,
+        "pixel_ratio": 0.12837978328586336
+      }
+    }
+  },
+  {
+    "image": "test_images_jpg/IMG_5080.jpg",
+    "overlay": "test_iamges_jpg/test1/overlays/IMG_5080_overlay.png",
+    "mask": "test_iamges_jpg/test1/masks/IMG_5080_mask.png",
+    "color_mask": "test_iamges_jpg/test1/masks_color/IMG_5080_mask_color.png",
+    "classes": {
+      "background": {
+        "class_index": 0,
+        "pixel_count": 18243157,
+        "pixel_ratio": 0.7455252117186744
+      },
+      "area/alternative": {
+        "class_index": 1,
+        "pixel_count": 3115490,
+        "pixel_ratio": 0.12731767543618755
+      },
+      "area/drivable": {
+        "class_index": 2,
+        "pixel_count": 3111561,
+        "pixel_ratio": 0.12715711284513806
+      }
+    }
+  },
+  {
+    "image": "test_images_jpg/IMG_5081.jpg",
+    "overlay": "test_iamges_jpg/test1/overlays/IMG_5081_overlay.png",
+    "mask": "test_iamges_jpg/test1/masks/IMG_5081_mask.png",
+    "color_mask": "test_iamges_jpg/test1/masks_color/IMG_5081_mask_color.png",
+    "classes": {
+      "background": {
+        "class_index": 0,
+        "pixel_count": 17188682,
+        "pixel_ratio": 0.7024330156899361
+      },
+      "area/alternative": {
+        "class_index": 1,
+        "pixel_count": 3127430,
+        "pixel_ratio": 0.1278056157103364
+      },
+      "area/drivable": {
+        "class_index": 2,
+        "pixel_count": 4154096,
+        "pixel_ratio": 0.16976136859972749
+      }
+    }
+  },
+  {
+    "image": "test_images_jpg/IMG_5082.jpg",
+    "overlay": "test_iamges_jpg/test1/overlays/IMG_5082_overlay.png",
+    "mask": "test_iamges_jpg/test1/masks/IMG_5082_mask.png",
+    "color_mask": "test_iamges_jpg/test1/masks_color/IMG_5082_mask_color.png",
+    "classes": {
+      "background": {
+        "class_index": 0,
+        "pixel_count": 17419809,
+        "pixel_ratio": 0.7118782562044426
+      },
+      "area/alternative": {
+        "class_index": 1,
+        "pixel_count": 1188355,
+        "pixel_ratio": 0.04856333873418649
+      },
+      "area/drivable": {
+        "class_index": 2,
+        "pixel_count": 5862044,
+        "pixel_ratio": 0.23955840506137097
+      }
+    }
+  },
+  {
+    "image": "test_images_jpg/IMG_5083.jpg",
+    "overlay": "test_iamges_jpg/test1/overlays/IMG_5083_overlay.png",
+    "mask": "test_iamges_jpg/test1/masks/IMG_5083_mask.png",
+    "color_mask": "test_iamges_jpg/test1/masks_color/IMG_5083_mask_color.png",
+    "classes": {
+      "background": {
+        "class_index": 0,
+        "pixel_count": 17936947,
+        "pixel_ratio": 0.7330116278537558
+      },
+      "area/alternative": {
+        "class_index": 1,
+        "pixel_count": 153814,
+        "pixel_ratio": 0.0062857659403630734
+      },
+      "area/drivable": {
+        "class_index": 2,
+        "pixel_count": 6379447,
+        "pixel_ratio": 0.26070260620588104
+      }
+    }
+  },
+  {
+    "image": "test_images_jpg/IMG_5086.jpg",
+    "overlay": "test_iamges_jpg/test1/overlays/IMG_5086_overlay.png",
+    "mask": "test_iamges_jpg/test1/masks/IMG_5086_mask.png",
+    "color_mask": "test_iamges_jpg/test1/masks_color/IMG_5086_mask_color.png",
+    "classes": {
+      "background": {
+        "class_index": 0,
+        "pixel_count": 7934862,
+        "pixel_ratio": 0.650784300988914
+      },
+      "area/alternative": {
+        "class_index": 1,
+        "pixel_count": 340033,
+        "pixel_ratio": 0.027888089070504746
+      },
+      "area/drivable": {
+        "class_index": 2,
+        "pixel_count": 3917873,
+        "pixel_ratio": 0.3213276099405812
+      }
+    }
+  },
+  {
+    "image": "test_images_jpg/IMG_5087.jpg",
+    "overlay": "test_iamges_jpg/test1/overlays/IMG_5087_overlay.png",
+    "mask": "test_iamges_jpg/test1/masks/IMG_5087_mask.png",
+    "color_mask": "test_iamges_jpg/test1/masks_color/IMG_5087_mask_color.png",
+    "classes": {
+      "background": {
+        "class_index": 0,
+        "pixel_count": 18497706,
+        "pixel_ratio": 0.755927616144497
+      },
+      "area/alternative": {
+        "class_index": 1,
+        "pixel_count": 124132,
+        "pixel_ratio": 0.005072780746285442
+      },
+      "area/drivable": {
+        "class_index": 2,
+        "pixel_count": 5848370,
+        "pixel_ratio": 0.23899960310921756
+      }
+    }
+  },
+  {
+    "image": "test_images_jpg/IMG_5088.jpg",
+    "overlay": "test_iamges_jpg/test1/overlays/IMG_5088_overlay.png",
+    "mask": "test_iamges_jpg/test1/masks/IMG_5088_mask.png",
+    "color_mask": "test_iamges_jpg/test1/masks_color/IMG_5088_mask_color.png",
+    "classes": {
+      "background": {
+        "class_index": 0,
+        "pixel_count": 18550618,
+        "pixel_ratio": 0.7580899189741256
+      },
+      "area/alternative": {
+        "class_index": 1,
+        "pixel_count": 90255,
+        "pixel_ratio": 0.0036883625999419374
+      },
+      "area/drivable": {
+        "class_index": 2,
+        "pixel_count": 5829335,
+        "pixel_ratio": 0.23822171842593245
+      }
+    }
+  },
+  {
+    "image": "test_images_jpg/IMG_5089.jpg",
+    "overlay": "test_iamges_jpg/test1/overlays/IMG_5089_overlay.png",
+    "mask": "test_iamges_jpg/test1/masks/IMG_5089_mask.png",
+    "color_mask": "test_iamges_jpg/test1/masks_color/IMG_5089_mask_color.png",
+    "classes": {
+      "background": {
+        "class_index": 0,
+        "pixel_count": 15761050,
+        "pixel_ratio": 0.644091378381418
+      },
+      "area/alternative": {
+        "class_index": 1,
+        "pixel_count": 1528814,
+        "pixel_ratio": 0.062476542904743596
+      },
+      "area/drivable": {
+        "class_index": 2,
+        "pixel_count": 7180344,
+        "pixel_ratio": 0.2934320787138385
+      }
+    }
+  },
+  {
+    "image": "test_images_jpg/IMG_5090.jpg",
+    "overlay": "test_iamges_jpg/test1/overlays/IMG_5090_overlay.png",
+    "mask": "test_iamges_jpg/test1/masks/IMG_5090_mask.png",
+    "color_mask": "test_iamges_jpg/test1/masks_color/IMG_5090_mask_color.png",
+    "classes": {
+      "background": {
+        "class_index": 0,
+        "pixel_count": 17423075,
+        "pixel_ratio": 0.7120117246244904
+      },
+      "area/alternative": {
+        "class_index": 1,
+        "pixel_count": 1214239,
+        "pixel_ratio": 0.04962111478578359
+      },
+      "area/drivable": {
+        "class_index": 2,
+        "pixel_count": 5832894,
+        "pixel_ratio": 0.2383671605897261
+      }
+    }
+  },
+  {
+    "image": "test_images_jpg/IMG_5091.jpg",
+    "overlay": "test_iamges_jpg/test1/overlays/IMG_5091_overlay.png",
+    "mask": "test_iamges_jpg/test1/masks/IMG_5091_mask.png",
+    "color_mask": "test_iamges_jpg/test1/masks_color/IMG_5091_mask_color.png",
+    "classes": {
+      "background": {
+        "class_index": 0,
+        "pixel_count": 10428056,
+        "pixel_ratio": 0.8552656788023851
+      },
+      "area/alternative": {
+        "class_index": 1,
+        "pixel_count": 0,
+        "pixel_ratio": 0.0
+      },
+      "area/drivable": {
+        "class_index": 2,
+        "pixel_count": 1764712,
+        "pixel_ratio": 0.14473432119761484
+      }
+    }
+  },
+  {
+    "image": "test_images_jpg/IMG_5092.jpg",
+    "overlay": "test_iamges_jpg/test1/overlays/IMG_5092_overlay.png",
+    "mask": "test_iamges_jpg/test1/masks/IMG_5092_mask.png",
+    "color_mask": "test_iamges_jpg/test1/masks_color/IMG_5092_mask_color.png",
+    "classes": {
+      "background": {
+        "class_index": 0,
+        "pixel_count": 19650124,
+        "pixel_ratio": 0.8030223527319424
+      },
+      "area/alternative": {
+        "class_index": 1,
+        "pixel_count": 684567,
+        "pixel_ratio": 0.027975528446672785
+      },
+      "area/drivable": {
+        "class_index": 2,
+        "pixel_count": 4135517,
+        "pixel_ratio": 0.16900211882138477
+      }
+    }
+  },
+  {
+    "image": "test_images_jpg/IMG_5093.jpg",
+    "overlay": "test_iamges_jpg/test1/overlays/IMG_5093_overlay.png",
+    "mask": "test_iamges_jpg/test1/masks/IMG_5093_mask.png",
+    "color_mask": "test_iamges_jpg/test1/masks_color/IMG_5093_mask_color.png",
+    "classes": {
+      "background": {
+        "class_index": 0,
+        "pixel_count": 16226102,
+        "pixel_ratio": 0.6630962025333009
+      },
+      "area/alternative": {
+        "class_index": 1,
+        "pixel_count": 0,
+        "pixel_ratio": 0.0
+      },
+      "area/drivable": {
+        "class_index": 2,
+        "pixel_count": 8244106,
+        "pixel_ratio": 0.3369037974666991
+      }
+    }
+  }
+]

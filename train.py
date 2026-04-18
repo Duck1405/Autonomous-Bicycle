@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 import argparse
+import csv
+import inspect
 import json
-import math
 import os
 import sys
+import time
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterable
@@ -12,9 +14,20 @@ from typing import Iterable
 import numpy as np
 from PIL import Image, ImageDraw
 import torch
+import torch.distributed as dist
+import torch.multiprocessing as mp
 import torch.nn as nn
-import torch.nn.functional as F
+from torch.cuda.amp import GradScaler, autocast
+from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.utils.data import DataLoader, Dataset
+from torch.utils.data.distributed import DistributedSampler
+from torchvision.models.segmentation import deeplabv3_resnet50, deeplabv3_resnet101
+
+try:
+    from torchvision.models import ResNet50_Weights, ResNet101_Weights
+except ImportError:
+    ResNet50_Weights = None
+    ResNet101_Weights = None
 
 try:
     from tqdm.auto import tqdm
@@ -49,6 +62,13 @@ DEFAULT_BDD100K_CATEGORIES = [
 IMAGENET_MEAN = np.array([0.485, 0.456, 0.406], dtype=np.float32)
 IMAGENET_STD = np.array([0.229, 0.224, 0.225], dtype=np.float32)
 
+if hasattr(Image, "Resampling"):
+    BILINEAR_RESAMPLE = Image.Resampling.BILINEAR
+    NEAREST_RESAMPLE = Image.Resampling.NEAREST
+else:
+    BILINEAR_RESAMPLE = Image.BILINEAR
+    NEAREST_RESAMPLE = Image.NEAREST
+
 
 def str2bool(value: bool | str) -> bool:
     if isinstance(value, bool):
@@ -66,354 +86,6 @@ def default_data_root() -> Path:
     if sm_training:
         return Path(sm_training)
     return Path(__file__).resolve().parent
-
-
-def conv3x3(
-    in_channels: int,
-    out_channels: int,
-    stride: int = 1,
-    dilation: int = 1,
-) -> nn.Conv2d:
-    return nn.Conv2d(
-        in_channels,
-        out_channels,
-        kernel_size=3,
-        stride=stride,
-        padding=dilation,
-        dilation=dilation,
-        bias=False,
-    )
-
-
-def conv1x1(in_channels: int, out_channels: int, stride: int = 1) -> nn.Conv2d:
-    return nn.Conv2d(
-        in_channels,
-        out_channels,
-        kernel_size=1,
-        stride=stride,
-        bias=False,
-    )
-
-
-class Bottleneck(nn.Module):
-    expansion = 4
-
-    def __init__(
-        self,
-        in_channels: int,
-        planes: int,
-        stride: int = 1,
-        dilation: int = 1,
-        downsample: nn.Module | None = None,
-        bn_momentum: float = 0.0003,
-    ) -> None:
-        super().__init__()
-        out_channels = planes * self.expansion
-
-        self.conv1 = conv1x1(in_channels, planes)
-        self.bn1 = nn.BatchNorm2d(planes, momentum=bn_momentum)
-        self.conv2 = conv3x3(planes, planes, stride=stride, dilation=dilation)
-        self.bn2 = nn.BatchNorm2d(planes, momentum=bn_momentum)
-        self.conv3 = conv1x1(planes, out_channels)
-        self.bn3 = nn.BatchNorm2d(out_channels, momentum=bn_momentum)
-        self.relu = nn.ReLU(inplace=True)
-        self.downsample = downsample
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        identity = x
-
-        out = self.conv1(x)
-        out = self.bn1(out)
-        out = self.relu(out)
-
-        out = self.conv2(out)
-        out = self.bn2(out)
-        out = self.relu(out)
-
-        out = self.conv3(out)
-        out = self.bn3(out)
-
-        if self.downsample is not None:
-            identity = self.downsample(x)
-
-        out = out + identity
-        out = self.relu(out)
-        return out
-
-
-class ResNetBackbone(nn.Module):
-    def __init__(
-        self,
-        layers: list[int],
-        output_stride: int = 16,
-        multi_grid: tuple[int, int, int] = (1, 2, 4),
-        bn_momentum: float = 0.0003,
-    ) -> None:
-        super().__init__()
-
-        if output_stride not in (8, 16):
-            raise ValueError("DeepLabv3 ResNet backbone only supports output_stride 8 or 16.")
-
-        self.in_channels = 64
-        self.bn_momentum = bn_momentum
-
-        self.conv1 = nn.Conv2d(
-            3,
-            64,
-            kernel_size=7,
-            stride=2,
-            padding=3,
-            bias=False,
-        )
-        self.bn1 = nn.BatchNorm2d(64, momentum=bn_momentum)
-        self.relu = nn.ReLU(inplace=True)
-        self.maxpool = nn.MaxPool2d(kernel_size=3, stride=2, padding=1)
-
-        if output_stride == 16:
-            layer_strides = [1, 2, 2, 1]
-            layer_dilations = [1, 1, 1, 2]
-        else:
-            layer_strides = [1, 2, 1, 1]
-            layer_dilations = [1, 1, 2, 4]
-
-        self.layer1 = self._make_layer(64, layers[0], layer_strides[0], layer_dilations[0])
-        self.layer2 = self._make_layer(128, layers[1], layer_strides[1], layer_dilations[1])
-        self.layer3 = self._make_layer(256, layers[2], layer_strides[2], layer_dilations[2])
-        self.layer4 = self._make_layer(
-            512,
-            layers[3],
-            layer_strides[3],
-            layer_dilations[3],
-            multi_grid=multi_grid,
-        )
-
-        self.out_channels = 2048
-        self._init_weights()
-
-    def _make_layer(
-        self,
-        planes: int,
-        blocks: int,
-        stride: int,
-        dilation: int,
-        multi_grid: tuple[int, int, int] | None = None,
-    ) -> nn.Sequential:
-        if multi_grid is None:
-            multi_grid = tuple(1 for _ in range(blocks))
-        elif len(multi_grid) != blocks:
-            if len(multi_grid) == 3 and blocks > 3:
-                repeats = math.ceil(blocks / len(multi_grid))
-                multi_grid = (multi_grid * repeats)[:blocks]
-            else:
-                raise ValueError("multi_grid must match the number of blocks or be a 3-value pattern.")
-
-        out_channels = planes * Bottleneck.expansion
-        downsample = None
-        if stride != 1 or self.in_channels != out_channels:
-            downsample = nn.Sequential(
-                conv1x1(self.in_channels, out_channels, stride=stride),
-                nn.BatchNorm2d(out_channels, momentum=self.bn_momentum),
-            )
-
-        layers = [
-            Bottleneck(
-                in_channels=self.in_channels,
-                planes=planes,
-                stride=stride,
-                dilation=dilation * multi_grid[0],
-                downsample=downsample,
-                bn_momentum=self.bn_momentum,
-            )
-        ]
-        self.in_channels = out_channels
-
-        for block_index in range(1, blocks):
-            layers.append(
-                Bottleneck(
-                    in_channels=self.in_channels,
-                    planes=planes,
-                    stride=1,
-                    dilation=dilation * multi_grid[block_index],
-                    bn_momentum=self.bn_momentum,
-                )
-            )
-
-        return nn.Sequential(*layers)
-
-    def _init_weights(self) -> None:
-        for module in self.modules():
-            if isinstance(module, nn.Conv2d):
-                nn.init.kaiming_normal_(module.weight, mode="fan_out", nonlinearity="relu")
-            elif isinstance(module, nn.BatchNorm2d):
-                nn.init.ones_(module.weight)
-                nn.init.zeros_(module.bias)
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        x = self.conv1(x)
-        x = self.bn1(x)
-        x = self.relu(x)
-        x = self.maxpool(x)
-
-        x = self.layer1(x)
-        x = self.layer2(x)
-        x = self.layer3(x)
-        x = self.layer4(x)
-        return x
-
-    def freeze_batch_norm(self) -> None:
-        for module in self.modules():
-            if isinstance(module, nn.BatchNorm2d):
-                module.eval()
-                module.weight.requires_grad_(False)
-                module.bias.requires_grad_(False)
-
-
-class ASPPConv(nn.Sequential):
-    def __init__(
-        self,
-        in_channels: int,
-        out_channels: int,
-        dilation: int,
-        bn_momentum: float,
-    ) -> None:
-        super().__init__(
-            nn.Conv2d(
-                in_channels,
-                out_channels,
-                kernel_size=3,
-                padding=dilation,
-                dilation=dilation,
-                bias=False,
-            ),
-            nn.BatchNorm2d(out_channels, momentum=bn_momentum),
-            nn.ReLU(inplace=True),
-        )
-
-
-class ASPPPooling(nn.Module):
-    def __init__(self, in_channels: int, out_channels: int, bn_momentum: float) -> None:
-        super().__init__()
-        self.pool = nn.AdaptiveAvgPool2d(1)
-        self.proj = nn.Sequential(
-            nn.Conv2d(in_channels, out_channels, kernel_size=1, bias=False),
-            nn.BatchNorm2d(out_channels, momentum=bn_momentum),
-            nn.ReLU(inplace=True),
-        )
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        pooled = self.pool(x)
-        pooled = self.proj(pooled)
-        return F.interpolate(pooled, size=x.shape[-2:], mode="bilinear", align_corners=False)
-
-
-class ASPP(nn.Module):
-    def __init__(
-        self,
-        in_channels: int,
-        atrous_rates: tuple[int, int, int],
-        out_channels: int = 256,
-        bn_momentum: float = 0.0003,
-        dropout: float = 0.5,
-    ) -> None:
-        super().__init__()
-
-        modules = [
-            nn.Sequential(
-                nn.Conv2d(in_channels, out_channels, kernel_size=1, bias=False),
-                nn.BatchNorm2d(out_channels, momentum=bn_momentum),
-                nn.ReLU(inplace=True),
-            )
-        ]
-
-        for rate in atrous_rates:
-            modules.append(ASPPConv(in_channels, out_channels, rate, bn_momentum))
-
-        modules.append(ASPPPooling(in_channels, out_channels, bn_momentum))
-
-        self.branches = nn.ModuleList(modules)
-        merged_channels = out_channels * len(self.branches)
-        self.project = nn.Sequential(
-            nn.Conv2d(merged_channels, out_channels, kernel_size=1, bias=False),
-            nn.BatchNorm2d(out_channels, momentum=bn_momentum),
-            nn.ReLU(inplace=True),
-            nn.Dropout(dropout),
-        )
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        branch_outputs = [branch(x) for branch in self.branches]
-        x = torch.cat(branch_outputs, dim=1)
-        return self.project(x)
-
-
-class DeepLabHead(nn.Module):
-    def __init__(
-        self,
-        in_channels: int,
-        num_classes: int,
-        atrous_rates: tuple[int, int, int],
-        bn_momentum: float = 0.0003,
-    ) -> None:
-        super().__init__()
-        self.aspp = ASPP(
-            in_channels=in_channels,
-            atrous_rates=atrous_rates,
-            out_channels=256,
-            bn_momentum=bn_momentum,
-        )
-        self.classifier = nn.Conv2d(256, num_classes, kernel_size=1)
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        x = self.aspp(x)
-        return self.classifier(x)
-
-
-class DeepLabV3(nn.Module):
-    def __init__(
-        self,
-        num_classes: int,
-        backbone: str = "resnet101",
-        output_stride: int = 16,
-        multi_grid: tuple[int, int, int] = (1, 2, 4),
-        bn_decay: float = 0.9997,
-    ) -> None:
-        super().__init__()
-
-        layers_by_backbone = {
-            "resnet50": [3, 4, 6, 3],
-            "resnet101": [3, 4, 23, 3],
-        }
-        if backbone not in layers_by_backbone:
-            raise ValueError("backbone must be 'resnet50' or 'resnet101'.")
-
-        bn_momentum = 1.0 - bn_decay
-        atrous_rates = (6, 12, 18) if output_stride == 16 else (12, 24, 36)
-
-        self.backbone = ResNetBackbone(
-            layers=layers_by_backbone[backbone],
-            output_stride=output_stride,
-            multi_grid=multi_grid,
-            bn_momentum=bn_momentum,
-        )
-        self.head = DeepLabHead(
-            in_channels=self.backbone.out_channels,
-            num_classes=num_classes,
-            atrous_rates=atrous_rates,
-            bn_momentum=bn_momentum,
-        )
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        input_size = x.shape[-2:]
-        features = self.backbone(x)
-        logits = self.head(features)
-        return F.interpolate(logits, size=input_size, mode="bilinear", align_corners=False)
-
-    def freeze_batch_norm(self) -> None:
-        self.backbone.freeze_batch_norm()
-        for module in self.head.modules():
-            if isinstance(module, nn.BatchNorm2d):
-                module.eval()
-                module.weight.requires_grad_(False)
-                module.bias.requires_grad_(False)
 
 
 class BDD100KSegmentationDataset(Dataset):
@@ -481,13 +153,13 @@ class BDD100KSegmentationDataset(Dataset):
         image = np.array(
             Image.fromarray(image).resize(
                 (self.image_size[1], self.image_size[0]),
-                resample=Image.BILINEAR,
+                resample=BILINEAR_RESAMPLE,
             )
         )
         mask = np.array(
             Image.fromarray(mask).resize(
                 (self.image_size[1], self.image_size[0]),
-                resample=Image.NEAREST,
+                resample=NEAREST_RESAMPLE,
             )
         )
 
@@ -584,6 +256,7 @@ class TrainConfig:
     bn_decay: float = 0.9997
     ignore_index: int = 255
     device: str = "cuda"
+    pretrained_backbone: bool = True
 
 
 def get_device(preferred_device: str = "cuda") -> torch.device:
@@ -594,19 +267,97 @@ def get_device(preferred_device: str = "cuda") -> torch.device:
     return torch.device("cpu")
 
 
+def is_distributed() -> bool:
+    return dist.is_available() and dist.is_initialized()
+
+
+def get_rank() -> int:
+    return dist.get_rank() if is_distributed() else 0
+
+
+def get_world_size() -> int:
+    return dist.get_world_size() if is_distributed() else 1
+
+
+def is_main_process() -> bool:
+    return get_rank() == 0
+
+
+def setup_distributed(rank: int, world_size: int, master_addr: str, master_port: int) -> None:
+    os.environ["MASTER_ADDR"] = master_addr
+    os.environ["MASTER_PORT"] = str(master_port)
+    torch.cuda.set_device(rank)
+    dist.init_process_group(backend="nccl", rank=rank, world_size=world_size)
+
+
+def cleanup_distributed() -> None:
+    if is_distributed():
+        dist.destroy_process_group()
+
+
+def validate_train_batch_size(
+    *,
+    batch_size: int,
+    test_batch_size: int,
+    device: torch.device,
+    visible_gpus: int,
+    train_enabled: bool,
+) -> None:
+    if not train_enabled or device.type != "cuda" or visible_gpus <= 1:
+        return
+
+    if batch_size < visible_gpus:
+        raise ValueError(
+            f"Global train batch-size must be at least the number of visible GPUs. "
+            f"Received batch-size={batch_size} across {visible_gpus} GPUs."
+        )
+    if batch_size % visible_gpus != 0:
+        raise ValueError(
+            f"Global train batch-size must be divisible by the number of visible GPUs for DDP. "
+            f"Received batch-size={batch_size} across {visible_gpus} GPUs."
+        )
+    if test_batch_size < visible_gpus:
+        raise ValueError(
+            f"Global validation batch-size must be at least the number of visible GPUs. "
+            f"Received test-batch-size={test_batch_size} across {visible_gpus} GPUs."
+        )
+    if test_batch_size % visible_gpus != 0:
+        raise ValueError(
+            f"Global validation batch-size must be divisible by the number of visible GPUs for DDP. "
+            f"Received test-batch-size={test_batch_size} across {visible_gpus} GPUs."
+        )
+
+
 def poly_learning_rate(base_lr: float, current_iter: int, max_iters: int, power: float = 0.9) -> float:
     if current_iter > max_iters:
         return 0.0
     return base_lr * ((1.0 - (current_iter / max_iters)) ** power)
 
 
-def build_model(config: TrainConfig) -> DeepLabV3:
-    return DeepLabV3(
-        num_classes=config.num_classes,
-        backbone=config.backbone,
-        output_stride=config.output_stride,
-        bn_decay=config.bn_decay,
-    )
+def build_model(config: TrainConfig) -> nn.Module:
+    model_builders = {
+        "resnet50": deeplabv3_resnet50,
+        "resnet101": deeplabv3_resnet101,
+    }
+    backbone_weights = {
+        "resnet50": ResNet50_Weights.DEFAULT if ResNet50_Weights is not None else None,
+        "resnet101": ResNet101_Weights.DEFAULT if ResNet101_Weights is not None else None,
+    }
+    model_builder = model_builders[config.backbone]
+    build_kwargs = {
+        "num_classes": config.num_classes,
+        "aux_loss": False,
+    }
+    builder_signature = inspect.signature(model_builder)
+    if "weights" in builder_signature.parameters:
+        build_kwargs["weights"] = None
+        build_kwargs["weights_backbone"] = (
+            backbone_weights[config.backbone] if config.pretrained_backbone else None
+        )
+    else:
+        build_kwargs["pretrained"] = False
+        build_kwargs["pretrained_backbone"] = config.pretrained_backbone
+    return model_builder(**build_kwargs)
 
 
 def build_optimizer(model: nn.Module, config: TrainConfig) -> torch.optim.Optimizer:
@@ -622,27 +373,36 @@ def build_criterion(config: TrainConfig) -> nn.Module:
     return nn.CrossEntropyLoss(ignore_index=config.ignore_index)
 
 
+def extract_segmentation_logits(model_output: torch.Tensor | dict[str, torch.Tensor]) -> torch.Tensor:
+    if isinstance(model_output, dict):
+        return model_output["out"]
+    return model_output
+
+
 def build_confusion_matrix(
     predictions: torch.Tensor,
     targets: torch.Tensor,
     num_classes: int,
     ignore_index: int,
-) -> np.ndarray:
-    preds = predictions.detach().view(-1).cpu()
-    truth = targets.detach().view(-1).cpu()
+) -> torch.Tensor:
+    preds = predictions.detach().view(-1)
+    truth = targets.detach().view(-1)
     valid_mask = truth != ignore_index
     preds = preds[valid_mask].to(torch.int64)
     truth = truth[valid_mask].to(torch.int64)
 
     if truth.numel() == 0:
-        return np.zeros((num_classes, num_classes), dtype=np.int64)
+        return torch.zeros((num_classes, num_classes), device=predictions.device, dtype=torch.int64)
 
     encoded = truth * num_classes + preds
     bins = torch.bincount(encoded, minlength=num_classes * num_classes)
-    return bins.reshape(num_classes, num_classes).numpy().astype(np.int64)
+    return bins.reshape(num_classes, num_classes).to(torch.int64)
 
 
-def metrics_from_confusion_matrix(confusion: np.ndarray) -> dict[str, float]:
+def metrics_from_confusion_matrix(
+    confusion: np.ndarray,
+    idx_to_class: dict[int, str] | None = None,
+) -> dict[str, float | int | list | dict]:
     total = confusion.sum()
     correct = np.trace(confusion)
     accuracy = float(correct / total) if total > 0 else 0.0
@@ -678,29 +438,75 @@ def metrics_from_confusion_matrix(confusion: np.ndarray) -> dict[str, float]:
     )
 
     valid_classes = support > 0
+    active_classes = (support > 0) | (predicted > 0)
     macro_precision = float(precision[valid_classes].mean()) if np.any(valid_classes) else 0.0
     macro_recall = float(recall[valid_classes].mean()) if np.any(valid_classes) else 0.0
     macro_f1 = float(f1[valid_classes].mean()) if np.any(valid_classes) else 0.0
     mean_iou = float(iou[valid_classes].mean()) if np.any(valid_classes) else 0.0
+    macro_precision_active = float(precision[active_classes].mean()) if np.any(active_classes) else 0.0
+    macro_recall_active = float(recall[active_classes].mean()) if np.any(active_classes) else 0.0
+    macro_f1_active = float(f1[active_classes].mean()) if np.any(active_classes) else 0.0
+    mean_iou_active = float(iou[active_classes].mean()) if np.any(active_classes) else 0.0
 
     weights = support / support.sum() if support.sum() > 0 else np.zeros_like(support)
     weighted_precision = float((precision * weights).sum())
     weighted_recall = float((recall * weights).sum())
     weighted_f1 = float((f1 * weights).sum())
+    micro_precision = accuracy
+    micro_recall = accuracy
+    micro_f1 = accuracy
+
+    class_order = [
+        idx_to_class.get(class_index, f"class_{class_index}")
+        if idx_to_class is not None
+        else f"class_{class_index}"
+        for class_index in range(confusion.shape[0])
+    ]
+    per_class: dict[str, dict[str, float | int]] = {}
+    for class_index, class_name in enumerate(class_order):
+        per_class[class_name] = {
+            "class_index": class_index,
+            "support_pixels": int(support[class_index]),
+            "predicted_pixels": int(predicted[class_index]),
+            "true_positive_pixels": int(true_positive[class_index]),
+            "precision": float(precision[class_index]),
+            "recall": float(recall[class_index]),
+            "f1": float(f1[class_index]),
+            "dice": float(f1[class_index]),
+            "iou": float(iou[class_index]),
+        }
 
     return {
+        "pixel_accuracy": accuracy,
         "accuracy": accuracy,
+        "precision_micro": micro_precision,
+        "recall_micro": micro_recall,
+        "f1_micro": micro_f1,
+        "dice_micro": micro_f1,
         "precision_macro": macro_precision,
         "recall_macro": macro_recall,
         "f1_macro": macro_f1,
+        "dice_macro": macro_f1,
+        "precision_macro_active": macro_precision_active,
+        "recall_macro_active": macro_recall_active,
+        "f1_macro_active": macro_f1_active,
+        "dice_macro_active": macro_f1_active,
         "precision_weighted": weighted_precision,
         "recall_weighted": weighted_recall,
         "f1_weighted": weighted_f1,
+        "dice_weighted": weighted_f1,
         "mean_iou": mean_iou,
+        "mean_iou_active": mean_iou_active,
+        "total_labeled_pixels": int(total),
+        "confusion_matrix": confusion.tolist(),
+        "class_order": class_order,
+        "per_class": per_class,
     }
 
 
 def progress_write(message: str, show_progress: bool) -> None:
+    if not is_main_process():
+        return
     if show_progress and tqdm is not None:
         tqdm.write(message)
     else:
@@ -726,25 +532,132 @@ def format_metric_line(split_name: str, metrics: dict[str, float]) -> str:
     )
 
 
+def current_wall_time() -> str:
+    return time.strftime("%Y-%m-%d %H:%M:%S")
+
+
+def format_elapsed(seconds: float) -> str:
+    total_seconds = int(round(seconds))
+    hours, remainder = divmod(total_seconds, 3600)
+    minutes, secs = divmod(remainder, 60)
+    if hours > 0:
+        return f"{hours:d}h {minutes:02d}m {secs:02d}s"
+    if minutes > 0:
+        return f"{minutes:d}m {secs:02d}s"
+    return f"{secs:d}s"
+
+
+def sanitize_metric_key(value: str) -> str:
+    return (
+        value.strip()
+        .lower()
+        .replace("/", "_")
+        .replace(" ", "_")
+        .replace("-", "_")
+    )
+
+
+def build_metrics_summary_row(
+    record: dict,
+    idx_to_class: dict[int, str],
+) -> dict[str, float | int | str]:
+    row: dict[str, float | int | str] = {
+        "epoch": int(record["epoch"]),
+        "lr": float(record["lr"]),
+        "epoch_elapsed_seconds": float(record.get("epoch_elapsed_seconds", 0.0)),
+    }
+
+    scalar_skip_keys = {"confusion_matrix", "class_order", "per_class"}
+    for split_name in ("train", "val"):
+        split_metrics = record.get(split_name, {})
+        for key, value in split_metrics.items():
+            if key in scalar_skip_keys:
+                continue
+            row[f"{split_name}_{key}"] = value
+
+        per_class_metrics = split_metrics.get("per_class", {})
+        for class_index in sorted(idx_to_class):
+            class_name = idx_to_class[class_index]
+            class_key = sanitize_metric_key(class_name)
+            class_metrics = per_class_metrics.get(class_name)
+            if class_metrics is None:
+                continue
+            for metric_name in (
+                "support_pixels",
+                "predicted_pixels",
+                "true_positive_pixels",
+                "precision",
+                "recall",
+                "f1",
+                "dice",
+                "iou",
+            ):
+                row[f"{split_name}_{class_key}_{metric_name}"] = class_metrics[metric_name]
+
+    return row
+
+
+def write_metrics_summary_csv(
+    csv_path: str | Path,
+    history: list[dict],
+    idx_to_class: dict[int, str],
+) -> None:
+    csv_path = Path(csv_path)
+    csv_path.parent.mkdir(parents=True, exist_ok=True)
+    rows = [build_metrics_summary_row(record, idx_to_class) for record in history]
+    if not rows:
+        return
+
+    fieldnames: list[str] = []
+    for row in rows:
+        for key in row:
+            if key not in fieldnames:
+                fieldnames.append(key)
+
+    with csv_path.open("w", encoding="utf-8", newline="") as handle:
+        writer = csv.DictWriter(handle, fieldnames=fieldnames)
+        writer.writeheader()
+        writer.writerows(rows)
+
+
+def write_confusion_matrix_csv(
+    csv_path: str | Path,
+    confusion_matrix: list[list[int]],
+    class_order: list[str],
+) -> None:
+    csv_path = Path(csv_path)
+    csv_path.parent.mkdir(parents=True, exist_ok=True)
+    with csv_path.open("w", encoding="utf-8", newline="") as handle:
+        writer = csv.writer(handle)
+        writer.writerow(["true/pred"] + class_order)
+        for class_name, row in zip(class_order, confusion_matrix):
+            writer.writerow([class_name] + row)
+
+
 def run_epoch(
     model: nn.Module,
     dataloader: DataLoader,
     criterion: nn.Module,
     device: torch.device,
     num_classes: int,
+    idx_to_class: dict[int, str],
     ignore_index: int,
     epoch_index: int,
     total_epochs: int,
     split_name: str,
     show_progress: bool,
     optimizer: torch.optim.Optimizer | None = None,
+    scaler: GradScaler | None = None,
+    amp_enabled: bool = False,
 ) -> dict[str, float]:
     is_training = optimizer is not None
     model.train(mode=is_training)
+    epoch_phase_start = time.perf_counter()
 
-    total_loss = 0.0
+    total_loss = torch.zeros(1, device=device, dtype=torch.float64)
+    total_samples_seen = torch.zeros(1, device=device, dtype=torch.float64)
     total_batches = 0
-    confusion = np.zeros((num_classes, num_classes), dtype=np.int64)
+    confusion = torch.zeros((num_classes, num_classes), device=device, dtype=torch.int64)
     progress_bar = None
     iterable: Iterable[tuple[torch.Tensor, torch.Tensor]] = dataloader
 
@@ -768,29 +681,46 @@ def run_epoch(
             optimizer.zero_grad(set_to_none=True)
 
         with torch.set_grad_enabled(is_training):
-            logits = model(images)
-            loss = criterion(logits, targets)
+            with autocast(enabled=amp_enabled and device.type == "cuda"):
+                logits = extract_segmentation_logits(model(images))
+                loss = criterion(logits, targets)
             predictions = torch.argmax(logits, dim=1)
 
             if is_training:
-                loss.backward()
-                optimizer.step()
+                if scaler is not None and scaler.is_enabled():
+                    scaler.scale(loss).backward()
+                    scaler.step(optimizer)
+                    scaler.update()
+                else:
+                    loss.backward()
+                    optimizer.step()
 
-        total_loss += loss.item()
+        batch_size = images.size(0)
+        total_loss += loss.detach().to(torch.float64) * batch_size
+        total_samples_seen += batch_size
         total_batches += 1
         confusion += build_confusion_matrix(predictions, targets, num_classes, ignore_index)
 
         if progress_bar is not None:
-            running_metrics = metrics_from_confusion_matrix(confusion)
+            running_metrics = metrics_from_confusion_matrix(confusion.detach().cpu().numpy(), idx_to_class=idx_to_class)
             progress_bar.set_postfix(
-                loss=f"{total_loss / total_batches:.4f}",
+                loss=f"{(total_loss.item() / max(total_samples_seen.item(), 1.0)):.4f}",
                 acc=f"{running_metrics['accuracy']:.4f}",
                 f1=f"{running_metrics['f1_weighted']:.4f}",
                 miou=f"{running_metrics['mean_iou']:.4f}",
             )
 
-    metrics = metrics_from_confusion_matrix(confusion)
-    metrics["loss"] = total_loss / max(total_batches, 1)
+    if is_distributed():
+        dist.all_reduce(confusion, op=dist.ReduceOp.SUM)
+        dist.all_reduce(total_loss, op=dist.ReduceOp.SUM)
+        dist.all_reduce(total_samples_seen, op=dist.ReduceOp.SUM)
+
+    metrics = metrics_from_confusion_matrix(confusion.detach().cpu().numpy(), idx_to_class=idx_to_class)
+    metrics["loss"] = float(total_loss.item() / max(total_samples_seen.item(), 1.0))
+    metrics["elapsed_seconds"] = time.perf_counter() - epoch_phase_start
+    metrics["num_batches"] = len(dataloader)
+    metrics["num_samples"] = len(dataloader.dataset)
+    metrics["num_samples_seen"] = int(round(total_samples_seen.item()))
 
     if progress_bar is not None:
         progress_bar.close()
@@ -802,12 +732,25 @@ def save_model(model: nn.Module, model_dir: str | Path, save_file: str) -> Path:
     model_dir = Path(model_dir)
     model_dir.mkdir(parents=True, exist_ok=True)
     save_path = model_dir / save_file
-    model_to_save = model.module if isinstance(model, nn.DataParallel) else model
+    model_to_save = model.module if hasattr(model, "module") else model
     torch.save(model_to_save.state_dict(), save_path)
     return save_path
 
 
-def append_metrics(metrics_path: str | Path, record: dict) -> None:
+def build_epoch_checkpoint_name(save_file: str, epoch_index: int, total_epochs: int) -> str:
+    save_path = Path(save_file)
+    width = max(3, len(str(total_epochs)))
+    epoch_suffix = f"_epoch_{epoch_index:0{width}d}"
+    if save_path.suffix:
+        return f"{save_path.stem}{epoch_suffix}{save_path.suffix}"
+    return f"{save_path.name}{epoch_suffix}"
+
+
+def append_metrics(
+    metrics_path: str | Path,
+    record: dict,
+    idx_to_class: dict[int, str],
+) -> None:
     metrics_path = Path(metrics_path)
     metrics_path.parent.mkdir(parents=True, exist_ok=True)
 
@@ -821,22 +764,44 @@ def append_metrics(metrics_path: str | Path, record: dict) -> None:
     with metrics_path.open("w", encoding="utf-8") as handle:
         json.dump(history, handle, indent=2)
 
+    write_metrics_summary_csv(metrics_path.with_suffix(".csv"), history, idx_to_class)
+
+    epoch_reports_dir = metrics_path.parent / "epoch_reports"
+    epoch_reports_dir.mkdir(parents=True, exist_ok=True)
+    epoch_report_path = epoch_reports_dir / f"epoch_{record['epoch']:03d}_metrics.json"
+    with epoch_report_path.open("w", encoding="utf-8") as handle:
+        json.dump(record, handle, indent=2)
+
+    for split_name in ("train", "val"):
+        split_metrics = record[split_name]
+        write_confusion_matrix_csv(
+            epoch_reports_dir / f"epoch_{record['epoch']:03d}_{split_name}_confusion_matrix.csv",
+            confusion_matrix=split_metrics["confusion_matrix"],
+            class_order=split_metrics["class_order"],
+        )
+
 
 def fit(
     model: nn.Module,
     train_loader: DataLoader,
     val_loader: DataLoader,
+    train_sampler: DistributedSampler | None,
+    val_sampler: DistributedSampler | None,
     optimizer: torch.optim.Optimizer,
     criterion: nn.Module,
     config: TrainConfig,
+    idx_to_class: dict[int, str],
     output_dir: str | Path,
     model_dir: str | Path,
     save_file: str,
     device: str | torch.device = "cpu",
     show_progress: bool = True,
+    scaler: GradScaler | None = None,
+    amp_enabled: bool = False,
 ) -> list[dict]:
     device = torch.device(device)
     model.to(device)
+    training_start = time.perf_counter()
     global_step = 0
     metrics_history: list[dict] = []
     best_val_f1 = -1.0
@@ -862,13 +827,23 @@ def fit(
             f"Starting training: epochs={config.epochs} "
             f"train_batches_per_epoch={len(train_loader)} "
             f"val_batches_per_epoch={len(val_loader)} "
-            f"planned_train_steps={config.epochs * len(train_loader)}"
+            f"planned_train_steps={config.epochs * len(train_loader)} "
+            f"started_at={current_wall_time()}"
         ),
         show_progress=show_progress,
     )
 
     for epoch in epoch_iterable:
         epoch_index = epoch + 1
+        epoch_start = time.perf_counter()
+        progress_write(
+            f"Epoch {epoch_index:03d}/{config.epochs:03d} started at {current_wall_time()}",
+            show_progress=show_progress,
+        )
+        if train_sampler is not None:
+            train_sampler.set_epoch(epoch)
+        if val_sampler is not None:
+            val_sampler.set_epoch(epoch)
         current_lr = poly_learning_rate(
             base_lr=config.base_lr,
             current_iter=min(global_step, config.max_iters),
@@ -884,12 +859,22 @@ def fit(
             criterion=criterion,
             device=device,
             num_classes=config.num_classes,
+            idx_to_class=idx_to_class,
             ignore_index=config.ignore_index,
             epoch_index=epoch_index,
             total_epochs=config.epochs,
             split_name="train",
             show_progress=show_progress,
             optimizer=optimizer,
+            scaler=scaler,
+            amp_enabled=amp_enabled,
+        )
+        progress_write(
+            (
+                f"Finished train split for epoch {epoch_index:03d} at {current_wall_time()} "
+                f"elapsed={format_elapsed(train_metrics['elapsed_seconds'])}"
+            ),
+            show_progress=show_progress,
         )
         val_metrics = run_epoch(
             model=model,
@@ -897,24 +882,37 @@ def fit(
             criterion=criterion,
             device=device,
             num_classes=config.num_classes,
+            idx_to_class=idx_to_class,
             ignore_index=config.ignore_index,
             epoch_index=epoch_index,
             total_epochs=config.epochs,
             split_name="val",
             show_progress=show_progress,
             optimizer=None,
+            scaler=None,
+            amp_enabled=amp_enabled,
+        )
+        progress_write(
+            (
+                f"Finished val split for epoch {epoch_index:03d} at {current_wall_time()} "
+                f"elapsed={format_elapsed(val_metrics['elapsed_seconds'])}"
+            ),
+            show_progress=show_progress,
         )
 
         global_step += len(train_loader)
+        epoch_elapsed = time.perf_counter() - epoch_start
 
         record = {
             "epoch": epoch_index,
             "lr": current_lr,
             "train": train_metrics,
             "val": val_metrics,
+            "epoch_elapsed_seconds": epoch_elapsed,
         }
         metrics_history.append(record)
-        append_metrics(metrics_path, record)
+        if is_main_process():
+            append_metrics(metrics_path, record, idx_to_class)
 
         progress_write(
             f"Epoch {epoch_index:03d}/{config.epochs:03d} lr={current_lr:.6f}",
@@ -922,6 +920,21 @@ def fit(
         )
         progress_write(format_metric_line("train", train_metrics), show_progress=show_progress)
         progress_write(format_metric_line("val", val_metrics), show_progress=show_progress)
+        progress_write(
+            (
+                f"Epoch {epoch_index:03d}/{config.epochs:03d} finished at {current_wall_time()} "
+                f"elapsed={format_elapsed(epoch_elapsed)}"
+            ),
+            show_progress=show_progress,
+        )
+
+        if is_main_process():
+            epoch_path = save_model(
+                model,
+                model_dir,
+                build_epoch_checkpoint_name(save_file, epoch_index, config.epochs),
+            )
+            progress_write(f"Saved epoch checkpoint to {epoch_path}", show_progress=show_progress)
 
         if epoch_progress is not None:
             epoch_progress.set_postfix(
@@ -931,16 +944,29 @@ def fit(
                 val_miou=f"{val_metrics['mean_iou']:.4f}",
             )
 
-        if val_metrics["f1_weighted"] > best_val_f1:
+        if is_main_process() and val_metrics["f1_weighted"] > best_val_f1:
             best_val_f1 = val_metrics["f1_weighted"]
             best_path = save_model(model, model_dir, f"best_{save_file}")
             progress_write(f"Saved best checkpoint to {best_path}", show_progress=show_progress)
 
-    final_path = save_model(model, model_dir, save_file)
+        if is_distributed():
+            dist.barrier()
+
+    final_path: Path | None = None
+    if is_main_process():
+        final_path = save_model(model, model_dir, save_file)
     if epoch_progress is not None:
         epoch_progress.close()
 
-    progress_write(f"Saved final checkpoint to {final_path}", show_progress=show_progress)
+    total_training_elapsed = time.perf_counter() - training_start
+    progress_write(
+        f"Training finished at {current_wall_time()} total_elapsed={format_elapsed(total_training_elapsed)}",
+        show_progress=show_progress,
+    )
+    if final_path is not None:
+        progress_write(f"Saved final checkpoint to {final_path}", show_progress=show_progress)
+    if is_distributed():
+        dist.barrier()
     return metrics_history
 
 
@@ -961,39 +987,72 @@ def discover_categories(json_root: str | Path, split: str = "train") -> list[str
     return sorted(categories)
 
 
+def build_class_to_idx(categories: list[str]) -> dict[str, int]:
+    class_to_idx = {"background": 0}
+    for index, category in enumerate(categories, start=1):
+        class_to_idx[category] = index
+    return class_to_idx
+
+
 def load_or_create_category_map(
     json_root: str | Path,
     category_map_path: str | Path | None,
     split: str = "train",
     auto_discover: bool = True,
+    write_map: bool = True,
 ) -> dict[str, int]:
+    categories = discover_categories(json_root, split=split) if auto_discover else DEFAULT_BDD100K_CATEGORIES
+    expected_class_to_idx = build_class_to_idx(categories)
+
     if category_map_path is not None:
         category_map_path = Path(category_map_path)
         if category_map_path.exists():
             with category_map_path.open("r", encoding="utf-8") as handle:
                 saved = json.load(handle)
-            return {str(key): int(value) for key, value in saved.items()}
+            saved_class_to_idx = {str(key): int(value) for key, value in saved.items()}
+
+            if auto_discover:
+                expected_categories = set(expected_class_to_idx)
+                saved_categories = set(saved_class_to_idx)
+                missing_categories = sorted(expected_categories - saved_categories)
+                extra_categories = sorted(saved_categories - expected_categories)
+                if missing_categories or extra_categories:
+                    details: list[str] = []
+                    if missing_categories:
+                        details.append(f"missing categories: {', '.join(missing_categories)}")
+                    if extra_categories:
+                        details.append(f"unexpected categories: {', '.join(extra_categories)}")
+                    raise ValueError(
+                        "The provided category map does not cover all discovered training classes for "
+                        f"split='{split}'. {'; '.join(details)}. "
+                        "Remove --category-map-path, point it to a new file for an all-class map, or "
+                        "use --no-auto-discover-classes true if you intentionally want a fixed class list."
+                    )
+
+            return saved_class_to_idx
     else:
         category_map_path = Path(json_root) / "category_map.json"
 
-    categories = discover_categories(json_root, split=split) if auto_discover else DEFAULT_BDD100K_CATEGORIES
-    class_to_idx = {"background": 0}
-    for index, category in enumerate(categories, start=1):
-        class_to_idx[category] = index
+    if write_map:
+        category_map_path.parent.mkdir(parents=True, exist_ok=True)
+        with category_map_path.open("w", encoding="utf-8") as handle:
+            json.dump(expected_class_to_idx, handle, indent=2, sort_keys=True)
 
-    category_map_path.parent.mkdir(parents=True, exist_ok=True)
-    with category_map_path.open("w", encoding="utf-8") as handle:
-        json.dump(class_to_idx, handle, indent=2, sort_keys=True)
-
-    return class_to_idx
+    return expected_class_to_idx
 
 
 def build_dataloaders(
     args: argparse.Namespace,
     class_to_idx: dict[str, int],
     device: torch.device,
-) -> tuple[DataLoader, DataLoader]:
+) -> tuple[DataLoader, DataLoader, DistributedSampler | None, DistributedSampler | None]:
     image_size = (args.image_height, args.image_width)
+    world_size = get_world_size()
+    distributed = is_distributed()
+    rank = get_rank()
+    train_batch_size = args.batch_size // world_size if distributed else args.batch_size
+    test_batch_size = args.test_batch_size // world_size if distributed else args.test_batch_size
+    num_workers = max(1, args.num_workers // world_size) if distributed and args.num_workers > 0 else args.num_workers
 
     train_dataset = BDD100KSegmentationDataset(
         image_root=args.image_root,
@@ -1019,24 +1078,52 @@ def build_dataloaders(
         max_samples=args.max_test_samples,
     )
 
-    pin_memory = device.type == "cuda"
+    # PyTorch 1.7.x can be unstable with pin_memory/persistent workers under mp.spawn + DDP.
+    pin_memory = device.type == "cuda" and not distributed
+    persistent_workers = num_workers > 0 and not distributed
+    train_sampler = (
+        DistributedSampler(
+            train_dataset,
+            num_replicas=world_size,
+            rank=rank,
+            shuffle=True,
+            drop_last=args.drop_last,
+        )
+        if distributed
+        else None
+    )
+    test_sampler = (
+        DistributedSampler(
+            test_dataset,
+            num_replicas=world_size,
+            rank=rank,
+            shuffle=False,
+            drop_last=False,
+        )
+        if distributed
+        else None
+    )
     train_loader = DataLoader(
         train_dataset,
-        batch_size=args.batch_size,
-        shuffle=True,
-        num_workers=args.num_workers,
+        batch_size=train_batch_size,
+        shuffle=train_sampler is None,
+        num_workers=num_workers,
         pin_memory=pin_memory,
+        persistent_workers=persistent_workers,
         drop_last=args.drop_last,
+        sampler=train_sampler,
     )
     test_loader = DataLoader(
         test_dataset,
-        batch_size=args.test_batch_size,
+        batch_size=test_batch_size,
         shuffle=False,
-        num_workers=args.num_workers,
+        num_workers=num_workers,
         pin_memory=pin_memory,
+        persistent_workers=persistent_workers,
         drop_last=False,
+        sampler=test_sampler,
     )
-    return train_loader, test_loader
+    return train_loader, test_loader, train_sampler, test_sampler
 
 
 def create_argparser() -> argparse.ArgumentParser:
@@ -1073,13 +1160,54 @@ def create_argparser() -> argparse.ArgumentParser:
     parser.add_argument("--disable-normalization", action="store_true", help="Skip ImageNet normalization.")
     parser.add_argument("--device", type=str, default="cuda", choices=["cuda", "mps", "cpu"], help="Preferred device.")
     parser.add_argument("--backbone", type=str, default="resnet101", choices=["resnet50", "resnet101"], help="Backbone depth.")
-    parser.add_argument("--output-stride", type=int, default=16, choices=[8, 16], help="DeepLabv3 output stride.")
+    parser.add_argument(
+        "--pretrained-backbone",
+        type=str2bool,
+        default=False,
+        help="Load ImageNet-pretrained ResNet backbone weights for the torchvision DeepLabV3 model.",
+    )
+    parser.add_argument(
+        "--output-stride",
+        type=int,
+        default=16,
+        choices=[8, 16],
+        help="Deprecated: kept for CLI compatibility, but ignored by the torchvision DeepLabV3 builders.",
+    )
     parser.add_argument("--base-lr", type=float, default=0.007, help="Initial learning rate.")
     parser.add_argument("--max-iters", type=int, default=30000, help="Maximum train iterations.")
-    parser.add_argument("--bn-decay", type=float, default=0.9997, help="BatchNorm decay from the paper.")
+    parser.add_argument(
+        "--bn-decay",
+        type=float,
+        default=0.9997,
+        help="Deprecated: kept for CLI compatibility, but ignored by the torchvision DeepLabV3 builders.",
+    )
     parser.add_argument("--momentum", type=float, default=0.9, help="Optimizer momentum.")
     parser.add_argument("--weight-decay", type=float, default=1e-4, help="Optimizer weight decay.")
     parser.add_argument("--lr-power", type=float, default=0.9, help="Poly LR exponent.")
+    parser.add_argument(
+        "--amp",
+        type=str2bool,
+        default=True,
+        help="Use automatic mixed precision on CUDA.",
+    )
+    parser.add_argument(
+        "--sync-bn",
+        type=str2bool,
+        default=True,
+        help="Convert BatchNorm layers to SyncBatchNorm for DDP training.",
+    )
+    parser.add_argument(
+        "--master-addr",
+        type=str,
+        default=os.environ.get("MASTER_ADDR", "127.0.0.1"),
+        help="Master address for torch.distributed initialization.",
+    )
+    parser.add_argument(
+        "--master-port",
+        type=int,
+        default=int(os.environ.get("MASTER_PORT", "29500")),
+        help="Master port for torch.distributed initialization.",
+    )
     parser.add_argument(
         "--model-dir",
         type=str,
@@ -1131,99 +1259,170 @@ def create_argparser() -> argparse.ArgumentParser:
     return parser
 
 
+def train_worker(rank: int, world_size: int, args: argparse.Namespace) -> None:
+    distributed = world_size > 1
+
+    if distributed:
+        setup_distributed(rank, world_size, args.master_addr, args.master_port)
+
+    try:
+        if args.device == "cuda" and torch.cuda.is_available():
+            device = torch.device(f"cuda:{rank}" if distributed else "cuda")
+            torch.backends.cudnn.benchmark = True
+        else:
+            device = get_device(args.device)
+
+        if distributed:
+            if is_main_process():
+                class_to_idx = load_or_create_category_map(
+                    json_root=args.json_root,
+                    category_map_path=args.category_map_path,
+                    split=args.train_split,
+                    auto_discover=not args.no_auto_discover_classes,
+                    write_map=True,
+                )
+            dist.barrier()
+            if not is_main_process():
+                class_to_idx = load_or_create_category_map(
+                    json_root=args.json_root,
+                    category_map_path=args.category_map_path,
+                    split=args.train_split,
+                    auto_discover=not args.no_auto_discover_classes,
+                    write_map=False,
+                )
+        else:
+            class_to_idx = load_or_create_category_map(
+                json_root=args.json_root,
+                category_map_path=args.category_map_path,
+                split=args.train_split,
+                auto_discover=not args.no_auto_discover_classes,
+                write_map=True,
+            )
+
+        idx_to_class = {index: name for name, index in class_to_idx.items()}
+
+        config = TrainConfig(
+            num_classes=len(class_to_idx),
+            backbone=args.backbone,
+            output_stride=args.output_stride,
+            crop_size=args.image_height,
+            epochs=args.epochs,
+            batch_size=args.batch_size,
+            max_iters=args.max_iters,
+            base_lr=args.base_lr,
+            lr_power=args.lr_power,
+            momentum=args.momentum,
+            weight_decay=args.weight_decay,
+            bn_decay=args.bn_decay,
+            device=args.device,
+            pretrained_backbone=args.pretrained_backbone,
+        )
+
+        train_loader, test_loader, train_sampler, test_sampler = build_dataloaders(args, class_to_idx, device)
+        local_train_batch_size = args.batch_size // world_size if distributed else args.batch_size
+        local_test_batch_size = args.test_batch_size // world_size if distributed else args.test_batch_size
+        local_num_workers = max(1, args.num_workers // world_size) if distributed and args.num_workers > 0 else args.num_workers
+
+        if is_main_process():
+            print(f"Using device: {device}")
+            print(f"Image root:   {args.image_root}")
+            print(f"JSON root:    {args.json_root}")
+            print(f"Train split:  {args.train_split}")
+            print(f"Test split:   {args.test_split}")
+            print(f"Classes:      {len(class_to_idx)}")
+            print(f"Background:   {idx_to_class[0]}")
+            print(f"Model dir:    {args.model_dir}")
+            print(f"Output dir:   {args.output_dir}")
+            print(f"Train samples: {len(train_loader.dataset)}")
+            print(f"Test samples:  {len(test_loader.dataset)}")
+            print(f"Train batches: {len(train_loader)}")
+            print(f"Test batches:  {len(test_loader)}")
+            if distributed:
+                print(f"DDP world size: {world_size}")
+                print(f"Local train batch size per GPU: {local_train_batch_size}")
+                print(f"Local val batch size per GPU:   {local_test_batch_size}")
+                print(f"Local dataloader workers/GPU:   {local_num_workers}")
+                print("DDP dataloader mode: pin_memory=False, persistent_workers=False")
+
+        model = build_model(config)
+        if distributed and args.sync_bn and device.type == "cuda":
+            model = nn.SyncBatchNorm.convert_sync_batchnorm(model)
+            if is_main_process():
+                print("Enabled SyncBatchNorm for DDP training")
+
+        model = model.to(device)
+        if distributed:
+            model = DDP(model, device_ids=[rank], output_device=rank)
+            if is_main_process():
+                print(f"Enabled DistributedDataParallel across {world_size} GPUs")
+
+        if is_main_process():
+            print(f"Model classes: {config.num_classes}")
+
+        if args.smoke_test or not args.train:
+            train_images, train_masks = next(iter(train_loader))
+            test_images, test_masks = next(iter(test_loader))
+
+            train_images = train_images.to(device)
+            model.eval()
+            with torch.no_grad():
+                logits = extract_segmentation_logits(model(train_images))
+
+            if is_main_process():
+                print(f"Train batch image shape: {tuple(train_images.shape)}")
+                print(f"Train batch mask shape:  {tuple(train_masks.shape)}")
+                print(f"Test batch image shape:  {tuple(test_images.shape)}")
+                print(f"Test batch mask shape:   {tuple(test_masks.shape)}")
+                print(f"Forward output shape:    {tuple(logits.shape)}")
+                print(f"Class map saved to:      {args.category_map_path or Path(args.json_root) / 'category_map.json'}")
+            return
+
+        criterion = build_criterion(config)
+        optimizer = build_optimizer(model, config)
+        scaler = GradScaler(enabled=args.amp and device.type == "cuda")
+        fit(
+            model=model,
+            train_loader=train_loader,
+            val_loader=test_loader,
+            train_sampler=train_sampler,
+            val_sampler=test_sampler,
+            optimizer=optimizer,
+            criterion=criterion,
+            config=config,
+            idx_to_class=idx_to_class,
+            output_dir=args.output_dir,
+            model_dir=args.model_dir,
+            save_file=args.save_file,
+            device=device,
+            show_progress=args.progress and is_main_process(),
+            scaler=scaler,
+            amp_enabled=args.amp,
+        )
+    finally:
+        cleanup_distributed()
+
+
 def main() -> None:
     parser = create_argparser()
     args = parser.parse_args()
 
-    device = get_device(args.device)
-    if device.type == "cuda":
-        torch.backends.cudnn.benchmark = True
+    preferred_device = get_device(args.device)
+    visible_gpus = torch.cuda.device_count() if preferred_device.type == "cuda" else 0
+    distributed = preferred_device.type == "cuda" and visible_gpus > 1 and args.train and not args.smoke_test
+    world_size = visible_gpus if distributed else 1
 
-    class_to_idx = load_or_create_category_map(
-        json_root=args.json_root,
-        category_map_path=args.category_map_path,
-        split=args.train_split,
-        auto_discover=not args.no_auto_discover_classes,
-    )
-    idx_to_class = {index: name for name, index in class_to_idx.items()}
-
-    config = TrainConfig(
-        num_classes=len(class_to_idx),
-        backbone=args.backbone,
-        output_stride=args.output_stride,
-        crop_size=args.image_height,
-        epochs=args.epochs,
+    validate_train_batch_size(
         batch_size=args.batch_size,
-        max_iters=args.max_iters,
-        base_lr=args.base_lr,
-        lr_power=args.lr_power,
-        momentum=args.momentum,
-        weight_decay=args.weight_decay,
-        bn_decay=args.bn_decay,
-        device=args.device,
+        test_batch_size=args.test_batch_size,
+        device=preferred_device,
+        visible_gpus=visible_gpus,
+        train_enabled=args.train and not args.smoke_test,
     )
 
-    print(f"Using device: {device}")
-    print(f"Image root:   {args.image_root}")
-    print(f"JSON root:    {args.json_root}")
-    print(f"Train split:  {args.train_split}")
-    print(f"Test split:   {args.test_split}")
-    print(f"Classes:      {len(class_to_idx)}")
-    print(f"Background:   {idx_to_class[0]}")
-    print(f"Model dir:    {args.model_dir}")
-    print(f"Output dir:   {args.output_dir}")
-
-
-    train_loader, test_loader = build_dataloaders(args, class_to_idx, device)
-    print(f"Train samples: {len(train_loader.dataset)}")
-    print(f"Test samples:  {len(test_loader.dataset)}")
-    print(f"Train batches: {len(train_loader)}")
-    print(f"Test batches:  {len(test_loader)}")
-
-    model = build_model(config)
-    if device.type == "cuda":
-        visible_gpus = torch.cuda.device_count()
-        print(f"CUDA devices visible: {visible_gpus}")
-        if visible_gpus > 1:
-            model = nn.DataParallel(model)
-            print(f"Enabled DataParallel across {visible_gpus} GPUs")
-    model = model.to(device)
-    print(f"Model classes: {config.num_classes}")
-
-    if args.smoke_test or not args.train:
-        train_images, train_masks = next(iter(train_loader))
-        test_images, test_masks = next(iter(test_loader))
-
-        train_images = train_images.to(device)
-        model.eval()
-        with torch.no_grad():
-            logits = model(train_images)
-
-        print(f"Train batch image shape: {tuple(train_images.shape)}")
-        print(f"Train batch mask shape:  {tuple(train_masks.shape)}")
-        print(f"Test batch image shape:  {tuple(test_images.shape)}")
-        print(f"Test batch mask shape:   {tuple(test_masks.shape)}")
-        print(f"Forward output shape:    {tuple(logits.shape)}")
-        print(f"Class map saved to:      {args.category_map_path or Path(args.json_root) / 'category_map.json'}")
-
-        if args.smoke_test or not args.train:
-            return
-
-    criterion = build_criterion(config)
-    optimizer = build_optimizer(model, config)
-    fit(
-        model=model,
-        train_loader=train_loader,
-        val_loader=test_loader,
-        optimizer=optimizer,
-        criterion=criterion,
-        config=config,
-        output_dir=args.output_dir,
-        model_dir=args.model_dir,
-        save_file=args.save_file,
-        device=device,
-        show_progress=args.progress,
-    )
+    if distributed:
+        mp.spawn(train_worker, args=(world_size, args), nprocs=world_size, join=True)
+    else:
+        train_worker(0, world_size, args)
 
 
 if __name__ == "__main__":
