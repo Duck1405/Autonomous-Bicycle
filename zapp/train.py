@@ -88,20 +88,6 @@ def default_data_root() -> Path:
     return Path(__file__).resolve().parent
 
 
-def default_image_root() -> Path:
-    sm_images = os.environ.get("SM_CHANNEL_IMAGES")
-    if sm_images:
-        return Path(sm_images)
-    return default_data_root() / "100k_images"
-
-
-def default_json_root() -> Path:
-    sm_annotations = os.environ.get("SM_CHANNEL_ANNOTATIONS")
-    if sm_annotations:
-        return Path(sm_annotations)
-    return default_data_root() / "100k"
-
-
 class BDD100KSegmentationDataset(Dataset):
     def __init__(
         self,
@@ -1141,8 +1127,6 @@ def build_dataloaders(
 
 
 def create_argparser() -> argparse.ArgumentParser:
-    image_root = default_image_root()
-    json_root = default_json_root()
     data_root = default_data_root()
 
     parser = argparse.ArgumentParser(
@@ -1152,13 +1136,13 @@ def create_argparser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--image-root",
         type=str,
-        default=str(image_root),
+        default=str(data_root / "100k_images"),
         help="Root folder that contains split subfolders like train/, val/, and test/ for images.",
     )
     parser.add_argument(
         "--json-root",
         type=str,
-        default=str(json_root),
+        default=str(data_root / "100k"),
         help="Root folder that contains split subfolders like train/, val/, and test/ for JSON annotations.",
     )
     parser.add_argument("--train-split", type=str, default="train", help="Dataset split name for training.")
@@ -1361,6 +1345,7 @@ def train_worker(rank: int, world_size: int, args: argparse.Namespace) -> None:
                 print("DDP dataloader mode: pin_memory=False, persistent_workers=False")
 
         model = build_model(config)
+        
         if distributed and args.sync_bn and device.type == "cuda":
             model = nn.SyncBatchNorm.convert_sync_batchnorm(model)
             if is_main_process():
