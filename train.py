@@ -5,6 +5,8 @@ import csv
 import inspect
 import json
 import os
+import socket
+import subprocess
 import sys
 import time
 from dataclasses import dataclass
@@ -33,6 +35,11 @@ try:
     from tqdm.auto import tqdm
 except ImportError:
     tqdm = None
+
+try:
+    import psutil
+except ImportError:
+    psutil = None
 
 
 DEFAULT_BDD100K_CATEGORIES = [
@@ -100,6 +107,151 @@ def default_json_root() -> Path:
     if sm_annotations:
         return Path(sm_annotations)
     return default_data_root() / "100k"
+
+
+def bytes_to_mib(value: int | float) -> float:
+    return float(value) / (1024**2)
+
+
+def bytes_to_gib(value: int | float) -> float:
+    return float(value) / (1024**3)
+
+
+def get_process_ram_usage_mb() -> float | None:
+    if psutil is None:
+        return None
+    process = psutil.Process(os.getpid())
+    return bytes_to_mib(process.memory_info().rss)
+
+
+def get_system_ram_usage() -> dict[str, float] | None:
+    if psutil is None:
+        return None
+    memory = psutil.virtual_memory()
+    return {
+        "used_gib": bytes_to_gib(memory.used),
+        "available_gib": bytes_to_gib(memory.available),
+        "total_gib": bytes_to_gib(memory.total),
+        "percent": float(memory.percent),
+    }
+
+
+def get_cpu_usage_percent() -> float | None:
+    if psutil is None:
+        return None
+    return float(psutil.cpu_percent(interval=None))
+
+
+def get_torch_gpu_memory(device: torch.device) -> dict[str, float] | None:
+    if device.type != "cuda" or not torch.cuda.is_available():
+        return None
+    device_index = device.index if device.index is not None else torch.cuda.current_device()
+    free_bytes, total_bytes = torch.cuda.mem_get_info(device_index)
+    return {
+        "device_index": float(device_index),
+        "allocated_mib": bytes_to_mib(torch.cuda.memory_allocated(device_index)),
+        "reserved_mib": bytes_to_mib(torch.cuda.memory_reserved(device_index)),
+        "max_allocated_mib": bytes_to_mib(torch.cuda.max_memory_allocated(device_index)),
+        "free_mib": bytes_to_mib(free_bytes),
+        "total_mib": bytes_to_mib(total_bytes),
+    }
+
+
+def query_nvidia_smi() -> list[dict[str, int | str | None]]:
+    command = [
+        "nvidia-smi",
+        "--query-gpu=index,name,utilization.gpu,memory.used,memory.total,temperature.gpu",
+        "--format=csv,noheader,nounits",
+    ]
+    try:
+        completed = subprocess.run(command, check=True, capture_output=True, text=True)
+    except (FileNotFoundError, OSError, subprocess.CalledProcessError):
+        return []
+
+    stats: list[dict[str, int | str | None]] = []
+    for raw_line in completed.stdout.splitlines():
+        line = raw_line.strip()
+        if not line:
+            continue
+        parts = [part.strip() for part in line.split(",", maxsplit=5)]
+        if len(parts) != 6:
+            continue
+        index, name, utilization, memory_used, memory_total, temperature = parts
+
+        def parse_optional_int(value: str) -> int | None:
+            try:
+                return int(value)
+            except ValueError:
+                return None
+
+        stats.append(
+            {
+                "index": parse_optional_int(index),
+                "name": name,
+                "utilization": parse_optional_int(utilization),
+                "memory_used": parse_optional_int(memory_used),
+                "memory_total": parse_optional_int(memory_total),
+                "temperature": parse_optional_int(temperature),
+            }
+        )
+    return stats
+
+
+def build_resource_lines(device: torch.device) -> list[str]:
+    lines: list[str] = []
+    process_ram_mb = get_process_ram_usage_mb()
+    system_ram = get_system_ram_usage()
+    cpu_usage = get_cpu_usage_percent()
+
+    ram_parts: list[str] = []
+    if process_ram_mb is not None:
+        ram_parts.append(f"process_rss={process_ram_mb:.1f} MB")
+    if system_ram is not None:
+        ram_parts.append(
+            "system_ram="
+            f"{system_ram['used_gib']:.2f}/{system_ram['total_gib']:.2f} GiB "
+            f"({system_ram['percent']:.1f}% used, {system_ram['available_gib']:.2f} GiB avail)"
+        )
+    if cpu_usage is not None:
+        ram_parts.append(f"cpu={cpu_usage:.1f}%")
+    if ram_parts:
+        lines.append("Host resources: " + " | ".join(ram_parts))
+    else:
+        lines.append("Host resources: psutil not installed; RAM/CPU telemetry unavailable.")
+
+    torch_gpu = get_torch_gpu_memory(device)
+    if torch_gpu is not None:
+        lines.append(
+            "Torch CUDA allocator: "
+            f"device=cuda:{int(torch_gpu['device_index'])} "
+            f"allocated={torch_gpu['allocated_mib']:.1f} MiB "
+            f"reserved={torch_gpu['reserved_mib']:.1f} MiB "
+            f"peak_allocated={torch_gpu['max_allocated_mib']:.1f} MiB "
+            f"free={torch_gpu['free_mib']:.1f} MiB "
+            f"total={torch_gpu['total_mib']:.1f} MiB"
+        )
+
+    nvidia_stats = query_nvidia_smi()
+    if nvidia_stats:
+        for gpu in nvidia_stats:
+            utilization = "n/a" if gpu["utilization"] is None else f"{gpu['utilization']}%"
+            temperature = "n/a" if gpu["temperature"] is None else f"{gpu['temperature']}C"
+            memory_used = "n/a" if gpu["memory_used"] is None else f"{gpu['memory_used']} MiB"
+            memory_total = "n/a" if gpu["memory_total"] is None else f"{gpu['memory_total']} MiB"
+            lines.append(
+                f"GPU {gpu['index']}: {gpu['name']} | util={utilization} | "
+                f"mem={memory_used}/{memory_total} | temp={temperature}"
+            )
+    elif device.type == "cuda":
+        lines.append("GPU telemetry: nvidia-smi unavailable; only torch allocator stats are available.")
+
+    return lines
+
+
+def progress_write_resource_snapshot(title: str, device: torch.device, show_progress: bool) -> None:
+    progress_write(title, show_progress=show_progress)
+    for line in build_resource_lines(device):
+        progress_write(f"  {line}", show_progress=show_progress)
 
 
 class BDD100KSegmentationDataset(Dataset):

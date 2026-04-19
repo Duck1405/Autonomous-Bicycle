@@ -1,63 +1,59 @@
+# Pin NumPy 1.x because the SageMaker PyTorch 2.1 DLC was compiled
+# against the NumPy 1.x C ABI. Remove this pin if/when you move to
+# a PyTorch 2.3+ DLC.
+numpy>2
+
 # Core Scientific Computing
-pandas>=2.0.0
-scipy>=1.10.0
+pandas>=2.0,<2.3
+scipy>=1.10,<1.14
 
 # Machine Learning
-scikit-learn>=1.3.0
-xgboost>=2.0.0
-lightgbm>=4.0.0
-catboost>=1.2.0
-
-# Deep Learning Frameworks
-# TensorFlow with GPU support - Requires 2.18+ for numpy 2.x compatibility
-# Note: On Windows, use plain 'tensorflow' (GPU support included automatically)
-# tensorflow>=2.18.0
-
-# PyTorch with CUDA 11.8 support
-# Install with: pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu118
+scikit-learn>=1.3,<1.6
+xgboost>=2.0,<2.2
+lightgbm>=4.0,<4.6
+catboost>=1.2,<1.3
 
 # Computer Vision
-opencv-python>=4.8.0
-opencv-contrib-python>=4.8.0
-scikit-image>=0.22.0
-albumentations>=1.3.0
-imageio>=2.31.0
+opencv-python>=4.8,<4.11
+opencv-contrib-python>=4.8,<4.11
+scikit-image>=0.22,<0.25
+albumentations>=1.3,<2.0
+imageio>=2.31,<3
 
 # Visualization
-matplotlib>=3.7.0
-seaborn>=0.13.0
-plotly>=5.17.0
+matplotlib>=3.7,<3.10
+seaborn>=0.13,<0.14
+plotly>=5.17,<6
 
 # Image/Video Processing
-moviepy>=1.0.3
-imgaug>=0.4.0
+moviepy>=1.0,<2
+imgaug>=0.4,<0.5
 
 # Object Detection & Segmentation
-ultralytics>=8.0.0  # YOLOv8p
-supervision>=0.16.0
+ultralytics>=8.0,<8.3
+supervision>=0.16,<0.23
 
 # Model Training & Experiment Tracking
-wandb>=0.16.0
-mlflow>=2.8.0
+wandb>=0.16,<0.18
+mlflow>=2.8,<3
 
-# Data Processing & Augmentation
-timm>=0.9.0  # PyTorch Image Models
-torchmetrics>=1.2.0
-
-# Jupyter & Notebook Tools
-# jupyter>=1.0.0
-# ipywidgets>=8.1.0
-# notebook>=7.0.0
+# PyTorch ecosystem (torch itself is provided by the DLC image)
+timm>=0.9,<1.1
+torchmetrics>=1.2,<1.5
 
 # Utilities
-tqdm>=4.66.0
-pyyaml>=6.0
-python-dotenv>=1.0.0
+tqdm>=4.66
+pyyaml>=6
+python-dotenv>=1,<2
 
 # Model Deployment
-onnx>=1.15.0
-onnxruntime>=1.16.0
+onnx>=1.15,<1.17
+onnxruntime>=1.16,<1.20
 
 kagglehub
 
+# Keep SageMaker on the V2 line to match sagemaker-training-toolkit
 sagemaker<3.0.0
+
+# sagemaker-training-toolkit pins protobuf<=3.20.3; don't let wandb/mlflow upgrade it
+protobuf<=3.20.3
