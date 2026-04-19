@@ -10,3 +10,9 @@ bdd100k_labels.zip
 drivable_maps
 runs
 downloaded_models
+new_data
+.DS_Store
+*.DS_Store
+__pycache__/
+*.pyc
+*.pth

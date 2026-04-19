@@ -57,4 +57,9 @@ The goal of this GitHub is to keep all AI, hardware, and design work organized, 
 
 
 
-   
+  
+Datasets: 
+https://xingangpan.github.io/projects/CULane.html
+http://bdd-data.berkeley.edu/
+
+Models: 
