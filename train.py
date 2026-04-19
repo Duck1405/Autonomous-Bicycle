@@ -423,6 +423,8 @@ class TrainConfig:
     ignore_index: int = 255
     device: str = "cuda"
     pretrained_backbone: bool = True
+    best_metric: str = "mean_iou"
+    primary_class_name: str = "area/drivable"
 
 
 def get_device(preferred_device: str = "cuda") -> torch.device:
@@ -498,6 +500,17 @@ def poly_learning_rate(base_lr: float, current_iter: int, max_iters: int, power:
     if current_iter > max_iters:
         return 0.0
     return base_lr * ((1.0 - (current_iter / max_iters)) ** power)
+
+
+def set_optimizer_learning_rate(optimizer: torch.optim.Optimizer, learning_rate: float) -> None:
+    for param_group in optimizer.param_groups:
+        param_group["lr"] = learning_rate
+
+
+def resolve_scheduler_max_iters(requested_max_iters: int, planned_train_steps: int) -> int:
+    safe_requested = max(int(requested_max_iters), 1)
+    safe_planned = max(int(planned_train_steps), 1)
+    return max(safe_requested, safe_planned)
 
 
 def build_model(config: TrainConfig) -> nn.Module:
@@ -670,6 +683,34 @@ def metrics_from_confusion_matrix(
     }
 
 
+def get_primary_class_iou(
+    metrics: dict[str, float | int | list | dict],
+    primary_class_name: str,
+) -> float | None:
+    per_class = metrics.get("per_class")
+    if not isinstance(per_class, dict):
+        return None
+    class_metrics = per_class.get(primary_class_name)
+    if not isinstance(class_metrics, dict):
+        return None
+    value = class_metrics.get("iou")
+    return float(value) if value is not None else None
+
+
+def select_best_metric_value(
+    metrics: dict[str, float | int | list | dict],
+    best_metric: str,
+    primary_class_name: str,
+) -> tuple[float, str]:
+    if best_metric == "f1_weighted":
+        return float(metrics["f1_weighted"]), "f1_weighted"
+    if best_metric == "primary_class_iou":
+        primary_iou = get_primary_class_iou(metrics, primary_class_name)
+        if primary_iou is not None:
+            return primary_iou, f"{primary_class_name}.iou"
+    return float(metrics["mean_iou"]), "mean_iou"
+
+
 def progress_write(message: str, show_progress: bool) -> None:
     if not is_main_process():
         return
@@ -683,19 +724,28 @@ def build_progress_desc(split_name: str, epoch_index: int, total_epochs: int) ->
     return f"{split_name.capitalize()} {epoch_index}/{total_epochs}"
 
 
-def format_metric_line(split_name: str, metrics: dict[str, float]) -> str:
-    return (
-        f"{split_name:<5} "
-        f"loss={metrics['loss']:.4f} "
-        f"acc={metrics['accuracy']:.4f} "
-        f"precision_w={metrics['precision_weighted']:.4f} "
-        f"recall_w={metrics['recall_weighted']:.4f} "
-        f"f1_w={metrics['f1_weighted']:.4f} "
-        f"precision_macro={metrics['precision_macro']:.4f} "
-        f"recall_macro={metrics['recall_macro']:.4f} "
-        f"f1_macro={metrics['f1_macro']:.4f} "
-        f"miou={metrics['mean_iou']:.4f}"
-    )
+def format_metric_line(
+    split_name: str,
+    metrics: dict[str, float | int | list | dict],
+    primary_class_name: str | None = None,
+) -> str:
+    parts = [
+        f"{split_name:<5}",
+        f"loss={float(metrics['loss']):.4f}",
+        f"acc={float(metrics['accuracy']):.4f}",
+        f"precision_w={float(metrics['precision_weighted']):.4f}",
+        f"recall_w={float(metrics['recall_weighted']):.4f}",
+        f"f1_w={float(metrics['f1_weighted']):.4f}",
+        f"precision_macro={float(metrics['precision_macro']):.4f}",
+        f"recall_macro={float(metrics['recall_macro']):.4f}",
+        f"f1_macro={float(metrics['f1_macro']):.4f}",
+        f"miou={float(metrics['mean_iou']):.4f}",
+    ]
+    if primary_class_name:
+        primary_iou = get_primary_class_iou(metrics, primary_class_name)
+        if primary_iou is not None:
+            parts.append(f"{sanitize_metric_key(primary_class_name)}_iou={primary_iou:.4f}")
+    return " ".join(parts)
 
 
 def current_wall_time() -> str:
@@ -815,7 +865,12 @@ def run_epoch(
     optimizer: torch.optim.Optimizer | None = None,
     scaler: GradScaler | None = None,
     amp_enabled: bool = False,
-) -> dict[str, float]:
+    base_lr: float | None = None,
+    lr_power: float = 0.9,
+    max_iters: int = 1,
+    global_step: int = 0,
+    primary_class_name: str | None = None,
+) -> tuple[dict[str, float | int | list | dict], int]:
     is_training = optimizer is not None
     model.train(mode=is_training)
     epoch_phase_start = time.perf_counter()
@@ -826,6 +881,7 @@ def run_epoch(
     confusion = torch.zeros((num_classes, num_classes), device=device, dtype=torch.int64)
     progress_bar = None
     iterable: Iterable[tuple[torch.Tensor, torch.Tensor]] = dataloader
+    last_lr = 0.0
 
     if show_progress and tqdm is not None:
         progress_bar = tqdm(
@@ -844,6 +900,15 @@ def run_epoch(
         targets = targets.to(device, non_blocking=device.type == "cuda")
 
         if is_training:
+            assert optimizer is not None
+            assert base_lr is not None
+            last_lr = poly_learning_rate(
+                base_lr=base_lr,
+                current_iter=min(global_step, max_iters),
+                max_iters=max(max_iters, 1),
+                power=lr_power,
+            )
+            set_optimizer_learning_rate(optimizer, last_lr)
             optimizer.zero_grad(set_to_none=True)
 
         with torch.set_grad_enabled(is_training):
@@ -860,6 +925,7 @@ def run_epoch(
                 else:
                     loss.backward()
                     optimizer.step()
+                global_step += 1
 
         batch_size = images.size(0)
         total_loss += loss.detach().to(torch.float64) * batch_size
@@ -874,6 +940,12 @@ def run_epoch(
                 acc=f"{running_metrics['accuracy']:.4f}",
                 f1=f"{running_metrics['f1_weighted']:.4f}",
                 miou=f"{running_metrics['mean_iou']:.4f}",
+                road_iou=(
+                    f"{get_primary_class_iou(running_metrics, primary_class_name):.4f}"
+                    if primary_class_name and get_primary_class_iou(running_metrics, primary_class_name) is not None
+                    else "n/a"
+                ),
+                lr=f"{last_lr:.6f}" if is_training else "n/a",
             )
 
     if is_distributed():
@@ -887,11 +959,13 @@ def run_epoch(
     metrics["num_batches"] = len(dataloader)
     metrics["num_samples"] = len(dataloader.dataset)
     metrics["num_samples_seen"] = int(round(total_samples_seen.item()))
+    metrics["last_lr"] = float(last_lr)
+    metrics["global_step"] = int(global_step)
 
     if progress_bar is not None:
         progress_bar.close()
 
-    return metrics
+    return metrics, global_step
 
 
 def save_model(model: nn.Module, model_dir: str | Path, save_file: str) -> Path:
@@ -970,9 +1044,12 @@ def fit(
     training_start = time.perf_counter()
     global_step = 0
     metrics_history: list[dict] = []
-    best_val_f1 = -1.0
+    best_val_score = float("-inf")
+    best_metric_label = config.best_metric
     metrics_path = Path(output_dir) / "metrics_history.json"
     epoch_progress = None
+    planned_train_steps = config.epochs * len(train_loader)
+    scheduler_max_iters = resolve_scheduler_max_iters(config.max_iters, planned_train_steps)
 
     if show_progress and tqdm is not None:
         epoch_progress = tqdm(
@@ -993,11 +1070,20 @@ def fit(
             f"Starting training: epochs={config.epochs} "
             f"train_batches_per_epoch={len(train_loader)} "
             f"val_batches_per_epoch={len(val_loader)} "
-            f"planned_train_steps={config.epochs * len(train_loader)} "
+            f"planned_train_steps={planned_train_steps} "
+            f"scheduler_max_iters={scheduler_max_iters} "
             f"started_at={current_wall_time()}"
         ),
         show_progress=show_progress,
     )
+    if scheduler_max_iters != config.max_iters:
+        progress_write(
+            (
+                f"Adjusted scheduler max_iters from {config.max_iters} to {scheduler_max_iters} "
+                "so the poly LR schedule covers the full training run."
+            ),
+            show_progress=show_progress,
+        )
 
     for epoch in epoch_iterable:
         epoch_index = epoch + 1
@@ -1010,16 +1096,14 @@ def fit(
             train_sampler.set_epoch(epoch)
         if val_sampler is not None:
             val_sampler.set_epoch(epoch)
-        current_lr = poly_learning_rate(
+        epoch_start_lr = poly_learning_rate(
             base_lr=config.base_lr,
-            current_iter=min(global_step, config.max_iters),
-            max_iters=max(config.max_iters, 1),
+            current_iter=min(global_step, scheduler_max_iters),
+            max_iters=max(scheduler_max_iters, 1),
             power=config.lr_power,
         )
-        for param_group in optimizer.param_groups:
-            param_group["lr"] = current_lr
 
-        train_metrics = run_epoch(
+        train_metrics, global_step = run_epoch(
             model=model,
             dataloader=train_loader,
             criterion=criterion,
@@ -1034,6 +1118,11 @@ def fit(
             optimizer=optimizer,
             scaler=scaler,
             amp_enabled=amp_enabled,
+            base_lr=config.base_lr,
+            lr_power=config.lr_power,
+            max_iters=scheduler_max_iters,
+            global_step=global_step,
+            primary_class_name=config.primary_class_name,
         )
         progress_write(
             (
@@ -1042,7 +1131,7 @@ def fit(
             ),
             show_progress=show_progress,
         )
-        val_metrics = run_epoch(
+        val_metrics, _ = run_epoch(
             model=model,
             dataloader=val_loader,
             criterion=criterion,
@@ -1057,6 +1146,8 @@ def fit(
             optimizer=None,
             scaler=None,
             amp_enabled=amp_enabled,
+            global_step=global_step,
+            primary_class_name=config.primary_class_name,
         )
         progress_write(
             (
@@ -1065,13 +1156,15 @@ def fit(
             ),
             show_progress=show_progress,
         )
-
-        global_step += len(train_loader)
         epoch_elapsed = time.perf_counter() - epoch_start
+        epoch_end_lr = float(train_metrics.get("last_lr", epoch_start_lr))
 
         record = {
             "epoch": epoch_index,
-            "lr": current_lr,
+            "lr": epoch_end_lr,
+            "epoch_start_lr": epoch_start_lr,
+            "epoch_end_lr": epoch_end_lr,
+            "scheduler_max_iters": scheduler_max_iters,
             "train": train_metrics,
             "val": val_metrics,
             "epoch_elapsed_seconds": epoch_elapsed,
@@ -1081,11 +1174,20 @@ def fit(
             append_metrics(metrics_path, record, idx_to_class)
 
         progress_write(
-            f"Epoch {epoch_index:03d}/{config.epochs:03d} lr={current_lr:.6f}",
+            (
+                f"Epoch {epoch_index:03d}/{config.epochs:03d} "
+                f"start_lr={epoch_start_lr:.6f} end_lr={epoch_end_lr:.6f}"
+            ),
             show_progress=show_progress,
         )
-        progress_write(format_metric_line("train", train_metrics), show_progress=show_progress)
-        progress_write(format_metric_line("val", val_metrics), show_progress=show_progress)
+        progress_write(
+            format_metric_line("train", train_metrics, primary_class_name=config.primary_class_name),
+            show_progress=show_progress,
+        )
+        progress_write(
+            format_metric_line("val", val_metrics, primary_class_name=config.primary_class_name),
+            show_progress=show_progress,
+        )
         progress_write(
             (
                 f"Epoch {epoch_index:03d}/{config.epochs:03d} finished at {current_wall_time()} "
@@ -1104,16 +1206,24 @@ def fit(
 
         if epoch_progress is not None:
             epoch_progress.set_postfix(
-                lr=f"{current_lr:.6f}",
+                lr=f"{epoch_end_lr:.6f}",
                 train_loss=f"{train_metrics['loss']:.4f}",
-                val_f1=f"{val_metrics['f1_weighted']:.4f}",
+                val_best=f"{select_best_metric_value(val_metrics, config.best_metric, config.primary_class_name)[0]:.4f}",
                 val_miou=f"{val_metrics['mean_iou']:.4f}",
             )
 
-        if is_main_process() and val_metrics["f1_weighted"] > best_val_f1:
-            best_val_f1 = val_metrics["f1_weighted"]
+        current_val_score, best_metric_label = select_best_metric_value(
+            val_metrics,
+            config.best_metric,
+            config.primary_class_name,
+        )
+        if is_main_process() and current_val_score > best_val_score:
+            best_val_score = current_val_score
             best_path = save_model(model, model_dir, f"best_{save_file}")
-            progress_write(f"Saved best checkpoint to {best_path}", show_progress=show_progress)
+            progress_write(
+                f"Saved best checkpoint to {best_path} ({best_metric_label}={current_val_score:.4f})",
+                show_progress=show_progress,
+            )
 
         if is_distributed():
             dist.barrier()
@@ -1196,6 +1306,12 @@ def load_or_create_category_map(
                     )
 
             return saved_class_to_idx
+        if not auto_discover:
+            raise FileNotFoundError(
+                "The provided category map path does not exist: "
+                f"{category_map_path}. When auto class discovery is disabled, "
+                "the category map file must already exist."
+            )
     else:
         category_map_path = Path(json_root) / "category_map.json"
 
@@ -1331,7 +1447,7 @@ def create_argparser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--pretrained-backbone",
         type=str2bool,
-        default=False,
+        default=True,
         help="Load ImageNet-pretrained ResNet backbone weights for the torchvision DeepLabV3 model.",
     )
     parser.add_argument(
@@ -1424,6 +1540,19 @@ def create_argparser() -> argparse.ArgumentParser:
         default=True,
         help="Show tqdm progress bars during training and evaluation.",
     )
+    parser.add_argument(
+        "--best-metric",
+        type=str,
+        default="mean_iou",
+        choices=["mean_iou", "f1_weighted", "primary_class_iou"],
+        help="Validation metric used to choose the best checkpoint.",
+    )
+    parser.add_argument(
+        "--primary-class-name",
+        type=str,
+        default="area/drivable",
+        help="Primary class name used when best-metric=primary_class_iou and for log reporting.",
+    )
     return parser
 
 
@@ -1484,6 +1613,8 @@ def train_worker(rank: int, world_size: int, args: argparse.Namespace) -> None:
             bn_decay=args.bn_decay,
             device=args.device,
             pretrained_backbone=args.pretrained_backbone,
+            best_metric=args.best_metric,
+            primary_class_name=args.primary_class_name,
         )
 
         train_loader, test_loader, train_sampler, test_sampler = build_dataloaders(args, class_to_idx, device)
