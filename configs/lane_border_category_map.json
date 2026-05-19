@@ -1,0 +1,10 @@
+{
+  "background": 0,
+  "lane/road curb": 1,
+  "lane/single white": 2,
+  "lane/single yellow": 3,
+  "lane/double white": 4,
+  "lane/double yellow": 5,
+  "lane/single other": 6,
+  "lane/double other": 7
+}

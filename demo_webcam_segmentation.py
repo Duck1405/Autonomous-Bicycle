@@ -5,6 +5,7 @@ import inspect
 import json
 import time
 from pathlib import Path
+from typing import Sequence
 
 import cv2
 import numpy as np
@@ -31,7 +32,7 @@ DEFAULT_CATEGORY_MAP = Path("100k") / "category_map.json"
 
 def make_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        description="Run the DeepLab road-segmentation smoke-test checkpoint on a webcam feed.",
+        description="Run the DeepLab road-segmentation checkpoint on a webcam feed or video file.",
     )
     parser.add_argument("--weights", type=Path, default=DEFAULT_CHECKPOINT, help="Path to the .pth checkpoint.")
     parser.add_argument("--category-map", type=Path, default=DEFAULT_CATEGORY_MAP, help="Path to category_map.json.")
@@ -50,6 +51,7 @@ def make_parser() -> argparse.ArgumentParser:
         help="Class names counted as road coverage in the HUD.",
     )
     parser.add_argument("--stats-every", type=int, default=30, help="Print resource stats every N frames.")
+    parser.add_argument("--max-gpus", type=int, default=0, help="Maximum number of GPUs to use for file inference. 0 uses all visible GPUs.")
     parser.add_argument("--project", type=Path, default=Path("runs") / "webcam_segmentation", help="Recording output directory.")
     parser.add_argument("--name", type=str, default="exp", help="Recording run name.")
     parser.add_argument("--exist-ok", action="store_true", help="Reuse an existing recording directory.")
@@ -61,8 +63,11 @@ def make_parser() -> argparse.ArgumentParser:
         help="Record the annotated webcam feed.",
     )
     parser.add_argument("--record-path", type=Path, default=None, help="Optional explicit output video path.")
-    parser.add_argument("--record-fps", type=float, default=0.0, help="Output FPS. Defaults to camera FPS, then 30.")
+    parser.add_argument("--record-fps", type=float, default=0.0, help="Output FPS. Defaults to input FPS, then 30.")
     parser.add_argument("--record-codec", type=str, default="mp4v", help="FourCC codec for recorded video.")
+    parser.add_argument("--show", dest="show", action="store_true", help="Display annotated frames while processing.")
+    parser.add_argument("--hide", dest="show", action="store_false", help="Disable display window while processing.")
+    parser.set_defaults(show=None)
     return parser
 
 
@@ -106,18 +111,53 @@ def load_checkpoint_state_dict(path: Path) -> dict[str, torch.Tensor]:
     return cleaned
 
 
-def build_inference_model(
-    checkpoint_path: Path,
+def build_inference_model_from_state_dict(
+    state_dict: dict[str, torch.Tensor],
     backbone: str,
     num_classes: int,
     device: torch.device,
 ) -> torch.nn.Module:
     config = TrainConfig(num_classes=num_classes, backbone=backbone, pretrained_backbone=False)
     model = build_model(config)
-    model.load_state_dict(load_checkpoint_state_dict(checkpoint_path))
+    model.load_state_dict(state_dict)
     model.to(device)
     model.eval()
     return model
+
+
+def resolve_inference_devices(source: int | str, preferred_device: str, max_gpus: int) -> list[torch.device]:
+    primary_device = get_device(preferred_device)
+    if primary_device.type != "cuda":
+        return [primary_device]
+
+    visible_gpus = torch.cuda.device_count()
+    if visible_gpus <= 1 or isinstance(source, int):
+        return [torch.device("cuda:0")]
+
+    requested_gpus = visible_gpus if max_gpus <= 0 else min(max_gpus, visible_gpus)
+    requested_gpus = max(1, requested_gpus)
+    return [torch.device(f"cuda:{index}") for index in range(requested_gpus)]
+
+
+def format_device_label(devices: Sequence[torch.device]) -> str:
+    if len(devices) == 1:
+        device = devices[0]
+        return f"CUDA:{device.index or 0}" if device.type == "cuda" else device.type.upper()
+    gpu_labels = ", ".join(f"cuda:{device.index}" for device in devices)
+    return f"CUDA x{len(devices)} ({gpu_labels})"
+
+
+def build_inference_models(
+    checkpoint_path: Path,
+    backbone: str,
+    num_classes: int,
+    devices: Sequence[torch.device],
+) -> list[torch.nn.Module]:
+    state_dict = load_checkpoint_state_dict(checkpoint_path)
+    return [
+        build_inference_model_from_state_dict(state_dict, backbone=backbone, num_classes=num_classes, device=device)
+        for device in devices
+    ]
 
 
 def preprocess_frame(frame_bgr: np.ndarray, image_height: int, image_width: int) -> torch.Tensor:
@@ -127,6 +167,28 @@ def preprocess_frame(frame_bgr: np.ndarray, image_height: int, image_width: int)
     image_array = (image_array - IMAGENET_MEAN) / IMAGENET_STD
     image_array = np.transpose(image_array, (2, 0, 1))
     return torch.from_numpy(image_array).unsqueeze(0)
+
+
+def predict_chunk(
+    frames_bgr: Sequence[np.ndarray],
+    models: Sequence[torch.nn.Module],
+    devices: Sequence[torch.device],
+    image_height: int,
+    image_width: int,
+) -> list[np.ndarray]:
+    pending: list[tuple[torch.Tensor, tuple[int, int]]] = []
+    for frame_bgr, model, device in zip(frames_bgr, models, devices):
+        input_tensor = preprocess_frame(frame_bgr, image_height=image_height, image_width=image_width).to(device)
+        logits = extract_segmentation_logits(model(input_tensor))
+        prediction = torch.argmax(logits, dim=1).squeeze(0)
+        pending.append((prediction, (frame_bgr.shape[1], frame_bgr.shape[0])))
+
+    predictions: list[np.ndarray] = []
+    for prediction, (width, height) in pending:
+        mask = prediction.detach().to("cpu").numpy().astype(np.uint8)
+        mask = cv2.resize(mask, (width, height), interpolation=cv2.INTER_NEAREST)
+        predictions.append(mask)
+    return predictions
 
 
 def class_color(class_name: str, class_index: int) -> tuple[int, int, int]:
@@ -179,14 +241,14 @@ def summarize_mask(mask: np.ndarray, idx_to_class: dict[int, str]) -> list[tuple
 def build_hud(
     frame: np.ndarray,
     fps: float,
-    device: torch.device,
+    device_label: str,
     drivable_ratio: float,
     top_classes: list[tuple[str, float]],
 ) -> np.ndarray:
     hud = frame.copy()
     cv2.putText(
         hud,
-        f"FPS: {fps:.1f} | Device: {device.type.upper()}",
+        f"FPS: {fps:.1f} | Device: {device_label}",
         (20, 34),
         cv2.FONT_HERSHEY_SIMPLEX,
         0.8,
@@ -226,11 +288,14 @@ def resolve_recording_params(
     cap: cv2.VideoCapture,
     record_fps: float,
     record_codec: str,
+    source_name: str,
 ) -> tuple[Path, float, str]:
     if record_path is None:
         save_dir = increment_path(project / name, exist_ok=exist_ok)
         save_dir.mkdir(parents=True, exist_ok=True)
-        output_path = save_dir / "webcam_segmentation.mp4"
+        source_path = Path(source_name)
+        default_name = f"{source_path.stem or 'webcam'}_segmentation.mp4"
+        output_path = save_dir / default_name
     else:
         output_path = record_path
         output_path.parent.mkdir(parents=True, exist_ok=True)
@@ -244,6 +309,16 @@ def resolve_recording_params(
         raise ValueError(f"--record-codec must be exactly 4 characters, got: {codec!r}")
 
     return output_path, fps, codec
+
+
+def read_frame_chunk(cap: cv2.VideoCapture, chunk_size: int) -> list[np.ndarray]:
+    frames: list[np.ndarray] = []
+    while len(frames) < chunk_size:
+        ok, frame_bgr = cap.read()
+        if not ok:
+            break
+        frames.append(frame_bgr)
+    return frames
 
 
 def main() -> None:
@@ -262,25 +337,32 @@ def main() -> None:
             + f". Available classes include: {', '.join(sorted(class_to_idx))}"
         )
 
-    device = get_device(args.device)
-    model = build_inference_model(
+    source = parse_source(args.source)
+    is_live_source = isinstance(source, int)
+    inference_devices = resolve_inference_devices(source=source, preferred_device=args.device, max_gpus=args.max_gpus)
+    primary_device = inference_devices[0]
+    device_label = format_device_label(inference_devices)
+    models = build_inference_models(
         checkpoint_path=args.weights,
         backbone=args.backbone,
         num_classes=len(class_to_idx),
-        device=device,
+        devices=inference_devices,
     )
 
-    source = parse_source(args.source)
     cap = cv2.VideoCapture(source)
     if not cap.isOpened():
         raise RuntimeError(f"Unable to open camera source: {args.source}")
 
-    cap.set(cv2.CAP_PROP_FRAME_WIDTH, args.view_width)
-    cap.set(cv2.CAP_PROP_FRAME_HEIGHT, args.view_height)
+    if is_live_source:
+        cap.set(cv2.CAP_PROP_FRAME_WIDTH, args.view_width)
+        cap.set(cv2.CAP_PROP_FRAME_HEIGHT, args.view_height)
+
+    should_show = args.show if args.show is not None else is_live_source
+    save_video = args.save_video or not is_live_source
 
     video_writer = None
     output_path = None
-    if args.save_video:
+    if save_video:
         output_path, output_fps, output_codec = resolve_recording_params(
             record_path=args.record_path,
             project=args.project,
@@ -289,95 +371,109 @@ def main() -> None:
             cap=cap,
             record_fps=args.record_fps,
             record_codec=args.record_codec,
+            source_name=args.source,
         )
 
-    print("Starting segmentation webcam demo. Press 'q' to quit.")
+    if is_live_source:
+        print("Starting segmentation webcam demo. Press 'q' to quit.")
+    else:
+        print("Starting segmentation video render.")
     print(f"Checkpoint: {args.weights}")
     print(f"Category map: {args.category_map}")
-    print(f"Device: {device}")
+    print(f"Inference devices: {device_label}")
     print(f"Input size: {args.image_height}x{args.image_width}")
     print(f"Road classes: {', '.join(args.road_classes)}")
-    for line in build_resource_lines(device):
+    print(f"Frames per inference chunk: {len(inference_devices) if not is_live_source else 1}")
+    for line in build_resource_lines(primary_device):
         print(line)
 
     road_indices = {class_to_idx[name] for name in args.road_classes}
     window_name = "DeepLab Road Segmentation"
     frame_idx = 0
-    last_frame_time = time.perf_counter()
+    total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT)) if not is_live_source else 0
+    last_chunk_time = time.perf_counter()
+    should_stop = False
 
     with torch.no_grad():
-        while True:
-            ok, frame_bgr = cap.read()
-            if not ok:
-                print("Camera frame read failed, stopping.")
+        while not should_stop:
+            frames_bgr = read_frame_chunk(cap, 1 if is_live_source else len(inference_devices))
+            if not frames_bgr:
+                if is_live_source:
+                    print("Camera frame read failed, stopping.")
+                else:
+                    print("Reached end of input video, stopping.")
                 break
 
-            input_tensor = preprocess_frame(
-                frame_bgr,
+            predictions = predict_chunk(
+                frames_bgr=frames_bgr,
+                models=models[: len(frames_bgr)],
+                devices=inference_devices[: len(frames_bgr)],
                 image_height=args.image_height,
                 image_width=args.image_width,
-            ).to(device)
-
-            logits = extract_segmentation_logits(model(input_tensor))
-            prediction = torch.argmax(logits, dim=1).squeeze(0).cpu().numpy().astype(np.uint8)
-            prediction = cv2.resize(
-                prediction,
-                (frame_bgr.shape[1], frame_bgr.shape[0]),
-                interpolation=cv2.INTER_NEAREST,
             )
-
-            overlay = overlay_mask(frame_bgr, prediction, idx_to_class=idx_to_class, alpha=args.alpha)
-
-            top_classes = summarize_mask(prediction, idx_to_class=idx_to_class)
-            drivable_pixels = sum(int((prediction == class_index).sum()) for class_index in road_indices)
-            drivable_ratio = drivable_pixels / float(prediction.size)
 
             current_time = time.perf_counter()
-            fps = 1.0 / max(current_time - last_frame_time, 1e-6)
-            last_frame_time = current_time
+            chunk_elapsed = max(current_time - last_chunk_time, 1e-6)
+            fps = len(frames_bgr) / chunk_elapsed
+            last_chunk_time = current_time
 
-            annotated = build_hud(
-                overlay,
-                fps=fps,
-                device=device,
-                drivable_ratio=drivable_ratio,
-                top_classes=top_classes,
-            )
+            for frame_bgr, prediction in zip(frames_bgr, predictions):
+                overlay = overlay_mask(frame_bgr, prediction, idx_to_class=idx_to_class, alpha=args.alpha)
 
-            if video_writer is None and args.save_video:
-                output_height, output_width = annotated.shape[:2]
-                video_writer = cv2.VideoWriter(
-                    str(output_path),
-                    cv2.VideoWriter_fourcc(*output_codec),
-                    output_fps,
-                    (output_width, output_height),
+                top_classes = summarize_mask(prediction, idx_to_class=idx_to_class)
+                drivable_pixels = sum(int((prediction == class_index).sum()) for class_index in road_indices)
+                drivable_ratio = drivable_pixels / float(prediction.size)
+
+                annotated = build_hud(
+                    overlay,
+                    fps=fps,
+                    device_label=device_label,
+                    drivable_ratio=drivable_ratio,
+                    top_classes=top_classes,
                 )
-                if not video_writer.isOpened():
-                    raise RuntimeError(f"Unable to open video writer for: {output_path}")
-                print(f"Recording webcam video to: {output_path}")
 
-            cv2.imshow(window_name, annotated)
-            if video_writer is not None:
-                video_writer.write(annotated)
+                if video_writer is None and save_video:
+                    output_height, output_width = annotated.shape[:2]
+                    video_writer = cv2.VideoWriter(
+                        str(output_path),
+                        cv2.VideoWriter_fourcc(*output_codec),
+                        output_fps,
+                        (output_width, output_height),
+                    )
+                    if not video_writer.isOpened():
+                        raise RuntimeError(f"Unable to open video writer for: {output_path}")
+                    print(f"Recording annotated video to: {output_path}")
 
-            if frame_idx % max(args.stats_every, 1) == 0:
-                top_summary = ", ".join(f"{name}={ratio * 100:.1f}%" for name, ratio in top_classes[:5]) or "none"
-                print(
-                    f"[frame {frame_idx:06d}] fps={fps:.1f} road_coverage={drivable_ratio * 100:.1f}% "
-                    f"top_classes={top_summary}"
-                )
-                for line in build_resource_lines(device):
-                    print(f"  {line}")
+                if should_show:
+                    cv2.imshow(window_name, annotated)
+                if video_writer is not None:
+                    video_writer.write(annotated)
 
-            frame_idx += 1
-            if cv2.waitKey(1) & 0xFF == ord("q"):
-                break
+                if frame_idx % max(args.stats_every, 1) == 0:
+                    top_summary = ", ".join(f"{name}={ratio * 100:.1f}%" for name, ratio in top_classes[:5]) or "none"
+                    progress_bits = []
+                    if total_frames > 0:
+                        progress_bits.append(f"progress={(frame_idx + 1) / total_frames * 100:.1f}%")
+                        progress_bits.append(f"frames={frame_idx + 1}/{total_frames}")
+                    progress_prefix = (" ".join(progress_bits) + " ") if progress_bits else ""
+                    print(
+                        f"[frame {frame_idx:06d}] {progress_prefix}fps={fps:.1f} road_coverage={drivable_ratio * 100:.1f}% "
+                        f"top_classes={top_summary}"
+                    )
+                    for line in build_resource_lines(primary_device):
+                        print(f"  {line}")
+
+                frame_idx += 1
+                if should_show and cv2.waitKey(1) & 0xFF == ord("q"):
+                    should_stop = True
+                    break
 
     cap.release()
     if video_writer is not None:
         video_writer.release()
-        print(f"Saved webcam video to: {output_path}")
-    cv2.destroyAllWindows()
+        print(f"Saved annotated video to: {output_path}")
+    if should_show:
+        cv2.destroyAllWindows()
 
 
 if __name__ == "__main__":

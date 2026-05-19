@@ -1,0 +1,10 @@
+name: sagemaker-v2-py313
+channels:
+  - conda-forge
+  - defaults
+dependencies:
+  - python=3.13
+  - pip
+  - ipykernel
+  - pip:
+      - -r requirements.sagemaker-v2.lock.txt

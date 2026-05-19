@@ -37,6 +37,11 @@ except ImportError:
     tqdm = None
 
 try:
+    import albumentations as A
+except ImportError:
+    A = None
+
+try:
     import psutil
 except ImportError:
     psutil = None
@@ -64,6 +69,16 @@ DEFAULT_BDD100K_CATEGORIES = [
     "traffic sign",
     "train",
     "truck",
+]
+
+DEFAULT_LANE_BORDER_CATEGORIES = [
+    "lane/road curb",
+    "lane/single white",
+    "lane/single yellow",
+    "lane/double white",
+    "lane/double yellow",
+    "lane/single other",
+    "lane/double other",
 ]
 
 IMAGENET_MEAN = np.array([0.485, 0.456, 0.406], dtype=np.float32)
@@ -254,6 +269,92 @@ def progress_write_resource_snapshot(title: str, device: torch.device, show_prog
         progress_write(f"  {line}", show_progress=show_progress)
 
 
+def build_resource_summary_line(device: torch.device) -> str:
+    process_ram_mb = get_process_ram_usage_mb()
+    system_ram = get_system_ram_usage()
+    cpu_usage = get_cpu_usage_percent()
+    nvidia_stats = query_nvidia_smi()
+
+    parts: list[str] = []
+    if process_ram_mb is not None:
+        parts.append(f"proc_ram={process_ram_mb:.0f}MB")
+    if system_ram is not None:
+        parts.append(f"sys_ram={system_ram['used_gib']:.1f}/{system_ram['total_gib']:.1f}GiB")
+    if cpu_usage is not None:
+        parts.append(f"cpu={cpu_usage:.0f}%")
+
+    torch_gpu = get_torch_gpu_memory(device)
+    if torch_gpu is not None:
+        parts.append(
+            f"cuda_alloc={torch_gpu['allocated_mib']:.0f}MB"
+        )
+        parts.append(
+            f"cuda_reserved={torch_gpu['reserved_mib']:.0f}MB"
+        )
+
+    if nvidia_stats:
+        gpu_summaries: list[str] = []
+        for gpu in nvidia_stats:
+            index = "?" if gpu["index"] is None else str(gpu["index"])
+            utilization = "?" if gpu["utilization"] is None else str(gpu["utilization"])
+            memory_used = "?" if gpu["memory_used"] is None else str(gpu["memory_used"])
+            memory_total = "?" if gpu["memory_total"] is None else str(gpu["memory_total"])
+            gpu_summaries.append(f"gpu{index}:{utilization}% {memory_used}/{memory_total}MB")
+        parts.append(" | ".join(gpu_summaries))
+
+    if not parts:
+        return "resource summary unavailable"
+    return " | ".join(parts)
+
+
+def build_train_augmentations(hflip_prob: float) -> object | None:
+    if A is None:
+        return None
+
+    return A.Compose(
+        [
+            A.HorizontalFlip(p=hflip_prob),
+            A.OneOf(
+                [
+                    A.RandomBrightnessContrast(
+                        brightness_limit=0.20,
+                        contrast_limit=0.20,
+                        p=1.0,
+                    ),
+                    A.RandomGamma(gamma_limit=(85, 115), p=1.0),
+                ],
+                p=0.45,
+            ),
+            A.HueSaturationValue(
+                hue_shift_limit=10,
+                sat_shift_limit=15,
+                val_shift_limit=10,
+                p=0.25,
+            ),
+            A.OneOf(
+                [
+                    A.MotionBlur(blur_limit=(3, 5), p=1.0),
+                    A.GaussianBlur(blur_limit=(3, 5), p=1.0),
+                ],
+                p=0.20,
+            ),
+            A.OneOf(
+                [
+                    A.Affine(
+                        scale=(0.97, 1.03),
+                        translate_percent={"x": (-0.04, 0.04), "y": (-0.02, 0.02)},
+                        rotate=(-3.0, 3.0),
+                        shear=(-2.0, 2.0),
+                        p=1.0,
+                    ),
+                    A.Perspective(scale=(0.02, 0.05), keep_size=True, p=1.0),
+                ],
+                p=0.25,
+            ),
+        ]
+    )
+
+
 class BDD100KSegmentationDataset(Dataset):
     def __init__(
         self,
@@ -264,6 +365,7 @@ class BDD100KSegmentationDataset(Dataset):
         image_size: tuple[int, int],
         normalize: bool = True,
         hflip_prob: float = 0.0,
+        enable_train_augmentations: bool = False,
         max_samples: int | None = None,
     ) -> None:
         self.image_dir = Path(image_root) / split
@@ -273,6 +375,16 @@ class BDD100KSegmentationDataset(Dataset):
         self.image_size = image_size
         self.normalize = normalize
         self.hflip_prob = hflip_prob
+        self.enable_train_augmentations = enable_train_augmentations
+        if self.enable_train_augmentations and A is None:
+            raise ImportError(
+                "train-augmentations=true requires albumentations to be installed in the training environment."
+            )
+        self.train_augmentations = (
+            build_train_augmentations(hflip_prob=hflip_prob)
+            if enable_train_augmentations
+            else None
+        )
         self.samples = self._collect_samples(max_samples)
 
         if not self.samples:
@@ -312,7 +424,11 @@ class BDD100KSegmentationDataset(Dataset):
         image = np.array(Image.open(image_path).convert("RGB"))
         mask = self._build_mask(json_path, image.shape[:2])
 
-        if self.hflip_prob > 0.0 and np.random.rand() < self.hflip_prob:
+        if self.train_augmentations is not None:
+            transformed = self.train_augmentations(image=image, mask=mask)
+            image = transformed["image"]
+            mask = transformed["mask"]
+        elif self.hflip_prob > 0.0 and np.random.rand() < self.hflip_prob:
             image = np.ascontiguousarray(image[:, ::-1])
             mask = np.ascontiguousarray(mask[:, ::-1])
 
@@ -1092,6 +1208,15 @@ def fit(
             f"Epoch {epoch_index:03d}/{config.epochs:03d} started at {current_wall_time()}",
             show_progress=show_progress,
         )
+        progress_write(
+            f"Epoch {epoch_index:03d} resource summary: {build_resource_summary_line(device)}",
+            show_progress=show_progress,
+        )
+        progress_write_resource_snapshot(
+            f"Resource snapshot at epoch {epoch_index:03d} start:",
+            device=device,
+            show_progress=show_progress,
+        )
         if train_sampler is not None:
             train_sampler.set_epoch(epoch)
         if val_sampler is not None:
@@ -1131,6 +1256,15 @@ def fit(
             ),
             show_progress=show_progress,
         )
+        progress_write(
+            f"Post-train resource summary epoch {epoch_index:03d}: {build_resource_summary_line(device)}",
+            show_progress=show_progress,
+        )
+        progress_write_resource_snapshot(
+            f"Resource snapshot after epoch {epoch_index:03d} train split:",
+            device=device,
+            show_progress=show_progress,
+        )
         val_metrics, _ = run_epoch(
             model=model,
             dataloader=val_loader,
@@ -1154,6 +1288,15 @@ def fit(
                 f"Finished val split for epoch {epoch_index:03d} at {current_wall_time()} "
                 f"elapsed={format_elapsed(val_metrics['elapsed_seconds'])}"
             ),
+            show_progress=show_progress,
+        )
+        progress_write(
+            f"Post-val resource summary epoch {epoch_index:03d}: {build_resource_summary_line(device)}",
+            show_progress=show_progress,
+        )
+        progress_write_resource_snapshot(
+            f"Resource snapshot after epoch {epoch_index:03d} val split:",
+            device=device,
             show_progress=show_progress,
         )
         epoch_elapsed = time.perf_counter() - epoch_start
@@ -1193,6 +1336,15 @@ def fit(
                 f"Epoch {epoch_index:03d}/{config.epochs:03d} finished at {current_wall_time()} "
                 f"elapsed={format_elapsed(epoch_elapsed)}"
             ),
+            show_progress=show_progress,
+        )
+        progress_write(
+            f"Epoch {epoch_index:03d} final resource summary: {build_resource_summary_line(device)}",
+            show_progress=show_progress,
+        )
+        progress_write_resource_snapshot(
+            f"Resource snapshot at epoch {epoch_index:03d} end:",
+            device=device,
             show_progress=show_progress,
         )
 
@@ -1239,6 +1391,15 @@ def fit(
         f"Training finished at {current_wall_time()} total_elapsed={format_elapsed(total_training_elapsed)}",
         show_progress=show_progress,
     )
+    progress_write(
+        f"Final training resource summary: {build_resource_summary_line(device)}",
+        show_progress=show_progress,
+    )
+    progress_write_resource_snapshot(
+        "Final resource snapshot after training:",
+        device=device,
+        show_progress=show_progress,
+    )
     if final_path is not None:
         progress_write(f"Saved final checkpoint to {final_path}", show_progress=show_progress)
     if is_distributed():
@@ -1270,15 +1431,84 @@ def build_class_to_idx(categories: list[str]) -> dict[str, int]:
     return class_to_idx
 
 
+def build_merged_class_to_idx(
+    categories: list[str],
+    foreground_class_name: str | None,
+) -> dict[str, int]:
+    if foreground_class_name is None:
+        return build_class_to_idx(categories)
+
+    class_to_idx = {"background": 0}
+    for category in categories:
+        class_to_idx[category] = 1
+    return class_to_idx
+
+
+def build_idx_to_class(
+    class_to_idx: dict[str, int],
+    foreground_class_name: str | None = None,
+) -> dict[int, str]:
+    idx_to_class: dict[int, str] = {0: "background"}
+    grouped_names: dict[int, list[str]] = {}
+    for class_name, class_index in class_to_idx.items():
+        grouped_names.setdefault(class_index, []).append(class_name)
+
+    for class_index, class_names in grouped_names.items():
+        if class_index == 0:
+            continue
+        if foreground_class_name and class_index == 1:
+            idx_to_class[class_index] = foreground_class_name
+        else:
+            idx_to_class[class_index] = class_names[-1]
+    return idx_to_class
+
+
+def parse_category_list(raw_value: object) -> list[str] | None:
+    if raw_value is None:
+        return None
+
+    if isinstance(raw_value, (list, tuple)):
+        raw_text = " ".join(str(item) for item in raw_value)
+    else:
+        raw_text = str(raw_value)
+
+    categories: list[str] = []
+    seen: set[str] = set()
+    for item in raw_text.split(","):
+        category = item.strip()
+        if not category or category in seen:
+            continue
+        categories.append(category)
+        seen.add(category)
+
+    return categories or None
+
+
+def resolve_selected_categories(raw_value: object, foreground_class_name: str | None) -> list[str] | None:
+    selected_categories = parse_category_list(raw_value)
+    if selected_categories:
+        return selected_categories
+
+    if (foreground_class_name or "").strip() == "lane_border":
+        return list(DEFAULT_LANE_BORDER_CATEGORIES)
+
+    return None
+
+
 def load_or_create_category_map(
     json_root: str | Path,
     category_map_path: str | Path | None,
     split: str = "train",
     auto_discover: bool = True,
     write_map: bool = True,
+    selected_categories: list[str] | None = None,
+    foreground_class_name: str | None = None,
 ) -> dict[str, int]:
-    categories = discover_categories(json_root, split=split) if auto_discover else DEFAULT_BDD100K_CATEGORIES
-    expected_class_to_idx = build_class_to_idx(categories)
+    if selected_categories is not None:
+        categories = selected_categories
+    else:
+        categories = discover_categories(json_root, split=split) if auto_discover else DEFAULT_BDD100K_CATEGORIES
+    expected_class_to_idx = build_merged_class_to_idx(categories, foreground_class_name)
 
     if category_map_path is not None:
         category_map_path = Path(category_map_path)
@@ -1287,7 +1517,7 @@ def load_or_create_category_map(
                 saved = json.load(handle)
             saved_class_to_idx = {str(key): int(value) for key, value in saved.items()}
 
-            if auto_discover:
+            if auto_discover or selected_categories is not None:
                 expected_categories = set(expected_class_to_idx)
                 saved_categories = set(saved_class_to_idx)
                 missing_categories = sorted(expected_categories - saved_categories)
@@ -1299,14 +1529,14 @@ def load_or_create_category_map(
                     if extra_categories:
                         details.append(f"unexpected categories: {', '.join(extra_categories)}")
                     raise ValueError(
-                        "The provided category map does not cover all discovered training classes for "
+                        "The provided category map does not match the requested training classes for "
                         f"split='{split}'. {'; '.join(details)}. "
-                        "Remove --category-map-path, point it to a new file for an all-class map, or "
-                        "use --no-auto-discover-classes true if you intentionally want a fixed class list."
+                        "Update --category-map-path to a matching file, remove it so train.py can write a new one, "
+                        "or update --train-categories."
                     )
 
             return saved_class_to_idx
-        if not auto_discover:
+        if not auto_discover and selected_categories is None:
             raise FileNotFoundError(
                 "The provided category map path does not exist: "
                 f"{category_map_path}. When auto class discovery is disabled, "
@@ -1344,6 +1574,7 @@ def build_dataloaders(
         image_size=image_size,
         normalize=not args.disable_normalization,
         hflip_prob=args.train_hflip_prob,
+        enable_train_augmentations=args.train_augmentations,
         max_samples=args.max_train_samples,
     )
     
@@ -1357,6 +1588,7 @@ def build_dataloaders(
         image_size=image_size,
         normalize=not args.disable_normalization,
         hflip_prob=0.0,
+        enable_train_augmentations=False,
         max_samples=args.max_test_samples,
     )
 
@@ -1438,6 +1670,12 @@ def create_argparser() -> argparse.ArgumentParser:
     parser.add_argument("--test-batch-size", type=int, default=4, help="Test batch size.")
     parser.add_argument("--num-workers", type=int, default=0, help="DataLoader worker count.")
     parser.add_argument("--train-hflip-prob", type=float, default=0.5, help="Horizontal flip probability for train data.")
+    parser.add_argument(
+        "--train-augmentations",
+        type=str2bool,
+        default=True,
+        help="Enable lane-focused train-time image/mask augmentations.",
+    )
     parser.add_argument("--max-train-samples", type=int, default=None, help="Optional cap on training samples for quick experiments.")
     parser.add_argument("--max-test-samples", type=int, default=None, help="Optional cap on test samples for quick experiments.")
     parser.add_argument("--drop-last", action="store_true", help="Drop the last incomplete train batch.")
@@ -1517,6 +1755,18 @@ def create_argparser() -> argparse.ArgumentParser:
         help="Optional JSON file to save/load the discovered category map.",
     )
     parser.add_argument(
+        "--train-categories",
+        nargs="+",
+        default=None,
+        help="Optional comma-separated foreground categories to train. Accepts SageMaker space-split tokens; unlisted labels become background.",
+    )
+    parser.add_argument(
+        "--foreground-class-name",
+        type=str,
+        default="",
+        help="Optional display name for a merged foreground class when train-categories are collapsed into one class.",
+    )
+    parser.add_argument(
         "--no-auto-discover-classes",
         type=str2bool,
         default=False,
@@ -1558,6 +1808,8 @@ def create_argparser() -> argparse.ArgumentParser:
 
 def train_worker(rank: int, world_size: int, args: argparse.Namespace) -> None:
     distributed = world_size > 1
+    foreground_class_name = args.foreground_class_name.strip() or None
+    selected_categories = resolve_selected_categories(args.train_categories, foreground_class_name)
 
     if distributed:
         setup_distributed(rank, world_size, args.master_addr, args.master_port)
@@ -1577,6 +1829,8 @@ def train_worker(rank: int, world_size: int, args: argparse.Namespace) -> None:
                     split=args.train_split,
                     auto_discover=not args.no_auto_discover_classes,
                     write_map=True,
+                    selected_categories=selected_categories,
+                    foreground_class_name=foreground_class_name,
                 )
             dist.barrier()
             if not is_main_process():
@@ -1586,6 +1840,8 @@ def train_worker(rank: int, world_size: int, args: argparse.Namespace) -> None:
                     split=args.train_split,
                     auto_discover=not args.no_auto_discover_classes,
                     write_map=False,
+                    selected_categories=selected_categories,
+                    foreground_class_name=foreground_class_name,
                 )
         else:
             class_to_idx = load_or_create_category_map(
@@ -1594,12 +1850,19 @@ def train_worker(rank: int, world_size: int, args: argparse.Namespace) -> None:
                 split=args.train_split,
                 auto_discover=not args.no_auto_discover_classes,
                 write_map=True,
+                selected_categories=selected_categories,
+                foreground_class_name=foreground_class_name,
             )
 
-        idx_to_class = {index: name for name, index in class_to_idx.items()}
+        idx_to_class = build_idx_to_class(
+            class_to_idx,
+            foreground_class_name=foreground_class_name,
+        )
+
+        num_classes = len(set(class_to_idx.values()))
 
         config = TrainConfig(
-            num_classes=len(class_to_idx),
+            num_classes=num_classes,
             backbone=args.backbone,
             output_stride=args.output_stride,
             crop_size=args.image_height,
@@ -1628,8 +1891,21 @@ def train_worker(rank: int, world_size: int, args: argparse.Namespace) -> None:
             print(f"JSON root:    {args.json_root}")
             print(f"Train split:  {args.train_split}")
             print(f"Test split:   {args.test_split}")
-            print(f"Classes:      {len(class_to_idx)}")
+            print(f"Classes:      {num_classes}")
             print(f"Background:   {idx_to_class[0]}")
+            if selected_categories:
+                print(f"Selected train categories: {', '.join(selected_categories)}")
+            if foreground_class_name:
+                print(f"Merged foreground class: {foreground_class_name}")
+            print(f"Train augmentations enabled: {args.train_augmentations}")
+            if args.train_augmentations:
+                if A is None:
+                    print("Train augmentations backend: unavailable (albumentations not installed); using horizontal flip only.")
+                else:
+                    print(
+                        "Train augmentations: horizontal flip, brightness/contrast or gamma, "
+                        "HSV jitter, blur, and mild affine/perspective transforms."
+                    )
             print(f"Model dir:    {args.model_dir}")
             print(f"Output dir:   {args.output_dir}")
             print(f"Train samples: {len(train_loader.dataset)}")
