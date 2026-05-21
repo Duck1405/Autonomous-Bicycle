@@ -16,3 +16,7 @@ new_data
 __pycache__/
 *.pyc
 *.pth
+data/
+.data/
+/home/aman/Projects/Auto/Autonomous-Bicycle/HybridNets/data
+/home/aman/Projects/Auto/Autonomous-Bicycle/HybridNets/data/
