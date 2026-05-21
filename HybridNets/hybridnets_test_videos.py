@@ -27,6 +27,8 @@ parser.add_argument('--cuda', type=boolean_string, default=True)
 parser.add_argument('--float16', type=boolean_string, default=True, help="Use float16 for faster inference")
 args = parser.parse_args()
 
+
+
 params = Params(f'projects/{args.project}.yml')
 color_list_seg = {}
 for seg_class in params.seg_list:
@@ -135,6 +137,10 @@ for video_index, video_src in enumerate(video_srcs):
         x.unsqueeze_(0)
         with torch.no_grad():
             features, regression, classification, anchors, seg = model(x)
+            print("features:", features.size())
+            print("regression:", regression.size())
+            print("classification:", classification.size())
+            print("anchors:", anchors.size())
 
             seg = seg[:, :, int(pad[1]):int(h+pad[1]), int(pad[0]):int(w+pad[0])]
             # (1, C, W, H) -> (1, W, H)

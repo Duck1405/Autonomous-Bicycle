@@ -29,12 +29,15 @@ parser.add_argument('--iou_thresh', type=restricted_float, default='0.3')
 parser.add_argument('--imshow', type=boolean_string, default=False, help="Show result onscreen (unusable on colab, jupyter...)")
 parser.add_argument('--imwrite', type=boolean_string, default=True, help="Write result to output folder")
 parser.add_argument('--show_det', type=boolean_string, default=False, help="Output detection result exclusively")
-parser.add_argument('--show_seg', type=boolean_string, default=False, help="Output segmentation result exclusively")
+parser.add_argument('--show_seg', type=boolean_string, default=True, help="Output segmentation result exclusively")
 parser.add_argument('--cuda', type=boolean_string, default=True)
 parser.add_argument('--float16', type=boolean_string, default=True, help="Use float16 for faster inference")
 parser.add_argument('--speed_test', type=boolean_string, default=False,
                     help='Measure inference latency')
 args = parser.parse_args()
+
+# /home/aman/Projects/Auto/models/hybridNet/results/checkpoints/hybridnets_epoch_025_weights.pth
+# python hybridnets_test.py -w /home/aman/Projects/Auto/models/hybridNet/results/checkpoints/hybridnets_epoch_025_weights.pth --source /home/aman/Projects/Auto/test_images_jpg/ --output demo_result --imshow False --imwrite True
 
 params = Params(f'projects/{args.project}.yml')
 color_list_seg = {}
@@ -66,7 +69,7 @@ show_det = args.show_det
 show_seg = args.show_seg
 os.makedirs(output, exist_ok=True)
 
-use_cuda = args.cuda
+use_cuda = True
 use_float16 = args.float16
 cudnn.fastest = True
 cudnn.benchmark = True
@@ -80,28 +83,38 @@ ori_imgs = [cv2.cvtColor(i, cv2.COLOR_BGR2RGB) for i in ori_imgs]
 print(f"FOUND {len(ori_imgs)} IMAGES")
 # cv2.imwrite('ori.jpg', ori_imgs[0])
 # cv2.imwrite('normalized.jpg', normalized_imgs[0]*255)
-resized_shape = params.model['image_size']
-if isinstance(resized_shape, list):
-    resized_shape = max(resized_shape)
+model_image_size = params.model['image_size']
+if isinstance(model_image_size, list):
+    target_width, target_height = model_image_size
+    resized_shape = (target_height, target_width)
+else:
+    resized_shape = (model_image_size, model_image_size)
 normalize = transforms.Normalize(
     mean=params.mean, std=params.std
 )
+
+
 transform = transforms.Compose([
     transforms.ToTensor(),
     normalize,
 ])
 for ori_img in ori_imgs:
     h0, w0 = ori_img.shape[:2]  # orig hw
-    r = resized_shape / max(h0, w0)  # resize image to img_size
+    r = max(resized_shape) / max(h0, w0)  # resize image to img_size
     input_img = cv2.resize(ori_img, (int(w0 * r), int(h0 * r)), interpolation=cv2.INTER_AREA)
     h, w = input_img.shape[:2]
 
-    (input_img, _), ratio, pad = letterbox((input_img, None), resized_shape, auto=True,
+    (input_img, _), ratio, pad = letterbox((input_img, None), resized_shape, auto=False,
                                               scaleup=False)
-
     input_imgs.append(input_img)
     # cv2.imwrite('input.jpg', input_img * 255)
     shapes.append(((h0, w0), ((h / h0, w / w0), pad)))  # for COCO mAP rescaling
+
+
+for fi in input_imgs:
+    print(fi.shape)
+    t = transform(fi)
+    print(t.shape)
 
 if use_cuda:
     x = torch.stack([transform(fi).cuda() for fi in input_imgs], 0)
@@ -136,23 +149,33 @@ if use_cuda:
 
 with torch.no_grad():
     features, regression, classification, anchors, seg = model(x)
+    print("features:", [feature.size() for feature in features])
+    print("regression:", regression.size()) 
+    print("classification:", classification.size())
+    print("anchors:", anchors.size())
 
     # in case of MULTILABEL_MODE, each segmentation class gets their own inference image
     seg_mask_list = []
     # (B, C, W, H) -> (B, W, H)
     if seg_mode == BINARY_MODE:
+        print("BINARY MODE SEGMENTATION")
         seg_mask = torch.where(seg >= 0, 1, 0)
         # print(torch.count_nonzero(seg_mask))
         seg_mask.squeeze_(1)
         seg_mask_list.append(seg_mask)
     elif seg_mode == MULTICLASS_MODE:
+        print("MULTICLASS MODE SEGMENTATION")
         _, seg_mask = torch.max(seg, 1)
         seg_mask_list.append(seg_mask)
     else:
+        print("MULTILABEL MODE SEGMENTATION")
         seg_mask_list = [torch.where(torch.sigmoid(seg)[:, i, ...] >= 0.5, 1, 0) for i in range(seg.size(1))]
         # but remove background class from the list
         seg_mask_list.pop(0)
     # (B, W, H) -> (W, H)
+    print("segmentation mask:", seg.size(0))
+    print(seg_mask_list)
+    print(len(seg_mask_list[0]))
     for i in range(seg.size(0)):
         #   print(i)
         for seg_class_index, seg_mask in enumerate(seg_mask_list):
@@ -181,32 +204,32 @@ with torch.no_grad():
 
     regressBoxes = BBoxTransform()
     clipBoxes = ClipBoxes()
-    out = postprocess(x,
-                      anchors, regression, classification,
-                      regressBoxes, clipBoxes,
-                      threshold, iou_threshold)
+    # out = postprocess(x,
+    #                   anchors, regression, classification,
+    #                   regressBoxes, clipBoxes,
+    #                   threshold, iou_threshold)
 
-    for i in range(len(ori_imgs)):
-        out[i]['rois'] = scale_coords(ori_imgs[i][:2], out[i]['rois'], shapes[i][0], shapes[i][1])
-        for j in range(len(out[i]['rois'])):
-            x1, y1, x2, y2 = out[i]['rois'][j].astype(int)
-            obj = obj_list[out[i]['class_ids'][j]]
-            score = float(out[i]['scores'][j])
-            plot_one_box(ori_imgs[i], [x1, y1, x2, y2], label=obj, score=score,
-                         color=color_list[get_index_label(obj, obj_list)])
-            if show_det:
-                plot_one_box(det_only_imgs[i], [x1, y1, x2, y2], label=obj, score=score,
-                             color=color_list[get_index_label(obj, obj_list)])
+    # for i in range(len(ori_imgs)):
+    #     out[i]['rois'] = scale_coords(ori_imgs[i][:2], out[i]['rois'], shapes[i][0], shapes[i][1])
+    #     for j in range(len(out[i]['rois'])):
+    #         x1, y1, x2, y2 = out[i]['rois'][j].astype(int)
+    #         obj = obj_list[out[i]['class_ids'][j]]
+    #         score = float(out[i]['scores'][j])
+    #         plot_one_box(ori_imgs[i], [x1, y1, x2, y2], label=obj, score=score,
+    #                      color=color_list[get_index_label(obj, obj_list)])
+    #         if show_det:
+    #             plot_one_box(det_only_imgs[i], [x1, y1, x2, y2], label=obj, score=score,
+    #                          color=color_list[get_index_label(obj, obj_list)])
 
-        if show_det:
-            cv2.imwrite(f'{output}/{i}_det.jpg',  cv2.cvtColor(det_only_imgs[i], cv2.COLOR_RGB2BGR))
+    #     if show_det:
+    #         cv2.imwrite(f'{output}/{i}_det.jpg',  cv2.cvtColor(det_only_imgs[i], cv2.COLOR_RGB2BGR))
 
-        if imshow:
-            cv2.imshow('img', ori_imgs[i])
-            cv2.waitKey(0)
+    #     if imshow:
+    #         cv2.imshow('img', ori_imgs[i])
+    #         cv2.waitKey(0)
 
-        if imwrite:
-            cv2.imwrite(f'{output}/{i}.jpg', cv2.cvtColor(ori_imgs[i], cv2.COLOR_RGB2BGR))
+    #     if imwrite:
+    #         cv2.imwrite(f'{output}/{i}.jpg', cv2.cvtColor(ori_imgs[i], cv2.COLOR_RGB2BGR))
 
 if not args.speed_test:
     exit(0)
