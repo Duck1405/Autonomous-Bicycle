@@ -13,8 +13,43 @@ from torchvision import transforms
 import argparse
 from utils.constants import *
 from collections import OrderedDict
+import matplotlib.pyplot as plt
+from matplotlib.colors import ListedColormap
+
 from torch.nn import functional as F
 
+
+
+def _select_primary_corridor(corridor_mask: np.ndarray) -> np.ndarray:
+    num_labels, labels, stats, centroids = cv2.connectedComponentsWithStats(corridor_mask, connectivity=8)
+    if num_labels <= 2:
+        return corridor_mask
+
+    height, width = corridor_mask.shape
+    anchor_x = width // 2
+    anchor_y = min(height - 1, int(height * 0.92))
+
+    anchor_label = labels[anchor_y, anchor_x]
+    if anchor_label > 0:
+        return (labels == anchor_label).astype(np.uint8) * 255
+
+    best_label = 0
+    best_score = float("-inf")
+    image_area = float(height * width)
+    for label_index in range(1, num_labels):
+        x, y, component_width, component_height, area = stats[label_index]
+        centroid_x, _ = centroids[label_index]
+        bottom_ratio = float(y + component_height) / max(height, 1)
+        center_distance = abs(float(centroid_x) - anchor_x) / max(width, 1)
+        area_ratio = float(area) / max(image_area, 1.0)
+        score = area_ratio * 2.0 + bottom_ratio - center_distance
+        if score > best_score:
+            best_score = score
+            best_label = label_index
+
+    if best_label <= 0:
+        return corridor_mask
+    return (labels == best_label).astype(np.uint8) * 255
 
 parser = argparse.ArgumentParser('HybridNets: End-to-End Perception Network - DatVu')
 parser.add_argument('-p', '--project', type=str, default='bdd100k', help='Project file that contains parameters')
@@ -179,11 +214,80 @@ with torch.no_grad():
     for i in range(seg.size(0)):
         #   print(i)
         for seg_class_index, seg_mask in enumerate(seg_mask_list):
+            
             seg_mask_ = seg_mask[i].squeeze().cpu().numpy()
-            pad_h = int(shapes[i][1][1][1])
-            pad_w = int(shapes[i][1][1][0])
+            edgeMask = (seg_mask_ == 2).astype(np.uint8) * 255
+            roadMask = (seg_mask_ == 1).astype(np.uint8) * 255
+            print("edgeMask")
+            print(edgeMask)
+            print("roadMask")
+            print(roadMask)
+            
+            kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5))
+            corridor_mask1 = cv2.morphologyEx(edgeMask, cv2.MORPH_CLOSE, kernel)
+            corridor_mask2 = cv2.medianBlur(corridor_mask1, 5)
+            corridor_mask3 = _select_primary_corridor(corridor_mask2)
+                
+            
+            print(edgeMask.shape)
+            fig, (ax1, ax2, ax3, ax4, ax5, ax6) = plt.subplots(1, 6, figsize=(24, 11.52))
+            ax1.set_title("Original Image")
+            ax1.imshow(input_imgs[i], origin="upper")
+            ax1.axis("off")
+
+            ax2.set_title("Edge Mask")
+            ax2.imshow(
+                edgeMask,
+                cmap=ListedColormap(["black", "blue"]),
+                origin='upper'
+            )
+            ax2.axis("off")
+
+            ax3.set_title("Corridor Mask after Morphological Closing")
+            ax3.imshow(
+                corridor_mask1,
+                cmap=ListedColormap(["black", "blue"]),
+                origin='upper'
+            )
+            ax3.axis("off")
+
+            ax4.set_title("Corridor Mask after Median Blur")
+            ax4.imshow(
+                corridor_mask2,
+                cmap=ListedColormap(["black", "blue"]),
+                origin='upper'
+            )
+            ax4.axis("off")
+
+            ax5.set_title("Primary Corridor Mask after Connected Components")
+            ax5.imshow(
+                corridor_mask3,
+                cmap=ListedColormap(["black", "blue"]),
+                origin='upper'
+            )
+            ax5.axis("off")
+
+            ax6.set_title("Original Segmentation Mask")
+            ax6.imshow(
+                seg_mask_,
+                cmap=ListedColormap(["black", "green", "blue"]),
+                vmin=0,
+                vmax=2,
+                origin='upper'
+            )
+            ax6.axis("off")
+
+            
+            plt.tight_layout()
+            plt.show()
+
+            pad_h = int(shapes[i][1][1][1]) # Shape[((original_height, original_width), ((resize_ratio_h, resize_ratio_w), pad))] getting this "resize_ratio_h"
+            pad_w = int(shapes[i][1][1][0]) # Shape[((original_height, original_width), ((resize_ratio_h, resize_ratio_w), pad))] geting this  "resize_ratio_w"
+            print("pad_h:", pad_h, "pad_w:", pad_w)
             seg_mask_ = seg_mask_[pad_h:seg_mask_.shape[0]-pad_h, pad_w:seg_mask_.shape[1]-pad_w]
+            print("segmentation mask after removing padding:", seg_mask_.shape)
             seg_mask_ = cv2.resize(seg_mask_, dsize=shapes[i][0][::-1], interpolation=cv2.INTER_NEAREST)
+            print("segmentation mask after resizing back to original shape:", seg_mask_.shape)
             color_seg = np.zeros((seg_mask_.shape[0], seg_mask_.shape[1], 3), dtype=np.uint8)
             for index, seg_class in enumerate(params.seg_list):
                     color_seg[seg_mask_ == index+1] = color_list_seg[seg_class]
