@@ -1,0 +1,31 @@
+# =========================
+# LaneNet Environment
+# Python 3.6 + Torch 1.2
+# =========================
+
+# Core DL
+# torch==1.2.0
+# torchvision==0.4.0
+
+# Numerical
+numpy==1.17.5
+scipy==1.5.4
+pandas==1.1.5
+
+# Computer Vision
+opencv-python==4.5.5.64
+Pillow==8.4.0
+scikit-image==0.17.2
+
+# Visualization
+matplotlib==3.3.4
+
+# Utilities
+tqdm==4.64.1
+PyYAML==5.4.1
+
+# ML Utilities
+scikit-learn==0.24.2
+
+# Logging
+tensorboardX==2.4
