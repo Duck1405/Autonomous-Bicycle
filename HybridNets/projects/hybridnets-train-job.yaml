@@ -61,7 +61,7 @@ spec:
                 --lr 0.0001 \
                 --optim adamw \
                 --num_epochs 1 \
-                --save_interval 500 \
+                --save_interval 1000 \
                 --val_interval 1 \
                 --saved_path /data/hybridnets_models/live/checkpoints \
                 --log_path /data/hybridnets/live/logs \
@@ -72,14 +72,14 @@ spec:
                 --num_gpus 2 \
                 --mosaic False
           resources:
-            requests:
-              cpu: "8"
+            requsts:
+              cpu: "12"
               memory: 64Gi
               ephemeral-storage: 50Gi
               nvidia.com/gpu: "2"
             limits:
-              cpu: "8"
-              memory: 128Gi
+              cpu: "12"
+              memory: 96Gi
               ephemeral-storage: 100Gi
               nvidia.com/gpu: "2"
           volumeMounts:
