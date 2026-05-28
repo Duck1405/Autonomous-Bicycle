@@ -1,4 +1,5 @@
 import argparse
+import atexit
 import datetime
 import os
 import traceback
@@ -23,6 +24,14 @@ from torch.distributed.optim import ZeroRedundancyOptimizer
 import torch.multiprocessing as mp
 import torch.distributed as dist
 from torch.utils.data import DataLoader
+
+
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+
+
+def cleanup_dist():
+    if dist.is_available() and dist.is_initialized():
+        dist.destroy_process_group()
 
 
 def get_args():
@@ -66,8 +75,8 @@ def get_args():
                         help='Whether to print results per class when valing')
     parser.add_argument('--plots', type=boolean_string, default=True,
                         help='Whether to plot confusion matrix when valing')
-    parser.add_argument('--num_gpus', type=int, default=1,
-                        help='Number of GPUs to be used (0 to use CPU)')
+    parser.add_argument('--num_gpus', type=int, default=None,
+                        help='Number of GPUs to use. Defaults to all visible CUDA GPUs.')
     parser.add_argument('--mosaic', type=boolean_string, default=False,
                         help='Use mosaic augmentation, '
                              'recommended when training object detection only.')
@@ -105,12 +114,14 @@ class ModelWithLoss(nn.Module):
 
 def train(rank, opt):
     print(2)
-    params = Params(f'projects/{opt.project}.yml')
+    torch.cuda.set_device(rank)
+    project_path = os.path.join(SCRIPT_DIR, 'projects', f'{opt.project}.yml')
+    if not os.path.exists(project_path):
+        project_path = os.path.join(SCRIPT_DIR, 'projects', f'{opt.project}.yaml')
+    params = Params(project_path)
 
     torch.cuda.manual_seed(69)
     torch.manual_seed(69)
-
-    setup(rank, opt.num_gpus)
 
     train_dataloader, val_dataloader = prepare(rank, params, opt)
 
@@ -177,6 +188,7 @@ def train(rank, opt):
     writer = SummaryWriter(opt.log_path + f'/{datetime.datetime.now().strftime("%Y%m%d-%H%M%S")}/')
 
     # wrap the model with loss function, to reduce the memory usage on gpu0 and speedup
+    setup(rank, opt.num_gpus)
     model = ModelWithLoss(model, debug=opt.debug)
     model = nn.SyncBatchNorm.convert_sync_batchnorm(model)
     model = model.to(rank)
@@ -208,7 +220,6 @@ def train(rank, opt):
     model.train()
 
     num_iter_per_epoch = len(train_dataloader)
-    torch.cuda.set_device(rank)
     try:
         for epoch in range(opt.num_epochs):
             last_epoch = step // num_iter_per_epoch
@@ -289,13 +300,14 @@ def train(rank, opt):
             save_checkpoint(model, opt.saved_path, f'hybridnets-d{opt.compound_coef}_{epoch}_{step}.pth')
     finally:
         writer.close()
-        dist.destroy_process_group()
+        cleanup_dist()
 
 
 def setup(rank, world_size):
-    os.environ['MASTER_ADDR'] = 'localhost'
-    os.environ['MASTER_PORT'] = '23456'
+    os.environ.setdefault('MASTER_ADDR', 'localhost')
+    os.environ.setdefault('MASTER_PORT', '23456')
     dist.init_process_group("nccl", rank=rank, world_size=world_size)
+    atexit.register(cleanup_dist)
 
 def prepare(rank, params, opt):
     train_dataset = BddDataset(
@@ -307,8 +319,7 @@ def prepare(rank, params, opt):
             transforms.Normalize(
                 mean=params.mean, std=params.std
             )
-        ]),
-        use_mosaic=opt.mosaic
+        ])
     )
     train_sampler = DistributedSampler(train_dataset, num_replicas=opt.num_gpus, rank=rank, shuffle=False, drop_last=True)
     train_dataloader = DataLoader(train_dataset, batch_size=opt.batch_size, pin_memory=params.pin_memory, num_workers=opt.num_workers,
@@ -332,7 +343,18 @@ def prepare(rank, params, opt):
     return train_dataloader, val_dataloader
 
 if __name__ == '__main__':
+    print("Starting training...")
     opt = get_args()
+    visible_gpu_count = torch.cuda.device_count()
+    if opt.num_gpus is None:
+        opt.num_gpus = visible_gpu_count
+    if opt.num_gpus < 1:
+        raise SystemExit('train_ddp.py requires at least one CUDA GPU. Use train.py for CPU/single-process training.')
+    if visible_gpu_count < opt.num_gpus:
+        raise SystemExit(
+            f'Requested --num_gpus {opt.num_gpus}, but only {visible_gpu_count} CUDA GPU(s) are visible.'
+        )
+    print(f"Using {opt.num_gpus} GPU(s): {list(range(opt.num_gpus))}")
     opt.saved_path = opt.saved_path + f'/{opt.project}/'
     opt.log_path = opt.log_path + f'/{opt.project}/tensorboard/'
     os.makedirs(opt.log_path, exist_ok=True)

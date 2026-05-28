@@ -30,17 +30,12 @@ seg_list: ['road',
 seg_multilabel: false  # a pixel can belong to multiple labels (i.e. lane line + underlying road)
 
 dataset:
-# dataroot: /home/aman/Projects/Auto/100k_images
-# labelroot: /home/aman/Projects/Auto/100k
-  dataroot: 100k_images
-  labelroot: 100k
+  dataroot: /data/100k_images
+  labelroot: /data/100k
   segroot:
   # must be in correct order with seg_list
-  # /home/aman/Projects/Auto/ExtraHybridNetGithubData/bdd_seg_gt
-  #  /home/aman/Projects/Auto/ExtraHybridNetGithubData/bdd_lane_gt
-
-  - bdd_seg_gt
-  - bdd_lane_gt
+    - /data/bdd_seg_gt
+    - /data/bdd_lane_gt
   test_set: val
   train_set: train
   org_img_size:

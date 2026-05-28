@@ -1,0 +1,130 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: hybridnets-train
+  namespace: ucm-vista
+spec:
+  backoffLimit: 2
+  template:
+    spec:
+      restartPolicy: Never
+      nodeSelector:
+        nvidia.com/gpu.product: NVIDIA-A10
+      containers:
+        - name: trainer
+          image: pytorch/pytorch:2.5.0-cuda12.1-cudnn9-runtime
+          imagePullPolicy: IfNotPresent
+          workingDir: /data/HybridNets
+          command: ["/bin/bash", "-lc"]
+          args:
+            - |
+              set -euxo pipefail
+
+              test -f extra/TrainingScript.py
+              test -f extra/sagemaker_real_hyperparameters.json
+              test -d /data/100k_images
+              test -d /data/bdd_seg_gt
+              test -d /data/bdd_lane_gt
+
+              export PYTHONPATH=/data/HybridNets:${PYTHONPATH:-}
+              export OMP_NUM_THREADS=1
+              export MKL_NUM_THREADS=1
+              export SM_NUM_GPUS=4
+
+              python -m pip install --upgrade pip
+              python -m pip install --no-cache-dir \
+                albumentations==1.1.0 \
+                efficientnet_pytorch==0.7.1 \
+                matplotlib \
+                numpy==1.26.4 \
+                opencv_python_headless==4.11.0.86 \
+                prefetch_generator==1.0.1 \
+                pretrainedmodels==0.7.4 \
+                psutil==5.9.0 \
+                PyYAML==6.0.2 \
+                scipy \
+                seaborn==0.11.2 \
+                tensorboardX==2.4.1 \
+                timm==0.5.4 \
+                tqdm==4.61.2 \
+                webcolors==1.11.1
+
+              python - <<'PY'
+              import json
+              import shlex
+              import subprocess
+              import sys
+              from pathlib import Path
+
+              hyperparameters = json.loads(
+                  Path("extra/sagemaker_real_hyperparameters.json").read_text()
+              )
+
+              option_map = {
+                  "image-width": "--image-width",
+                  "image-height": "--image-height",
+                  "compound-coef": "--compound-coef",
+                  "batch-size": "--batch-size",
+                  "num-workers": "--num-workers",
+                  "epochs": "--epochs",
+                  "lr": "--lr",
+                  "weight-decay": "--weight-decay",
+                  "amp": "--amp",
+                  "freeze-backbone": "--freeze-backbone",
+                  "freeze-det": "--freeze-det",
+                  "freeze-seg": "--freeze-seg",
+                  "debug": "--debug",
+                  "seed": "--seed",
+              }
+
+              command = [
+                  sys.executable,
+                  "extra/TrainingScript.py",
+                  "--images-root",
+                  "/data/100k_images",
+                  "--bundle-root",
+                  "/data",
+                  "--train-split",
+                  "train",
+                  "--val-split",
+                  "val",
+                  "--num-gpus",
+                  "1",
+                  "--save-dir",
+                  "/data/hybridnets_artifacts/live",
+                  "--model-dir",
+                  "/data/hybridnets_artifacts/model",
+                  "--output-dir",
+                  "/data/hybridnets_artifacts/output",
+              ]
+
+              for key, option in option_map.items():
+                  if key not in hyperparameters:
+                      continue
+                  value = hyperparameters[key]
+                  if isinstance(value, bool):
+                      value = "True" if value else "False"
+                  command.extend([option, str(value)])
+
+              print("Training command:")
+              print(" ".join(shlex.quote(part) for part in command))
+              subprocess.check_call(command)
+              PY
+          resources:
+            requests:
+              cpu: "16"
+              memory: 16Gi
+              ephemeral-storage: 50Gi
+              nvidia.com/gpu: "4"
+            limits:
+              cpu: "16"
+              memory: 64Gi
+              ephemeral-storage: 50Gi
+              nvidia.com/gpu: "8"
+          volumeMounts:
+            - name: data
+              mountPath: /data
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: lanenet-data
