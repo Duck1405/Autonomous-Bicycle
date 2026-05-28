@@ -9,10 +9,10 @@ spec:
     spec:
       restartPolicy: Never
       nodeSelector:
-        nvidia.com/gpu.product: nvidia.com/a40
+        nvidia.com/gpu.product: NVIDIA-A10
       containers:
         - name: trainer
-          image: pytorch/pytorch:2.5.0-cuda12.1-cudnn9-runtime
+          image: pytorch/pytorch:2.5.1-cuda12.1-cudnn9-runtime
           imagePullPolicy: IfNotPresent
           workingDir: /data/Autonomous-Bicycle/HybridNets
           command: ["/bin/bash", "-lc"]
@@ -30,7 +30,6 @@ spec:
               export OMP_NUM_THREADS=1
               export MKL_NUM_THREADS=1
               export MPLCONFIGDIR=/tmp/matplotlib
-              export SM_NUM_GPUS=2
 
               python -m pip install --upgrade pip
               python -m pip install --no-cache-dir --upgrade-strategy only-if-needed \
@@ -54,8 +53,8 @@ spec:
               python train_ddp.py \
                 -p bdd100k_nrp \
                 -bb tf_efficientnet_b3 \
-                -b 4 \
-                -n 8 \
+                -b 2 \
+                -n 2 \
                 --freeze_backbone False \
                 --freeze_det True \
                 --freeze_seg False \
@@ -64,8 +63,8 @@ spec:
                 --num_epochs 1 \
                 --save_interval 500 \
                 --val_interval 1 \
-                --saved_path /data/hybridnets_artifacts/live/checkpoints \
-                --log_path /data/hybridnets_artifacts/live/logs \
+                --saved_path /data/hybridnets_models/live/checkpoints \
+                --log_path /data/hybridnets/live/logs \
                 --debug False \
                 --cal_map False \
                 --verbose True \
@@ -74,14 +73,14 @@ spec:
                 --mosaic False
           resources:
             requests:
-              cpu: "4"
-              memory: 8Gi
+              cpu: "8"
+              memory: 64Gi
               ephemeral-storage: 50Gi
               nvidia.com/gpu: "2"
             limits:
               cpu: "8"
-              memory: 18Gi
-              ephemeral-storage: 50Gi
+              memory: 128Gi
+              ephemeral-storage: 100Gi
               nvidia.com/gpu: "2"
           volumeMounts:
             - name: data

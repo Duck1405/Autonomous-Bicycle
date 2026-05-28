@@ -67,6 +67,138 @@ def get_model_state(checkpoint):
     return state
 
 
+def bytes_to_gib(value):
+    if value is None:
+        return 'unknown'
+    return f'{value / 1024 ** 3:.2f} GiB'
+
+
+def read_cgroup_memory_value(paths):
+    for path in paths:
+        try:
+            with open(path) as f:
+                value = f.read().strip()
+        except OSError:
+            continue
+        if value == 'max':
+            return None
+        try:
+            return int(value)
+        except ValueError:
+            continue
+    return None
+
+
+def get_system_memory_info():
+    page_size = os.sysconf('SC_PAGE_SIZE')
+    total_pages = os.sysconf('SC_PHYS_PAGES')
+    available_pages = os.sysconf('SC_AVPHYS_PAGES')
+    return {
+        'host_total': total_pages * page_size,
+        'host_available': available_pages * page_size,
+        'container_limit': read_cgroup_memory_value([
+            '/sys/fs/cgroup/memory.max',
+            '/sys/fs/cgroup/memory/memory.limit_in_bytes',
+        ]),
+        'container_used': read_cgroup_memory_value([
+            '/sys/fs/cgroup/memory.current',
+            '/sys/fs/cgroup/memory/memory.usage_in_bytes',
+        ]),
+    }
+
+
+def print_resource_summary(visible_gpu_count):
+    memory = get_system_memory_info()
+    print('System RAM:')
+    print(f"  Host total:       {bytes_to_gib(memory['host_total'])}")
+    print(f"  Host available:   {bytes_to_gib(memory['host_available'])}")
+    print(f"  Container limit:  {bytes_to_gib(memory['container_limit'])}")
+    print(f"  Container used:   {bytes_to_gib(memory['container_used'])}")
+
+    print('GPU VRAM:')
+    if visible_gpu_count == 0:
+        print('  No CUDA GPUs visible.')
+        return
+    for i in range(visible_gpu_count):
+        props = torch.cuda.get_device_properties(i)
+        total = props.total_memory
+        try:
+            with torch.cuda.device(i):
+                free, runtime_total = torch.cuda.mem_get_info()
+            used = runtime_total - free
+            print(f'  GPU {i}: {props.name}')
+            print(f'    Total: {bytes_to_gib(total)}')
+            print(f'    Free:  {bytes_to_gib(free)}')
+            print(f'    Used:  {bytes_to_gib(used)}')
+        except RuntimeError as e:
+            print(f'  GPU {i}: {props.name}')
+            print(f'    Total: {bytes_to_gib(total)}')
+            print(f'    Runtime VRAM check failed: {e}')
+            
+            
+
+def print_gpu_memory_summary(label='', rank=None, all_gpus=False, reset_peak=False):
+    if not torch.cuda.is_available():
+        print(f'GPU memory summary{f" [{label}]" if label else ""}: CUDA is not available.')
+        return
+
+    visible_gpu_count = torch.cuda.device_count()
+    if visible_gpu_count == 0:
+        print(f'GPU memory summary{f" [{label}]" if label else ""}: no CUDA GPUs visible.')
+        return
+
+    if rank is not None and not all_gpus:
+        device_ids = [rank]
+    else:
+        device_ids = list(range(visible_gpu_count))
+
+    title = f'GPU memory summary [{label}]' if label else 'GPU memory summary'
+    print(title)
+    for device_id in device_ids:
+        if device_id < 0 or device_id >= visible_gpu_count:
+            print(f'  GPU {device_id}: not visible')
+            continue
+
+        try:
+            torch.cuda.synchronize(device_id)
+        except RuntimeError:
+            pass
+
+        props = torch.cuda.get_device_properties(device_id)
+        try:
+            with torch.cuda.device(device_id):
+                free, total = torch.cuda.mem_get_info()
+        except RuntimeError:
+            free = None
+            total = props.total_memory
+
+        allocated = torch.cuda.memory_allocated(device_id)
+        reserved = torch.cuda.memory_reserved(device_id)
+        max_allocated = torch.cuda.max_memory_allocated(device_id)
+        max_reserved = torch.cuda.max_memory_reserved(device_id)
+        used = None if free is None else total - free
+
+        print(f'  GPU {device_id}: {props.name}')
+        print(f'    Total VRAM:      {bytes_to_gib(total)}')
+        print(f'    Free VRAM:       {bytes_to_gib(free)}')
+        print(f'    Runtime used:    {bytes_to_gib(used)}')
+        print(f'    Torch allocated: {bytes_to_gib(allocated)}')
+        print(f'    Torch reserved:  {bytes_to_gib(reserved)}')
+        print(f'    Peak allocated:  {bytes_to_gib(max_allocated)}')
+        print(f'    Peak reserved:   {bytes_to_gib(max_reserved)}')
+
+        if reset_peak:
+            torch.cuda.reset_peak_memory_stats(device_id)
+
+
+def should_log_gpu_memory(opt, step, iteration):
+    if not opt.gpu_memory_debug:
+        return False
+    if iteration == 0:
+        return True
+    return opt.gpu_memory_debug_interval > 0 and step % opt.gpu_memory_debug_interval == 0
+
+
 def get_args():
     parser = argparse.ArgumentParser('HybridNets: End-to-End Perception Network - DatVu')
     parser.add_argument('-p', '--project', type=str, default='bdd100k', help='Project file that contains parameters')
@@ -113,6 +245,10 @@ def get_args():
     parser.add_argument('--mosaic', type=boolean_string, default=False,
                         help='Use mosaic augmentation, '
                              'recommended when training object detection only.')
+    parser.add_argument('--gpu_memory_debug', type=boolean_string, default=True,
+                        help='Print GPU VRAM usage around major training memory changes.')
+    parser.add_argument('--gpu_memory_debug_interval', type=int, default=0,
+                        help='Print per-step GPU VRAM details every N steps. 0 prints only the first step of each epoch.')
 
     args = parser.parse_args()
     return args
@@ -146,8 +282,11 @@ class ModelWithLoss(nn.Module):
 
 
 def train(rank, opt):
-    print(2)
+    print("Training process started for rank:", rank)
     torch.cuda.set_device(rank)
+    if opt.gpu_memory_debug:
+        print_gpu_memory_summary(f'rank {rank} start', rank=rank, reset_peak=True)
+
     project_path = os.path.join(SCRIPT_DIR, 'projects', f'{opt.project}.yml')
     if not os.path.exists(project_path):
         project_path = os.path.join(SCRIPT_DIR, 'projects', f'{opt.project}.yaml')
@@ -158,9 +297,13 @@ def train(rank, opt):
 
     train_dataloader, val_dataloader = prepare(rank, params, opt)
 
+    if opt.gpu_memory_debug:
+        print_gpu_memory_summary(f'rank {rank} before model create', rank=rank, reset_peak=True)
     model = HybridNetsBackbone(num_classes=len(params.obj_list), compound_coef=opt.compound_coef,
                                ratios=eval(params.anchors_ratios), scales=eval(params.anchors_scales),
                                seg_classes=len(params.seg_list), backbone_name=opt.backbone)
+    if opt.gpu_memory_debug:
+        print_gpu_memory_summary(f'rank {rank} after model create', rank=rank)
 
     # load last weights
     ckpt = {}
@@ -176,8 +319,14 @@ def train(rank, opt):
         #     last_step = 0
 
         try:
+            if opt.gpu_memory_debug:
+                print_gpu_memory_summary(f'rank {rank} before checkpoint load', rank=rank, reset_peak=True)
             ckpt = load_checkpoint(weights_path, rank)
+            if opt.gpu_memory_debug:
+                print_gpu_memory_summary(f'rank {rank} after checkpoint load', rank=rank)
             model.load_state_dict(get_model_state(ckpt), strict=False)
+            if opt.gpu_memory_debug:
+                print_gpu_memory_summary(f'rank {rank} after checkpoint state_dict load', rank=rank)
         except (RuntimeError, TypeError) as e:
             print(f'[Warning] Ignoring {e}')
             print(
@@ -226,8 +375,14 @@ def train(rank, opt):
     setup(rank, opt.num_gpus)
     model = ModelWithLoss(model, debug=opt.debug)
     model = nn.SyncBatchNorm.convert_sync_batchnorm(model)
+    if opt.gpu_memory_debug:
+        print_gpu_memory_summary(f'rank {rank} before model.to(cuda)', rank=rank, reset_peak=True)
     model = model.to(rank)
+    if opt.gpu_memory_debug:
+        print_gpu_memory_summary(f'rank {rank} after model.to(cuda)', rank=rank)
     model = DDP(model, device_ids=[rank], output_device=rank, find_unused_parameters=True)
+    if opt.gpu_memory_debug:
+        print_gpu_memory_summary(f'rank {rank} after DDP wrap', rank=rank)
 
     if opt.optim == 'adamw':
         optimizer = ZeroRedundancyOptimizer(
@@ -257,6 +412,8 @@ def train(rank, opt):
     num_iter_per_epoch = len(train_dataloader)
     try:
         for epoch in range(opt.num_epochs):
+            if opt.gpu_memory_debug:
+                print_gpu_memory_summary(f'rank {rank} before epoch {epoch}', rank=rank, reset_peak=True)
             last_epoch = step // num_iter_per_epoch
             if epoch < last_epoch:
                 continue
@@ -270,14 +427,27 @@ def train(rank, opt):
                     continue
                 try:
                     # print("WTF")
+                    log_gpu_memory = should_log_gpu_memory(opt, step, iter)
+                    if log_gpu_memory:
+                        print_gpu_memory_summary(
+                            f'rank {rank} step {step} before batch to cuda',
+                            rank=rank,
+                            reset_peak=True
+                        )
                     imgs = data['img'].to(rank)
                     annot = data['annot'].to(rank)
                     seg_annot = data['segmentation'].to(rank)
+                    if log_gpu_memory:
+                        print_gpu_memory_summary(f'rank {rank} step {step} after batch to cuda', rank=rank)
 
                     optimizer.zero_grad()
+                    if log_gpu_memory:
+                        print_gpu_memory_summary(f'rank {rank} step {step} before forward', rank=rank)
                     cls_loss, reg_loss, seg_loss, regression, classification, anchors, segmentation = model(imgs, annot,
                                                                                                             seg_annot,
                                                                                                             obj_list=params.obj_list)
+                    if log_gpu_memory:
+                        print_gpu_memory_summary(f'rank {rank} step {step} after forward', rank=rank)
                     cls_loss = cls_loss.mean()
                     reg_loss = reg_loss.mean()
                     seg_loss = seg_loss.mean()
@@ -291,8 +461,14 @@ def train(rank, opt):
                     if not all_ranks_have_valid_loss(loss, rank):
                         continue
 
+                    if log_gpu_memory:
+                        print_gpu_memory_summary(f'rank {rank} step {step} before backward', rank=rank)
                     loss.backward()
+                    if log_gpu_memory:
+                        print_gpu_memory_summary(f'rank {rank} step {step} after backward', rank=rank)
                     optimizer.step()
+                    if log_gpu_memory:
+                        print_gpu_memory_summary(f'rank {rank} step {step} after optimizer step', rank=rank)
 
                     epoch_loss.append(loss.detach().item())
 
@@ -333,8 +509,12 @@ def train(rank, opt):
             scheduler.step(epoch_loss_tensor.item())
 
             if epoch % opt.val_interval == 0:
+                if opt.gpu_memory_debug:
+                    print_gpu_memory_summary(f'rank {rank} before validation epoch {epoch}', rank=rank, reset_peak=True)
                 best_fitness, best_loss, best_epoch = val(model, rank, optimizer, val_dataloader, params, opt, writer, epoch,
                                                           step, best_fitness, best_loss, best_epoch)
+                if opt.gpu_memory_debug:
+                    print_gpu_memory_summary(f'rank {rank} after validation epoch {epoch}', rank=rank)
     except KeyboardInterrupt:
         if rank == 0:
             save_checkpoint(model, opt.saved_path, f'hybridnets-d{opt.compound_coef}_{epoch}_{step}.pth')
@@ -366,6 +546,7 @@ def prepare(rank, params, opt):
     train_dataloader = DataLoader(train_dataset, batch_size=opt.batch_size, pin_memory=params.pin_memory, num_workers=opt.num_workers,
                                     drop_last=True, shuffle=False, sampler=train_sampler, collate_fn=BddDataset.collate_fn)
     
+    
     val_dataset = BddDataset(
         params=params,
         is_train=False,
@@ -383,6 +564,7 @@ def prepare(rank, params, opt):
     
     return train_dataloader, val_dataloader
 
+
 if __name__ == '__main__':
     print("Starting training...")
     opt = get_args()
@@ -390,6 +572,8 @@ if __name__ == '__main__':
     print(opt)
     visible_gpu_count = torch.cuda.device_count()
     print(f"Visible GPU count: {visible_gpu_count}")
+    print_resource_summary(visible_gpu_count)
+    print_gpu_memory_summary('startup all visible GPUs', all_gpus=True)
     if opt.num_gpus is None:
         opt.num_gpus = visible_gpu_count
     if opt.num_gpus < 1:
@@ -398,11 +582,7 @@ if __name__ == '__main__':
         raise SystemExit(
             f'Requested --num_gpus {opt.num_gpus}, but only {visible_gpu_count} CUDA GPU(s) are visible.'
         )
-    
-    for i in range(torch.cuda.device_count()):
-        props = torch.cuda.get_device_properties(i)
-        print(f"GPU {i}: {props.name} (Memory: {round(props.total_memory / 1024**3)} GB)")
-    
+
     print(f"Using {opt.num_gpus} GPU(s): {list(range(opt.num_gpus))}")
     opt.saved_path = opt.saved_path + f'/{opt.project}/'
     print(f"Model checkpoints will be saved to: {opt.saved_path}")
