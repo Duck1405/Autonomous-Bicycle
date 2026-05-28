@@ -26,6 +26,23 @@ from utils.constants import MULTICLASS_MODE
 from utils.utils import init_weights
 
 
+#    # albumentations==1.1.0 \
+                # efficientnet_pytorch==0.7.1 \
+                # matplotlib \
+                # numpy==1.26.4 \
+                # opencv_python_headless==4.11.0.86 \
+                # prefetch_generator==1.0.1 \
+                # pretrainedmodels==0.7.4 \
+                # psutil==5.9.0 \
+                # PyYAML==6.0.2 \
+                # scipy \
+                # seaborn==0.11.2 \
+                # tensorboardX==2.4.1 \
+                # timm==0.5.4 \
+                # tqdm==4.61.2 \
+                # webcolors==1.11.1
+
+
 MEAN = (0.485, 0.456, 0.406)
 STD = (0.229, 0.224, 0.225)
 SEGMENTATION_CLASSES = ("background", "road", "lane")
@@ -1352,7 +1369,7 @@ def main() -> None:
             metrics_dir / "final_summary.json",
             output_metrics_dir / "final_summary.json",
             model_dir / "final_summary.json",
-        ],
+        ],  
         final_summary,
     )
     print(f"Final live weights written to {final_live_weights}")

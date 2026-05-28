@@ -34,6 +34,39 @@ def cleanup_dist():
         dist.destroy_process_group()
 
 
+def load_checkpoint(path, rank):
+    load_kwargs = {'map_location': f'cuda:{rank}'}
+    try:
+        return torch.load(path, weights_only=False, **load_kwargs)
+    except TypeError:
+        return torch.load(path, **load_kwargs)
+
+
+def average_tensor(tensor, world_size):
+    reduced = tensor.detach().clone()
+    dist.all_reduce(reduced, op=dist.ReduceOp.SUM)
+    reduced /= world_size
+    return reduced
+
+
+def all_ranks_have_valid_loss(loss, device):
+    valid = torch.isfinite(loss) & (loss.detach() != 0)
+    valid_tensor = torch.tensor(1 if valid.item() else 0, device=device, dtype=torch.int32)
+    dist.all_reduce(valid_tensor, op=dist.ReduceOp.MIN)
+    return bool(valid_tensor.item())
+
+
+def get_model_state(checkpoint):
+    state = checkpoint.get('model', checkpoint) if isinstance(checkpoint, dict) else checkpoint
+    if isinstance(state, DDP):
+        return state.module.model.state_dict()
+    if isinstance(state, ModelWithLoss):
+        return state.model.state_dict()
+    if isinstance(state, nn.Module):
+        return state.state_dict()
+    return state
+
+
 def get_args():
     parser = argparse.ArgumentParser('HybridNets: End-to-End Perception Network - DatVu')
     parser.add_argument('-p', '--project', type=str, default='bdd100k', help='Project file that contains parameters')
@@ -143,9 +176,9 @@ def train(rank, opt):
         #     last_step = 0
 
         try:
-            ckpt = torch.load(weights_path)
-            model.load_state_dict(ckpt.get('model', ckpt), strict=False)
-        except RuntimeError as e:
+            ckpt = load_checkpoint(weights_path, rank)
+            model.load_state_dict(get_model_state(ckpt), strict=False)
+        except (RuntimeError, TypeError) as e:
             print(f'[Warning] Ignoring {e}')
             print(
                 '[Warning] Don\'t panic if you see this, this might be because you load a pretrained weights with different number of classes. The rest of the weights should be loaded already.')
@@ -185,7 +218,9 @@ def train(rank, opt):
         model.apply(freeze_seg)
         print('[Info] freezed segmentation head')
 
-    writer = SummaryWriter(opt.log_path + f'/{datetime.datetime.now().strftime("%Y%m%d-%H%M%S")}/')
+    writer = None
+    if rank == 0:
+        writer = SummaryWriter(opt.log_path + f'/{datetime.datetime.now().strftime("%Y%m%d-%H%M%S")}/')
 
     # wrap the model with loss function, to reduce the memory usage on gpu0 and speedup
     setup(rank, opt.num_gpus)
@@ -209,13 +244,13 @@ def train(rank, opt):
             nesterov=True
         )
 
-    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, patience=3, verbose=True)
+    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, patience=3)
 
     epoch = 0
     best_loss = 1e5
     best_epoch = 0
-    last_step = ckpt['step'] if opt.load_weights is not None and ckpt.get('step', None) else 0
-    best_fitness = ckpt['best_fitness'] if opt.load_weights is not None and ckpt.get('best_fitness', None) else 0
+    last_step = ckpt.get('step', 0) if isinstance(ckpt, dict) else 0
+    best_fitness = ckpt.get('best_fitness', 0) if isinstance(ckpt, dict) else 0
     step = max(0, last_step)
     model.train()
 
@@ -230,7 +265,7 @@ def train(rank, opt):
             train_dataloader.sampler.set_epoch(epoch)
             progress_bar = tqdm(train_dataloader)
             for iter, data in enumerate(progress_bar):
-                if iter < step - last_epoch * num_iter_per_epoch and rank == 0:
+                if iter < step - last_epoch * num_iter_per_epoch:
                     progress_bar.update()
                     continue
                 try:
@@ -243,35 +278,38 @@ def train(rank, opt):
                     cls_loss, reg_loss, seg_loss, regression, classification, anchors, segmentation = model(imgs, annot,
                                                                                                             seg_annot,
                                                                                                             obj_list=params.obj_list)
-                    cls_loss = cls_loss.mean() # if not opt.freeze_det else 0
-                    reg_loss = reg_loss.mean() # if not opt.freeze_det else 0
-                    seg_loss = seg_loss.mean() # if not opt.freeze_seg else 0
+                    cls_loss = cls_loss.mean()
+                    reg_loss = reg_loss.mean()
+                    seg_loss = seg_loss.mean()
+                    if opt.freeze_det:
+                        cls_loss = seg_loss.new_zeros(())
+                        reg_loss = seg_loss.new_zeros(())
+                    if opt.freeze_seg:
+                        seg_loss = cls_loss.new_zeros(())
 
                     loss = cls_loss + reg_loss + seg_loss
-                    if loss == 0 or not torch.isfinite(loss):
+                    if not all_ranks_have_valid_loss(loss, rank):
                         continue
 
                     loss.backward()
                     optimizer.step()
 
-                    epoch_loss.append(float(loss))
-                    
-                    dist.reduce(loss, 0, op=dist.ReduceOp.AVG)
-                    dist.reduce(cls_loss, 0, op=dist.ReduceOp.AVG)
-                    dist.reduce(reg_loss, 0, op=dist.ReduceOp.AVG)
-                    dist.reduce(seg_loss, 0, op=dist.ReduceOp.AVG)
+                    epoch_loss.append(loss.detach().item())
 
-
+                    avg_loss = average_tensor(loss, opt.num_gpus)
+                    avg_cls_loss = average_tensor(cls_loss, opt.num_gpus)
+                    avg_reg_loss = average_tensor(reg_loss, opt.num_gpus)
+                    avg_seg_loss = average_tensor(seg_loss, opt.num_gpus)
 
                     if rank == 0:
                         progress_bar.set_description(
                             'Step: {}. Epoch: {}/{}. Iteration: {}/{}. Cls loss: {:.5f}. Reg loss: {:.5f}. Seg loss: {:.5f}. Total loss: {:.5f}'.format(
-                                step, epoch, opt.num_epochs, iter + 1, num_iter_per_epoch, cls_loss.item(),
-                                reg_loss.item(), seg_loss.item(), loss.item()))
-                        writer.add_scalars('Loss', {'train': loss}, step)
-                        writer.add_scalars('Regression_loss', {'train': reg_loss}, step)
-                        writer.add_scalars('Classfication_loss', {'train': cls_loss}, step)
-                        writer.add_scalars('Segmentation_loss', {'train': seg_loss}, step)
+                                step, epoch, opt.num_epochs, iter + 1, num_iter_per_epoch, avg_cls_loss.item(),
+                                avg_reg_loss.item(), avg_seg_loss.item(), avg_loss.item()))
+                        writer.add_scalars('Loss', {'train': avg_loss.item()}, step)
+                        writer.add_scalars('Regression_loss', {'train': avg_reg_loss.item()}, step)
+                        writer.add_scalars('Classfication_loss', {'train': avg_cls_loss.item()}, step)
+                        writer.add_scalars('Segmentation_loss', {'train': avg_seg_loss.item()}, step)
 
                         # log learning_rate
                         current_lr = optimizer.param_groups[0]['lr']
@@ -286,10 +324,12 @@ def train(rank, opt):
                 except Exception as e:
                     print('[Error]', traceback.format_exc())
                     print(e)
-                    continue
+                    raise
 
-            epoch_loss_tensor = torch.tensor(np.mean(epoch_loss), device=rank)
-            dist.all_reduce(epoch_loss_tensor, op=dist.ReduceOp.AVG)
+            local_epoch_loss = np.mean(epoch_loss) if epoch_loss else float('inf')
+            epoch_loss_tensor = torch.tensor(local_epoch_loss, device=rank)
+            dist.all_reduce(epoch_loss_tensor, op=dist.ReduceOp.SUM)
+            epoch_loss_tensor /= opt.num_gpus
             scheduler.step(epoch_loss_tensor.item())
 
             if epoch % opt.val_interval == 0:
@@ -299,7 +339,8 @@ def train(rank, opt):
         if rank == 0:
             save_checkpoint(model, opt.saved_path, f'hybridnets-d{opt.compound_coef}_{epoch}_{step}.pth')
     finally:
-        writer.close()
+        if writer is not None:
+            writer.close()
         cleanup_dist()
 
 
@@ -345,7 +386,10 @@ def prepare(rank, params, opt):
 if __name__ == '__main__':
     print("Starting training...")
     opt = get_args()
+    print("Arguments parsed.")
+    print(opt)
     visible_gpu_count = torch.cuda.device_count()
+    print(f"Visible GPU count: {visible_gpu_count}")
     if opt.num_gpus is None:
         opt.num_gpus = visible_gpu_count
     if opt.num_gpus < 1:
@@ -354,11 +398,20 @@ if __name__ == '__main__':
         raise SystemExit(
             f'Requested --num_gpus {opt.num_gpus}, but only {visible_gpu_count} CUDA GPU(s) are visible.'
         )
+    
+    for i in range(torch.cuda.device_count()):
+        props = torch.cuda.get_device_properties(i)
+        print(f"GPU {i}: {props.name} (Memory: {round(props.total_memory / 1024**3)} GB)")
+    
     print(f"Using {opt.num_gpus} GPU(s): {list(range(opt.num_gpus))}")
     opt.saved_path = opt.saved_path + f'/{opt.project}/'
+    print(f"Model checkpoints will be saved to: {opt.saved_path}")
     opt.log_path = opt.log_path + f'/{opt.project}/tensorboard/'
+    print(f"Tensorboard logs will be saved to: {opt.log_path}")
     os.makedirs(opt.log_path, exist_ok=True)
+    print(f"Ensuring checkpoint directory exists: {opt.saved_path}")
     os.makedirs(opt.saved_path, exist_ok=True)
+    print("Setup complete. Spawning processes for training...")
     print(1)
     mp.spawn(
         train,

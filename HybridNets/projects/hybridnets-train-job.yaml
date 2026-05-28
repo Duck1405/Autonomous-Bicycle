@@ -9,118 +9,80 @@ spec:
     spec:
       restartPolicy: Never
       nodeSelector:
-        nvidia.com/gpu.product: NVIDIA-A10
+        nvidia.com/gpu.product: nvidia.com/a40
       containers:
         - name: trainer
           image: pytorch/pytorch:2.5.0-cuda12.1-cudnn9-runtime
           imagePullPolicy: IfNotPresent
-          workingDir: /data/HybridNets
+          workingDir: /data/Autonomous-Bicycle/HybridNets
           command: ["/bin/bash", "-lc"]
           args:
             - |
               set -euxo pipefail
 
-              test -f extra/TrainingScript.py
-              test -f extra/sagemaker_real_hyperparameters.json
+              test -f train_ddp.py
+              test -f projects/bdd100k_nrp.yaml
               test -d /data/100k_images
+              test -d /data/100k
               test -d /data/bdd_seg_gt
               test -d /data/bdd_lane_gt
 
-              export PYTHONPATH=/data/HybridNets:${PYTHONPATH:-}
               export OMP_NUM_THREADS=1
               export MKL_NUM_THREADS=1
-              export SM_NUM_GPUS=4
+              export MPLCONFIGDIR=/tmp/matplotlib
+              export SM_NUM_GPUS=2
 
               python -m pip install --upgrade pip
-              python -m pip install --no-cache-dir \
-                albumentations==1.1.0 \
+              python -m pip install --no-cache-dir --upgrade-strategy only-if-needed \
+                "albumentations>=1.3,<2" \
+                "matplotlib>=3.7,<4" \
+                "numpy>=1.26,<2" \
+                "opencv-python-headless>=4.8,<5" \
+                "psutil>=5.9,<7" \
+                "PyYAML>=6,<7" \
+                "scipy>=1.10,<2" \
+                "seaborn>=0.12,<1" \
+                "tensorboardX>=2.6,<3" \
+                "tqdm>=4.66,<5" \
+                "webcolors>=1.13,<2"
+              python -m pip install --no-cache-dir --no-deps \
                 efficientnet_pytorch==0.7.1 \
-                matplotlib \
-                numpy==1.26.4 \
-                opencv_python_headless==4.11.0.86 \
                 prefetch_generator==1.0.1 \
                 pretrainedmodels==0.7.4 \
-                psutil==5.9.0 \
-                PyYAML==6.0.2 \
-                scipy \
-                seaborn==0.11.2 \
-                tensorboardX==2.4.1 \
-                timm==0.5.4 \
-                tqdm==4.61.2 \
-                webcolors==1.11.1
+                timm==0.5.4
 
-              python - <<'PY'
-              import json
-              import shlex
-              import subprocess
-              import sys
-              from pathlib import Path
-
-              hyperparameters = json.loads(
-                  Path("extra/sagemaker_real_hyperparameters.json").read_text()
-              )
-
-              option_map = {
-                  "image-width": "--image-width",
-                  "image-height": "--image-height",
-                  "compound-coef": "--compound-coef",
-                  "batch-size": "--batch-size",
-                  "num-workers": "--num-workers",
-                  "epochs": "--epochs",
-                  "lr": "--lr",
-                  "weight-decay": "--weight-decay",
-                  "amp": "--amp",
-                  "freeze-backbone": "--freeze-backbone",
-                  "freeze-det": "--freeze-det",
-                  "freeze-seg": "--freeze-seg",
-                  "debug": "--debug",
-                  "seed": "--seed",
-              }
-
-              command = [
-                  sys.executable,
-                  "extra/TrainingScript.py",
-                  "--images-root",
-                  "/data/100k_images",
-                  "--bundle-root",
-                  "/data",
-                  "--train-split",
-                  "train",
-                  "--val-split",
-                  "val",
-                  "--num-gpus",
-                  "1",
-                  "--save-dir",
-                  "/data/hybridnets_artifacts/live",
-                  "--model-dir",
-                  "/data/hybridnets_artifacts/model",
-                  "--output-dir",
-                  "/data/hybridnets_artifacts/output",
-              ]
-
-              for key, option in option_map.items():
-                  if key not in hyperparameters:
-                      continue
-                  value = hyperparameters[key]
-                  if isinstance(value, bool):
-                      value = "True" if value else "False"
-                  command.extend([option, str(value)])
-
-              print("Training command:")
-              print(" ".join(shlex.quote(part) for part in command))
-              subprocess.check_call(command)
-              PY
+              python train_ddp.py \
+                -p bdd100k_nrp \
+                -bb tf_efficientnet_b3 \
+                -b 4 \
+                -n 8 \
+                --freeze_backbone False \
+                --freeze_det True \
+                --freeze_seg False \
+                --lr 0.0001 \
+                --optim adamw \
+                --num_epochs 1 \
+                --save_interval 500 \
+                --val_interval 1 \
+                --saved_path /data/hybridnets_artifacts/live/checkpoints \
+                --log_path /data/hybridnets_artifacts/live/logs \
+                --debug False \
+                --cal_map False \
+                --verbose True \
+                --plots False \
+                --num_gpus 2 \
+                --mosaic False
           resources:
             requests:
-              cpu: "16"
-              memory: 16Gi
+              cpu: "4"
+              memory: 8Gi
               ephemeral-storage: 50Gi
-              nvidia.com/gpu: "4"
+              nvidia.com/gpu: "2"
             limits:
-              cpu: "16"
-              memory: 64Gi
+              cpu: "8"
+              memory: 18Gi
               ephemeral-storage: 50Gi
-              nvidia.com/gpu: "8"
+              nvidia.com/gpu: "2"
           volumeMounts:
             - name: data
               mountPath: /data

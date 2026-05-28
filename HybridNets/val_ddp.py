@@ -17,11 +17,12 @@ import time
 @torch.no_grad()
 def val(model, rank, optimizer, val_generator, params, opt, writer, epoch, step, best_fitness, best_loss, best_epoch):
     model.eval()
+    device = torch.device(f'cuda:{rank}')
     loss_regression_ls = []
     loss_classification_ls = []
     loss_segmentation_ls = []
     jdict, stats, ap, ap_class = [], [], [], []
-    iou_thresholds = torch.linspace(0.5, 0.95, 10).cuda()  # iou vector for mAP@0.5:0.95
+    iou_thresholds = torch.linspace(0.5, 0.95, 10, device=device)  # iou vector for mAP@0.5:0.95
     num_thresholds = iou_thresholds.numel()
     names = {i: v for i, v in enumerate(params.obj_list)}
     nc = len(names)
@@ -69,7 +70,7 @@ def val(model, rank, optimizer, val_generator, params, opt, writer, epoch, step,
 
                 pred = np.column_stack([ou['rois'], ou['scores']])
                 pred = np.column_stack([pred, ou['class_ids']])
-                pred = torch.from_numpy(pred).cuda()
+                pred = torch.from_numpy(pred).to(device)
 
                 target_class = labels[:, 4].tolist() if nl else []  # target class
 
@@ -87,7 +88,7 @@ def val(model, rank, optimizer, val_generator, params, opt, writer, epoch, step,
                     if opt.plots:
                         confusion_matrix.process_batch(pred, labels)
                 else:
-                    correct = torch.zeros(pred.shape[0], num_thresholds, dtype=torch.bool)
+                    correct = torch.zeros(pred.shape[0], num_thresholds, dtype=torch.bool, device=device)
                 stats.append((correct.cpu(), pred[:, 4].cpu(), pred[:, 5].cpu(), target_class))
 
                 # print(stats)
@@ -111,12 +112,16 @@ def val(model, rank, optimizer, val_generator, params, opt, writer, epoch, step,
             # batch_size, num_classes, height, width
             _, segmentation = torch.max(segmentation, 1)
             # _, seg_annot = torch.max(seg_annot, 1)
-            seg = torch.zeros((seg_annot.size(0), 3, 384, 640), dtype=torch.int32)
+            seg = torch.zeros(
+                (seg_annot.size(0), len(params.seg_list) + 1, segmentation.shape[-2], segmentation.shape[-1]),
+                dtype=torch.int32,
+                device=device,
+            )
             seg[:, 0, ...][segmentation == 0] = 1
             seg[:, 1, ...][segmentation == 1] = 1
             seg[:, 2, ...][segmentation == 2] = 1
 
-            tp_seg, fp_seg, fn_seg, tn_seg = smp_metrics.get_stats(seg.cuda(), seg_annot.long().cuda(),
+            tp_seg, fp_seg, fn_seg, tn_seg = smp_metrics.get_stats(seg, seg_annot.long().to(device),
                                                                    mode='multilabel', threshold=None)
 
             iou = smp_metrics.iou_score(tp_seg, fp_seg, fn_seg, tn_seg, reduction='none')
@@ -248,7 +253,7 @@ def val(model, rank, optimizer, val_generator, params, opt, writer, epoch, step,
             ckpt = {'epoch': epoch,
                     'step': step,
                     'best_fitness': best_fitness,
-                    'model': model,
+                    'model': model.module.model.state_dict(),
                     # 'optimizer': optimizer.state_dict()
                     }
             print("Saving checkpoint with best fitness", fi[0])

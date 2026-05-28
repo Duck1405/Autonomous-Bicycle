@@ -77,7 +77,7 @@ class HybridNetsBackbone(nn.Module):
                                      onnx_export=onnx_export)
 
         if backbone_name:
-            self.encoder = timm.create_model(backbone_name, pretrained=True, features_only=True, out_indices=(2,3,4))  # P3,P4,P5
+            self.encoder = timm.create_model(backbone_name, pretrained=True, features_only=True, out_indices=(1,2,3,4))  # P2,P3,P4,P5
         else:
             # EfficientNet_Pytorch
             self.encoder = get_encoder(
