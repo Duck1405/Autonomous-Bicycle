@@ -65,7 +65,7 @@ spec:
                 --val_interval 1 \
                 --saved_path /data/hybridnets_models/live/checkpoints \
                 --log_path /data/hybridnets/live/logs \
-                --debug False \
+                --debug True \
                 --cal_map False \
                 --verbose True \
                 --plots False \

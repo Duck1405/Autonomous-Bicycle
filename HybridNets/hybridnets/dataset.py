@@ -15,7 +15,8 @@ from utils.constants import *
 
 
 class BddDataset(Dataset):
-    def __init__(self, params, is_train, inputsize=[640, 384], transform=None, seg_mode=MULTICLASS_MODE, debug=False):
+    def __init__(self, params, is_train, inputsize=[640, 384], transform=None, seg_mode=MULTICLASS_MODE, debug=False,
+                 lazy_load_labels=False):
         """
         initial all the characteristic
 
@@ -66,40 +67,50 @@ class BddDataset(Dataset):
         self.traffic_light_color = params.traffic_light_color
         self.mosaic_border = [-1 * self.inputsize[1] // 2, -1 * self.inputsize[0] // 2]
         self.seg_mode = seg_mode
+        self.lazy_load_labels = lazy_load_labels
         self.db = self._get_db()
+
+    def _make_record_paths(self, label_path):
+        label_path = str(label_path)
+        image_path = label_path.replace(str(self.label_root), str(self.img_root)).replace(".json", ".jpg")
+        seg_path = {}
+        for i in range(len(self.seg_list)):
+            seg_path[self.seg_list[i]] = label_path.replace(str(self.label_root), str(self.seg_root[i])).replace(".json", ".png")
+        return label_path, image_path, seg_path
+
+    def _load_detection_label(self, label_path):
+        height, width = self.shapes
+        with open(label_path, 'r') as f:
+            label = json.load(f)
+        data = label['frames'][0]['objects']
+        data = self.select_data(data)
+        gt = np.zeros((len(data), 5))
+        for idx, obj in enumerate(data):
+            category = obj['category']
+            x1 = float(obj['box2d']['x1'])
+            y1 = float(obj['box2d']['y1'])
+            x2 = float(obj['box2d']['x2'])
+            y2 = float(obj['box2d']['y2'])
+            if len(self.obj_combine):  # multiple classes into 1 class
+                cls_id = 0
+            else:
+                cls_id = self.obj_list.index(category)
+            gt[idx][0] = cls_id
+            box = self.convert((width, height), (x1, x2, y1, y2))
+            gt[idx][1:] = list(box)
+        return gt
 
     def _get_db(self):
         """
         TODO: add docs
         """
-        print('building database...')
+        if self.lazy_load_labels:
+            print('indexing dataset files...')
+        else:
+            print('building database...')
         gt_db = []
-        height, width = self.shapes
         for label in tqdm(self.label_list, ascii=True):
-            label_path = str(label)
-            image_path = label_path.replace(str(self.label_root), str(self.img_root)).replace(".json", ".jpg")
-            seg_path = {}
-            for i in range(len(self.seg_list)):
-                seg_path[self.seg_list[i]] = label_path.replace(str(self.label_root), str(self.seg_root[i])).replace(".json", ".png")
-                # seg_path[self.seg_list[i]] = cv2.imread(label_path.replace(str(self.label_root), str(self.seg_root[i])).replace(".json", ".png"), 0)
-            with open(label_path, 'r') as f:
-                label = json.load(f)
-            data = label['frames'][0]['objects']
-            data = self.select_data(data)
-            gt = np.zeros((len(data), 5))
-            for idx, obj in enumerate(data):
-                category = obj['category']
-                x1 = float(obj['box2d']['x1'])
-                y1 = float(obj['box2d']['y1'])
-                x2 = float(obj['box2d']['x2'])
-                y2 = float(obj['box2d']['y2'])
-                if len(self.obj_combine):  # multiple classes into 1 class
-                    cls_id = 0
-                else:
-                    cls_id = self.obj_list.index(category)
-                gt[idx][0] = cls_id
-                box = self.convert((width, height), (x1, x2, y1, y2))
-                gt[idx][1:] = list(box)
+            label_path, image_path, seg_path = self._make_record_paths(label)
 
             # img = cv2.imread(image_path, cv2.IMREAD_COLOR | cv2.IMREAD_IGNORE_ORIENTATION)
             # img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
@@ -107,13 +118,19 @@ class BddDataset(Dataset):
             rec = {
                 # 'image': img,
                 'image': image_path,
-                'label': gt,
             }
+            if self.lazy_load_labels:
+                rec['label_path'] = label_path
+            else:
+                rec['label'] = self._load_detection_label(label_path)
             # Since seg_path is a dynamic dict
             rec = {**rec, **seg_path}
 
             gt_db.append(rec)
-        print('database build finish')
+        if self.lazy_load_labels:
+            print('dataset file indexing finish')
+        else:
+            print('database build finish')
         return gt_db
 
 
@@ -131,7 +148,10 @@ class BddDataset(Dataset):
 
     def load_image(self, index):
         data = self.db[index]
-        det_label = data["label"]
+        if self.lazy_load_labels:
+            det_label = self._load_detection_label(data["label_path"])
+        else:
+            det_label = data["label"]
         img = cv2.imread(data["image"], cv2.IMREAD_COLOR | cv2.IMREAD_IGNORE_ORIENTATION)
         img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
         # img = data["image"]

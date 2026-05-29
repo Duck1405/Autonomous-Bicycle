@@ -555,7 +555,8 @@ def prepare(rank, params, opt, seg_mode):
             )
         ]),
         seg_mode=seg_mode,
-        debug=opt.debug
+        debug=opt.debug,
+        lazy_load_labels=True
     )
     train_sampler = DistributedSampler(train_dataset, num_replicas=opt.num_gpus, rank=rank, shuffle=False, drop_last=True)
     train_dataloader = DataLoader(train_dataset, batch_size=opt.batch_size, pin_memory=params.pin_memory, num_workers=opt.num_workers,
@@ -573,7 +574,8 @@ def prepare(rank, params, opt, seg_mode):
             )
         ]),
         seg_mode=seg_mode,
-        debug=opt.debug
+        debug=opt.debug,
+        lazy_load_labels=True
     )
     val_sampler = DistributedSampler(val_dataset, num_replicas=opt.num_gpus, rank=rank, shuffle=False, drop_last=True)
     val_dataloader = DataLoader(val_dataset, batch_size=opt.batch_size, pin_memory=params.pin_memory, num_workers=opt.num_workers,
