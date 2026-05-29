@@ -44,8 +44,8 @@ dataset:
   test_set: val
   train_set: train
   org_img_size:
-  - 720
-  - 1280
+  - 1080
+  - 1920
   fliplr: 0.5
   flipud: 0.0
   hsv_h: 0.015
