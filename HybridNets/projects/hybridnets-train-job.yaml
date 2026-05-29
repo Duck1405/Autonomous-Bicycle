@@ -4,7 +4,7 @@ metadata:
   name: hybridnets-train
   namespace: ucm-vista
 spec:
-  backoffLimit: 2
+  backoffLimit: 0
   template:
     spec:
       restartPolicy: Never
@@ -72,7 +72,7 @@ spec:
                 --num_gpus 2 \
                 --mosaic False
           resources:
-            requsts:
+            requests:
               cpu: "12"
               memory: 64Gi
               ephemeral-storage: 50Gi

@@ -18,6 +18,7 @@ from utils.utils import get_last_weights, init_weights, boolean_string, save_che
 from hybridnets.dataset import BddDataset
 from hybridnets.loss import FocalLossSeg, TverskyLoss
 from hybridnets.autoanchor import run_anchor
+from utils.constants import BINARY_MODE, MULTICLASS_MODE, MULTILABEL_MODE
 from torch.utils.data.distributed import DistributedSampler
 from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.distributed.optim import ZeroRedundancyOptimizer
@@ -254,12 +255,16 @@ def get_args():
     return args
 
 
+def get_segmentation_mode(params):
+    return MULTILABEL_MODE if params.seg_multilabel else MULTICLASS_MODE if len(params.seg_list) > 1 else BINARY_MODE
+
+
 class ModelWithLoss(nn.Module):
-    def __init__(self, model, debug=False):
+    def __init__(self, model, seg_mode, debug=False):
         super().__init__()
         self.criterion = FocalLoss()
-        self.seg_criterion1 = TverskyLoss(mode='multilabel', alpha=0.7, beta=0.3, gamma=4.0 / 3, from_logits=False)
-        self.seg_criterion2 = FocalLossSeg(mode='multilabel', alpha=0.25)
+        self.seg_criterion1 = TverskyLoss(mode=seg_mode, alpha=0.7, beta=0.3, gamma=4.0 / 3, from_logits=True)
+        self.seg_criterion2 = FocalLossSeg(mode=seg_mode, alpha=0.25)
         self.model = model
         self.debug = debug
 
@@ -295,13 +300,16 @@ def train(rank, opt):
     torch.cuda.manual_seed(69)
     torch.manual_seed(69)
 
-    train_dataloader, val_dataloader = prepare(rank, params, opt)
+    seg_mode = get_segmentation_mode(params)
+    print(f'[Info] rank {rank} using segmentation mode: {seg_mode}')
+
+    train_dataloader, val_dataloader = prepare(rank, params, opt, seg_mode)
 
     if opt.gpu_memory_debug:
         print_gpu_memory_summary(f'rank {rank} before model create', rank=rank, reset_peak=True)
     model = HybridNetsBackbone(num_classes=len(params.obj_list), compound_coef=opt.compound_coef,
                                ratios=eval(params.anchors_ratios), scales=eval(params.anchors_scales),
-                               seg_classes=len(params.seg_list), backbone_name=opt.backbone)
+                               seg_classes=len(params.seg_list), backbone_name=opt.backbone, seg_mode=seg_mode)
     if opt.gpu_memory_debug:
         print_gpu_memory_summary(f'rank {rank} after model create', rank=rank)
 
@@ -373,7 +381,7 @@ def train(rank, opt):
 
     # wrap the model with loss function, to reduce the memory usage on gpu0 and speedup
     setup(rank, opt.num_gpus)
-    model = ModelWithLoss(model, debug=opt.debug)
+    model = ModelWithLoss(model, seg_mode=seg_mode, debug=opt.debug)
     model = nn.SyncBatchNorm.convert_sync_batchnorm(model)
     if opt.gpu_memory_debug:
         print_gpu_memory_summary(f'rank {rank} before model.to(cuda)', rank=rank, reset_peak=True)
@@ -530,7 +538,12 @@ def setup(rank, world_size):
     dist.init_process_group("nccl", rank=rank, world_size=world_size)
     atexit.register(cleanup_dist)
 
-def prepare(rank, params, opt):
+def prepare(rank, params, opt, seg_mode):
+    
+    print(f"inputsize: {params.model['image_size']}")
+    print(f"mean: {params.mean}, std: {params.std}")
+    
+    print("Making Train Dataset")
     train_dataset = BddDataset(
         params=params,
         is_train=True,
@@ -540,13 +553,15 @@ def prepare(rank, params, opt):
             transforms.Normalize(
                 mean=params.mean, std=params.std
             )
-        ])
+        ]),
+        seg_mode=seg_mode,
+        debug=opt.debug
     )
     train_sampler = DistributedSampler(train_dataset, num_replicas=opt.num_gpus, rank=rank, shuffle=False, drop_last=True)
     train_dataloader = DataLoader(train_dataset, batch_size=opt.batch_size, pin_memory=params.pin_memory, num_workers=opt.num_workers,
                                     drop_last=True, shuffle=False, sampler=train_sampler, collate_fn=BddDataset.collate_fn)
     
-    
+    print("Making Val Dataset")
     val_dataset = BddDataset(
         params=params,
         is_train=False,
@@ -557,6 +572,8 @@ def prepare(rank, params, opt):
                 mean=params.mean, std=params.std
             )
         ]),
+        seg_mode=seg_mode,
+        debug=opt.debug
     )
     val_sampler = DistributedSampler(val_dataset, num_replicas=opt.num_gpus, rank=rank, shuffle=False, drop_last=True)
     val_dataloader = DataLoader(val_dataset, batch_size=opt.batch_size, pin_memory=params.pin_memory, num_workers=opt.num_workers,
