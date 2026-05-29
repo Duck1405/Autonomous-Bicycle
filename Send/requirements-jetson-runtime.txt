@@ -1,7 +1,0 @@
-# Install Jetson-native torch/torchvision wheels separately before using this file.
-# Validated clean environment versions on the workstation:
-# torch==1.13.1
-# torchvision==0.14.1
-numpy==1.26.4
-opencv-python-headless==4.11.0.86
-efficientnet-pytorch==0.7.1
