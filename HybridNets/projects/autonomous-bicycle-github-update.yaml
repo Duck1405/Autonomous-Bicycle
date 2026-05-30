@@ -1,0 +1,59 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: autonomous-bicycle-github-update
+  namespace: ucm-vista
+spec:
+  backoffLimit: 0
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: github-updater
+          image: alpine/git:2.45.2
+          imagePullPolicy: IfNotPresent
+          command: ["/bin/sh", "-lc"]
+          args:
+            - |
+              set -eux
+
+              REPO_URL="https://github.com/Duck1405/Autonomous-Bicycle.git"
+              TARGET_DIR="/data/Autonomous-Bicycle"
+              BRANCH="main"
+
+              if [ -d "${TARGET_DIR}/.git" ]; then
+                git -C "${TARGET_DIR}" remote set-url origin "${REPO_URL}"
+                git -C "${TARGET_DIR}" fetch --depth=1 origin "${BRANCH}"
+                git -C "${TARGET_DIR}" reset --hard "origin/${BRANCH}"
+                git -C "${TARGET_DIR}" clean -fd
+              else
+                TMP_DIR="${TARGET_DIR}.tmp"
+                BACKUP_DIR="${TARGET_DIR}.backup.$(date +%s)"
+
+                rm -rf "${TMP_DIR}"
+                git clone --depth=1 --branch "${BRANCH}" "${REPO_URL}" "${TMP_DIR}"
+
+                if [ -e "${TARGET_DIR}" ]; then
+                  mv "${TARGET_DIR}" "${BACKUP_DIR}"
+                fi
+                mv "${TMP_DIR}" "${TARGET_DIR}"
+              fi
+
+              git -C "${TARGET_DIR}" status --short
+              git -C "${TARGET_DIR}" rev-parse HEAD
+          resources:
+            requests:
+              cpu: "1"
+              memory: 1Gi
+              ephemeral-storage: 2Gi
+            limits:
+              cpu: "2"
+              memory: 2Gi
+              ephemeral-storage: 5Gi
+          volumeMounts:
+            - name: data
+              mountPath: /data
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: lanenet-data
