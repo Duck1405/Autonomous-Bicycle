@@ -6,6 +6,7 @@ import traceback
 
 import numpy as np
 import torch
+import torch.nn.functional as F
 from tensorboardX import SummaryWriter
 from torch import nn
 from torchvision import transforms
@@ -15,6 +16,7 @@ from val_ddp import val
 from backbone import HybridNetsBackbone
 from hybridnets.loss import FocalLoss
 from utils.utils import get_last_weights, init_weights, boolean_string, save_checkpoint, Params
+from utils.metrics_logging import append_jsonl
 from hybridnets.dataset import BddDataset
 from hybridnets.loss import FocalLossSeg, TverskyLoss
 from hybridnets.autoanchor import run_anchor
@@ -55,6 +57,97 @@ def all_ranks_have_valid_loss(loss, device):
     valid_tensor = torch.tensor(1 if valid.item() else 0, device=device, dtype=torch.int32)
     dist.all_reduce(valid_tensor, op=dist.ReduceOp.MIN)
     return bool(valid_tensor.item())
+
+
+@torch.no_grad()
+def segmentation_metric_sums(segmentation, seg_annot, seg_mode):
+    device = segmentation.device
+    stats = torch.zeros(17, dtype=torch.float64, device=device)
+    logits = segmentation.detach().float()
+    target = seg_annot.detach().long().to(device)
+
+    if seg_mode == MULTICLASS_MODE:
+        probabilities = logits.softmax(dim=1)
+        log_loss_sum = F.cross_entropy(logits, target, reduction='sum')
+        true_class_probability = probabilities.gather(1, target.unsqueeze(1)).squeeze(1)
+        topk_count = min(2, probabilities.size(1))
+        topk = probabilities.topk(topk_count, dim=1)
+        confidence = topk.values[:, 0]
+        margin = topk.values[:, 0] - topk.values[:, 1] if topk_count > 1 else topk.values[:, 0]
+        entropy = -(probabilities * probabilities.clamp_min(1e-12).log()).sum(dim=1)
+        correct_pixels = topk.indices[:, 0] == target
+    else:
+        probabilities = torch.sigmoid(logits)
+        target_float = target.float()
+        log_loss_sum = F.binary_cross_entropy_with_logits(logits, target_float, reduction='sum')
+        prediction = probabilities >= 0.5
+        confidence = torch.where(prediction, probabilities, 1.0 - probabilities)
+        margin = torch.abs(probabilities - 0.5) * 2.0
+        entropy = -(
+            probabilities * probabilities.clamp_min(1e-12).log()
+            + (1.0 - probabilities) * (1.0 - probabilities).clamp_min(1e-12).log()
+        )
+        true_class_probability = torch.where(target_float >= 0.5, probabilities, 1.0 - probabilities)
+        correct_pixels = prediction.long() == target
+
+    confidence_flat = confidence.detach().double().reshape(-1)
+    margin_flat = margin.detach().double().reshape(-1)
+    entropy_flat = entropy.detach().double().reshape(-1)
+    correct_flat = correct_pixels.detach().reshape(-1)
+
+    stats[0] = confidence_flat.sum()
+    stats[1] = (confidence_flat ** 2).sum()
+    stats[2] = entropy_flat.sum()
+    stats[3] = margin_flat.sum()
+    stats[4] = confidence_flat.numel()
+    stats[5] = (confidence_flat < 0.5).sum()
+    stats[6] = (confidence_flat < 0.7).sum()
+    stats[7] = (confidence_flat < 0.9).sum()
+    stats[8] = correct_flat.sum()
+    if correct_flat.any():
+        stats[9] = confidence_flat[correct_flat].sum()
+        stats[10] = correct_flat.sum()
+    incorrect_flat = ~correct_flat
+    if incorrect_flat.any():
+        stats[11] = confidence_flat[incorrect_flat].sum()
+        stats[12] = incorrect_flat.sum()
+    stats[13] = (entropy_flat ** 2).sum()
+    stats[14] = log_loss_sum.detach().double()
+    stats[15] = true_class_probability.numel()
+    stats[16] = true_class_probability.detach().double().sum()
+    return stats
+
+
+def summarize_segmentation_metric_sums(stats):
+    pixel_count = max(float(stats[4].item()), 1.0)
+    correct_pixel_count = max(float(stats[10].item()), 1.0)
+    incorrect_pixel_count = max(float(stats[12].item()), 1.0)
+    log_loss_count = max(float(stats[15].item()), 1.0)
+
+    confidence_mean = stats[0].item() / pixel_count
+    confidence_variance = max(stats[1].item() / pixel_count - confidence_mean ** 2, 0.0)
+    entropy_mean = stats[2].item() / pixel_count
+    entropy_variance = max(stats[13].item() / pixel_count - entropy_mean ** 2, 0.0)
+    return {
+        'num_pixels': int(stats[4].item()),
+        'pixel_accuracy': stats[8].item() / pixel_count,
+        'segmentation_log_loss': stats[14].item() / log_loss_count,
+        'mean_true_class_probability': stats[16].item() / log_loss_count,
+        'confidence': {
+            'mean': confidence_mean,
+            'std': confidence_variance ** 0.5,
+            'mean_on_correct_pixels': stats[9].item() / correct_pixel_count,
+            'mean_on_incorrect_pixels': stats[11].item() / incorrect_pixel_count,
+            'low_confidence_fraction_lt_0_5': stats[5].item() / pixel_count,
+            'low_confidence_fraction_lt_0_7': stats[6].item() / pixel_count,
+            'low_confidence_fraction_lt_0_9': stats[7].item() / pixel_count,
+        },
+        'uncertainty': {
+            'mean_entropy': entropy_mean,
+            'entropy_std': entropy_variance ** 0.5,
+            'mean_class_margin': stats[3].item() / pixel_count,
+        },
+    }
 
 
 def get_model_state(checkpoint):
@@ -232,6 +325,8 @@ def get_args():
                         help='Whether to load weights from a checkpoint, set None to initialize,'
                              'set \'last\' to load last checkpoint')
     parser.add_argument('--saved_path', type=str, default='checkpoints/')
+    parser.add_argument('--metrics_path', type=str, default=None,
+                        help='Path for line-delimited JSON metrics. Defaults to <log_path>/<project>/tensorboard/metrics.jsonl')
     parser.add_argument('--debug', type=boolean_string, default=False,
                         help='Whether visualize the predicted boxes of training, '
                              'the output images will be in test/')
@@ -241,12 +336,18 @@ def get_args():
                         help='Whether to print results per class when valing')
     parser.add_argument('--plots', type=boolean_string, default=True,
                         help='Whether to plot confusion matrix when valing')
+    parser.add_argument('--conf_thres', type=float, default=0.001,
+                        help='Confidence threshold for detection validation')
+    parser.add_argument('--iou_thres', type=float, default=0.6,
+                        help='NMS IoU threshold for detection validation')
     parser.add_argument('--num_gpus', type=int, default=None,
                         help='Number of GPUs to use. Defaults to all visible CUDA GPUs.')
     parser.add_argument('--mosaic', type=boolean_string, default=False,
                         help='Use mosaic augmentation, '
                              'recommended when training object detection only.')
-    parser.add_argument('--gpu_memory_debug', type=boolean_string, default=True,
+    parser.add_argument('--amp', type=boolean_string, default=False,
+                        help='Automatic Mixed Precision training')
+    parser.add_argument('--gpu_memory_debug', type=boolean_string, default=False,
                         help='Print GPU VRAM usage around major training memory changes.')
     parser.add_argument('--gpu_memory_debug_interval', type=int, default=0,
                         help='Print per-step GPU VRAM details every N steps. 0 prints only the first step of each epoch.')
@@ -268,20 +369,25 @@ class ModelWithLoss(nn.Module):
         self.model = model
         self.debug = debug
 
-    def forward(self, imgs, annotations, seg_annot, obj_list=None):
+    def forward(self, imgs, annotations, seg_annot, obj_list=None, skip_detection_loss=False, skip_seg_loss=False):
         _, regression, classification, anchors, segmentation = self.model(imgs)
 
-        if self.debug:
+        if skip_detection_loss:
+            zero = segmentation.new_zeros(1)
+            cls_loss = zero
+            reg_loss = zero
+        elif self.debug:
             cls_loss, reg_loss = self.criterion(classification, regression, anchors, annotations,
                                                 imgs=imgs, obj_list=obj_list)
-            tversky_loss = self.seg_criterion1(segmentation, seg_annot)
-            focal_loss = self.seg_criterion2(segmentation, seg_annot)
         else:
             cls_loss, reg_loss = self.criterion(classification, regression, anchors, annotations)
+
+        if skip_seg_loss:
+            seg_loss = segmentation.new_zeros(1)
+        else:
             tversky_loss = self.seg_criterion1(segmentation, seg_annot)
             focal_loss = self.seg_criterion2(segmentation, seg_annot)
-
-        seg_loss = tversky_loss + 1 * focal_loss
+            seg_loss = tversky_loss + 1 * focal_loss
 
         return cls_loss, reg_loss, seg_loss, regression, classification, anchors, segmentation
 
@@ -296,6 +402,12 @@ def train(rank, opt):
     if not os.path.exists(project_path):
         project_path = os.path.join(SCRIPT_DIR, 'projects', f'{opt.project}.yaml')
     params = Params(project_path)
+    if not opt.mosaic:
+        params.dataset['mosaic'] = 0.0
+        params.dataset['mixup'] = 0.0
+        print(f'[Info] rank {rank} disabled mosaic and mixup from CLI --mosaic False')
+    if opt.freeze_det and opt.freeze_seg:
+        raise ValueError('Cannot freeze both detection and segmentation heads: no active task loss would remain.')
 
     torch.cuda.manual_seed(69)
     torch.manual_seed(69)
@@ -340,39 +452,29 @@ def train(rank, opt):
             print(
                 '[Warning] Don\'t panic if you see this, this might be because you load a pretrained weights with different number of classes. The rest of the weights should be loaded already.')
     else:
-        print('[Info] initializing weights...')
-        init_weights(model)
+        print('[Info] initializing non-encoder weights...')
+        init_weights(model.bifpn)
+        init_weights(model.bifpndecoder)
+        init_weights(model.segmentation_head)
+        init_weights(model.regressor)
+        init_weights(model.classifier)
 
     print('[Info] Successfully!!!')
 
     if opt.freeze_backbone:
-        def freeze_backbone(m):
-            classname = m.__class__.__name__
-            if classname in ['EfficientNetEncoder', 'BiFPN']:  # replace backbone classname when using another backbone
-                print("[Info] freezing {}".format(classname))
-                for param in m.parameters():
-                    param.requires_grad = False
-        model.apply(freeze_backbone)
+        model.encoder.requires_grad_(False)
+        model.bifpn.requires_grad_(False)
         print('[Info] freezed backbone')
 
     if opt.freeze_det:
-        def freeze_det(m):
-            classname = m.__class__.__name__
-            if classname in ['Regressor', 'Classifier', 'Anchors']:
-                print("[Info] freezing {}".format(classname))
-                for param in m.parameters():
-                    param.requires_grad = False
-        model.apply(freeze_det)
+        model.regressor.requires_grad_(False)
+        model.classifier.requires_grad_(False)
+        model.anchors.requires_grad_(False)
         print('[Info] freezed detection head')
 
     if opt.freeze_seg:
-        def freeze_seg(m):
-            classname = m.__class__.__name__
-            if classname in ['BiFPNDecoder', 'SegmentationHead']:
-                print("[Info] freezing {}".format(classname))
-                for param in m.parameters():
-                    param.requires_grad = False
-        model.apply(freeze_seg)
+        model.bifpndecoder.requires_grad_(False)
+        model.segmentation_head.requires_grad_(False)
         print('[Info] freezed segmentation head')
 
     writer = None
@@ -385,27 +487,32 @@ def train(rank, opt):
     model = nn.SyncBatchNorm.convert_sync_batchnorm(model)
     if opt.gpu_memory_debug:
         print_gpu_memory_summary(f'rank {rank} before model.to(cuda)', rank=rank, reset_peak=True)
-    model = model.to(rank)
+    model = model.to(rank, memory_format=torch.channels_last)
     if opt.gpu_memory_debug:
         print_gpu_memory_summary(f'rank {rank} after model.to(cuda)', rank=rank)
-    model = DDP(model, device_ids=[rank], output_device=rank, find_unused_parameters=True)
+    model = DDP(model, device_ids=[rank], output_device=rank, find_unused_parameters=False)
     if opt.gpu_memory_debug:
         print_gpu_memory_summary(f'rank {rank} after DDP wrap', rank=rank)
 
+    trainable_params = [param for param in model.parameters() if param.requires_grad]
+    if not trainable_params:
+        raise RuntimeError('No trainable parameters remain after applying freeze options.')
+
     if opt.optim == 'adamw':
         optimizer = ZeroRedundancyOptimizer(
-            model.parameters(),
+            trainable_params,
             optimizer_class=torch.optim.AdamW,
             lr=opt.lr
         )
     else:
         optimizer = ZeroRedundancyOptimizer(
-            model.parameters(),
+            trainable_params,
             optimizer_class=torch.optim.SGD,
             lr=opt.lr,
             momentum=0.9,
             nesterov=True
         )
+    scaler = torch.cuda.amp.GradScaler(enabled=opt.amp)
 
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, patience=3)
 
@@ -427,8 +534,12 @@ def train(rank, opt):
                 continue
 
             epoch_loss = []
+            epoch_cls_loss = []
+            epoch_reg_loss = []
+            epoch_seg_loss = []
+            epoch_segmentation_metric_sums = torch.zeros(17, dtype=torch.float64, device=rank)
             train_dataloader.sampler.set_epoch(epoch)
-            progress_bar = tqdm(train_dataloader)
+            progress_bar = tqdm(train_dataloader, ascii=True, disable=rank != 0)
             for iter, data in enumerate(progress_bar):
                 if iter < step - last_epoch * num_iter_per_epoch:
                     progress_bar.update()
@@ -442,43 +553,49 @@ def train(rank, opt):
                             rank=rank,
                             reset_peak=True
                         )
-                    imgs = data['img'].to(rank)
-                    annot = data['annot'].to(rank)
-                    seg_annot = data['segmentation'].to(rank)
+                    imgs = data['img'].to(rank, non_blocking=params.pin_memory,
+                                          memory_format=torch.channels_last)
+                    annot = data['annot'].to(rank, non_blocking=params.pin_memory)
+                    seg_annot = data['segmentation'].to(rank, non_blocking=params.pin_memory)
                     if log_gpu_memory:
                         print_gpu_memory_summary(f'rank {rank} step {step} after batch to cuda', rank=rank)
 
-                    optimizer.zero_grad()
+                    optimizer.zero_grad(set_to_none=True)
                     if log_gpu_memory:
                         print_gpu_memory_summary(f'rank {rank} step {step} before forward', rank=rank)
-                    cls_loss, reg_loss, seg_loss, regression, classification, anchors, segmentation = model(imgs, annot,
-                                                                                                            seg_annot,
-                                                                                                            obj_list=params.obj_list)
+                    with torch.cuda.amp.autocast(enabled=opt.amp):
+                        cls_loss, reg_loss, seg_loss, regression, classification, anchors, segmentation = model(
+                            imgs,
+                            annot,
+                            seg_annot,
+                            obj_list=params.obj_list,
+                            skip_detection_loss=opt.freeze_det,
+                            skip_seg_loss=opt.freeze_seg,
+                        )
+                        cls_loss = cls_loss.mean()
+                        reg_loss = reg_loss.mean()
+                        seg_loss = seg_loss.mean()
+                        loss = cls_loss + reg_loss + seg_loss
                     if log_gpu_memory:
                         print_gpu_memory_summary(f'rank {rank} step {step} after forward', rank=rank)
-                    cls_loss = cls_loss.mean()
-                    reg_loss = reg_loss.mean()
-                    seg_loss = seg_loss.mean()
-                    if opt.freeze_det:
-                        cls_loss = seg_loss.new_zeros(())
-                        reg_loss = seg_loss.new_zeros(())
-                    if opt.freeze_seg:
-                        seg_loss = cls_loss.new_zeros(())
-
-                    loss = cls_loss + reg_loss + seg_loss
                     if not all_ranks_have_valid_loss(loss, rank):
                         continue
 
                     if log_gpu_memory:
                         print_gpu_memory_summary(f'rank {rank} step {step} before backward', rank=rank)
-                    loss.backward()
+                    scaler.scale(loss).backward()
                     if log_gpu_memory:
                         print_gpu_memory_summary(f'rank {rank} step {step} after backward', rank=rank)
-                    optimizer.step()
+                    scaler.step(optimizer)
+                    scaler.update()
                     if log_gpu_memory:
                         print_gpu_memory_summary(f'rank {rank} step {step} after optimizer step', rank=rank)
 
                     epoch_loss.append(loss.detach().item())
+                    epoch_cls_loss.append(cls_loss.detach().item())
+                    epoch_reg_loss.append(reg_loss.detach().item())
+                    epoch_seg_loss.append(seg_loss.detach().item())
+                    epoch_segmentation_metric_sums += segmentation_metric_sums(segmentation, seg_annot, seg_mode)
 
                     avg_loss = average_tensor(loss, opt.num_gpus)
                     avg_cls_loss = average_tensor(cls_loss, opt.num_gpus)
@@ -510,17 +627,65 @@ def train(rank, opt):
                     print(e)
                     raise
 
-            local_epoch_loss = np.mean(epoch_loss) if epoch_loss else float('inf')
-            epoch_loss_tensor = torch.tensor(local_epoch_loss, device=rank)
-            dist.all_reduce(epoch_loss_tensor, op=dist.ReduceOp.SUM)
-            epoch_loss_tensor /= opt.num_gpus
-            scheduler.step(epoch_loss_tensor.item())
+            train_loss_sums = torch.tensor(
+                [
+                    float(np.sum(epoch_loss)),
+                    float(np.sum(epoch_cls_loss)),
+                    float(np.sum(epoch_reg_loss)),
+                    float(np.sum(epoch_seg_loss)),
+                    float(len(epoch_loss)),
+                ],
+                dtype=torch.float64,
+                device=rank,
+            )
+            dist.all_reduce(train_loss_sums, op=dist.ReduceOp.SUM)
+            train_count = max(float(train_loss_sums[4].item()), 1.0)
+            train_loss = train_loss_sums[0].item() / train_count
+            train_cls_loss = train_loss_sums[1].item() / train_count
+            train_reg_loss = train_loss_sums[2].item() / train_count
+            train_seg_loss = train_loss_sums[3].item() / train_count
+            train_optimizer_steps = int(train_count / max(opt.num_gpus, 1))
+            dist.all_reduce(epoch_segmentation_metric_sums, op=dist.ReduceOp.SUM)
+            train_segmentation_metrics = summarize_segmentation_metric_sums(epoch_segmentation_metric_sums)
+            scheduler.step(train_loss)
+
+            if rank == 0:
+                train_metrics = {
+                    'phase': 'train',
+                    'project': opt.project,
+                    'epoch': epoch,
+                    'step': step,
+                    'loss': train_loss,
+                    'classification_loss': train_cls_loss,
+                    'regression_loss': train_reg_loss,
+                    'segmentation_loss': train_seg_loss,
+                    'learning_rate': optimizer.param_groups[0]['lr'],
+                    'num_batches': train_optimizer_steps,
+                    'num_rank_batches': int(train_count),
+                    'batch_size_per_rank': opt.batch_size,
+                    'global_batch_size': opt.batch_size * opt.num_gpus,
+                    'num_gpus': opt.num_gpus,
+                    'num_workers_per_rank': opt.num_workers,
+                    'freeze_backbone': opt.freeze_backbone,
+                    'freeze_det': opt.freeze_det,
+                    'freeze_seg': opt.freeze_seg,
+                    'mosaic': params.dataset['mosaic'],
+                    'mixup': params.dataset['mixup'],
+                    'amp': opt.amp,
+                    'conf_thres': opt.conf_thres,
+                    'iou_thres': opt.iou_thres,
+                    'segmentation_mode': seg_mode,
+                    'segmentation_classes': ['background', *params.seg_list] if seg_mode != BINARY_MODE else params.seg_list,
+                    'detection_classes': params.obj_list,
+                }
+                train_metrics.update(train_segmentation_metrics)
+                append_jsonl(opt.metrics_path, train_metrics)
 
             if epoch % opt.val_interval == 0:
                 if opt.gpu_memory_debug:
                     print_gpu_memory_summary(f'rank {rank} before validation epoch {epoch}', rank=rank, reset_peak=True)
                 best_fitness, best_loss, best_epoch = val(model, rank, optimizer, val_dataloader, params, opt, writer, epoch,
-                                                          step, best_fitness, best_loss, best_epoch)
+                                                          step, best_fitness, best_loss, best_epoch, seg_mode)
                 if opt.gpu_memory_debug:
                     print_gpu_memory_summary(f'rank {rank} after validation epoch {epoch}', rank=rank)
     except KeyboardInterrupt:
@@ -558,7 +723,7 @@ def prepare(rank, params, opt, seg_mode):
         debug=opt.debug,
         lazy_load_labels=True
     )
-    train_sampler = DistributedSampler(train_dataset, num_replicas=opt.num_gpus, rank=rank, shuffle=False, drop_last=True)
+    train_sampler = DistributedSampler(train_dataset, num_replicas=opt.num_gpus, rank=rank, shuffle=True, drop_last=True)
     train_dataloader = DataLoader(train_dataset, batch_size=opt.batch_size, pin_memory=params.pin_memory, num_workers=opt.num_workers,
                                     drop_last=True, shuffle=False, sampler=train_sampler, collate_fn=BddDataset.collate_fn)
     
@@ -577,9 +742,9 @@ def prepare(rank, params, opt, seg_mode):
         debug=opt.debug,
         lazy_load_labels=True
     )
-    val_sampler = DistributedSampler(val_dataset, num_replicas=opt.num_gpus, rank=rank, shuffle=False, drop_last=True)
+    val_sampler = DistributedSampler(val_dataset, num_replicas=opt.num_gpus, rank=rank, shuffle=False, drop_last=False)
     val_dataloader = DataLoader(val_dataset, batch_size=opt.batch_size, pin_memory=params.pin_memory, num_workers=opt.num_workers,
-                                    drop_last=True, shuffle=False, sampler=val_sampler, collate_fn=BddDataset.collate_fn)
+                                    drop_last=False, shuffle=False, sampler=val_sampler, collate_fn=BddDataset.collate_fn)
     
     return train_dataloader, val_dataloader
 
@@ -608,6 +773,9 @@ if __name__ == '__main__':
     opt.log_path = opt.log_path + f'/{opt.project}/tensorboard/'
     print(f"Tensorboard logs will be saved to: {opt.log_path}")
     os.makedirs(opt.log_path, exist_ok=True)
+    if opt.metrics_path is None:
+        opt.metrics_path = os.path.join(opt.log_path, 'metrics.jsonl')
+    print(f"JSON metrics will be saved to: {opt.metrics_path}")
     print(f"Ensuring checkpoint directory exists: {opt.saved_path}")
     os.makedirs(opt.saved_path, exist_ok=True)
     print("Setup complete. Spawning processes for training...")

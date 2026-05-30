@@ -8,6 +8,9 @@ import torch
 
 from road_segmentation_model import build_road_segmentation_model
 from road_guidance import RoadGuidanceConfig, RoadGuidanceEstimator, draw_guidance_overlay
+from utils.constants import MULTICLASS_MODE
+from utils.segmentation import segmentation_logits_to_probabilities, segmentation_probabilities_to_predictions, \
+    resize_segmentation_probabilities
 from utils.utils import letterbox
 
 
@@ -56,6 +59,10 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--max-angle", type=float, default=45.0, help="Maximum steering angle shown in the guidance gauge")
     parser.add_argument("--write-mask-video", type=parse_bool, default=False)
     parser.add_argument("--mask-output", type=str, default=None, help="Optional path for a color-mask-only video")
+    parser.add_argument("--confidence-output-dir", type=str, default=None,
+                        help="Optional directory for per-frame per-pixel confidence .npz files")
+    parser.add_argument("--confidence-stride", type=int, default=1,
+                        help="Save confidence for every Nth frame when --confidence-output-dir is set")
     return parser
 
 
@@ -165,6 +172,7 @@ def main() -> None:
     video_path = Path(args.video).expanduser().resolve()
     output_path = Path(args.output).expanduser().resolve()
     mask_output_path = Path(args.mask_output).expanduser().resolve() if args.mask_output else output_path.with_name(output_path.stem + "_mask.mp4")
+    confidence_output_dir = Path(args.confidence_output_dir).expanduser().resolve() if args.confidence_output_dir else None
 
     if not weights_path.exists():
         raise FileNotFoundError(f"Weights file not found: {weights_path}")
@@ -209,6 +217,8 @@ def main() -> None:
     total_frames = int(capture.get(cv2.CAP_PROP_FRAME_COUNT))
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
+    if confidence_output_dir is not None:
+        confidence_output_dir.mkdir(parents=True, exist_ok=True)
     writer = cv2.VideoWriter(
         str(output_path),
         cv2.VideoWriter_fourcc(*"mp4v"),
@@ -225,21 +235,44 @@ def main() -> None:
         )
 
     frame_index = 0
+    source_frame_index = 0
     start_time = time.perf_counter()
     pending_tensors: list[torch.Tensor] = []
     pending_frames: list[np.ndarray] = []
+    pending_frame_indices: list[int] = []
 
     def flush_batch():
-        nonlocal frame_index, pending_tensors, pending_frames
+        nonlocal frame_index, pending_tensors, pending_frames, pending_frame_indices
         if not pending_tensors:
             return
         batch_tensor = torch.stack(pending_tensors, dim=0).to(device, non_blocking=True)
         if device.type == "cuda":
             batch_tensor = batch_tensor.to(memory_format=torch.channels_last)
         segmentation_logits = run_segmentation_batch(model, batch_tensor, use_amp)
-        segmentation_masks = segmentation_logits.argmax(dim=1).detach().cpu().numpy().astype(np.uint8)
+        segmentation_probabilities = segmentation_logits_to_probabilities(segmentation_logits.float(), MULTICLASS_MODE)
+        segmentation_masks = segmentation_probabilities.argmax(dim=1).detach().cpu().numpy().astype(np.uint8)
 
-        for frame_bgr, segmentation_mask in zip(pending_frames, segmentation_masks):
+        for batch_offset, (source_frame_index, frame_bgr, segmentation_mask) in enumerate(
+            zip(pending_frame_indices, pending_frames, segmentation_masks)
+        ):
+            if confidence_output_dir is not None and source_frame_index % max(args.confidence_stride, 1) == 0:
+                frame_probabilities = resize_segmentation_probabilities(
+                    segmentation_probabilities[batch_offset:batch_offset + 1],
+                    size=frame_bgr.shape[:2],
+                )
+                frame_probabilities = frame_probabilities / frame_probabilities.sum(dim=1, keepdim=True).clamp_min(1e-12)
+                frame_prediction, frame_confidence = segmentation_probabilities_to_predictions(
+                    frame_probabilities,
+                    MULTICLASS_MODE,
+                )
+                np.savez_compressed(
+                    confidence_output_dir / f'frame_{source_frame_index:06d}_seg_confidence.npz',
+                    probabilities=frame_probabilities.squeeze(0).detach().cpu().numpy().astype(np.float32),
+                    predicted_class=frame_prediction.squeeze(0).detach().cpu().numpy().astype(np.uint8),
+                    confidence=frame_confidence.squeeze(0).detach().cpu().numpy().astype(np.float32),
+                    class_names=np.array(['background', 'road', 'lane']),
+                    seg_mode=np.array(MULTICLASS_MODE),
+                )
             _, color_mask = segmentation_to_overlay(segmentation_mask, frame_bgr.shape[:2])
             guidance = guidance_estimator.update(segmentation_mask)
             annotated = annotate_frame(frame_bgr, color_mask, args.alpha, args.ui_scale)
@@ -257,6 +290,7 @@ def main() -> None:
 
         pending_tensors = []
         pending_frames = []
+        pending_frame_indices = []
 
     while True:
         ok, frame_bgr = capture.read()
@@ -272,6 +306,8 @@ def main() -> None:
         )
         pending_tensors.append(tensor)
         pending_frames.append(resized_output)
+        pending_frame_indices.append(source_frame_index)
+        source_frame_index += 1
         if len(pending_tensors) >= args.batch_size:
             flush_batch()
 

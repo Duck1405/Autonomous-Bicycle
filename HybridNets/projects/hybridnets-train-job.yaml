@@ -1,7 +1,7 @@
 apiVersion: batch/v1
 kind: Job
 metadata:
-  name: hybridnets-train
+  name: hybridnets-train-ddp-a10
   namespace: ucm-vista
 spec:
   backoffLimit: 0
@@ -60,17 +60,19 @@ spec:
                 --freeze_seg False \
                 --lr 0.0001 \
                 --optim adamw \
-                --num_epochs 1 \
+                --num_epochs 2 \
                 --save_interval 1000 \
                 --val_interval 1 \
                 --saved_path /data/hybridnets_models/live/checkpoints \
                 --log_path /data/hybridnets/live/logs \
-                --debug True \
+                --debug False \
                 --cal_map False \
                 --verbose True \
                 --plots False \
                 --num_gpus 2 \
-                --mosaic False
+                --amp True \
+                --mosaic False \
+                --gpu_memory_debug False
           resources:
             requests:
               cpu: "12"

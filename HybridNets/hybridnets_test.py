@@ -8,6 +8,8 @@ from glob import glob
 from utils.utils import letterbox, scale_coords, postprocess, BBoxTransform, ClipBoxes, restricted_float, \
     boolean_string, Params
 from utils.plot import STANDARD_COLORS, standard_to_bgr, get_index_label, plot_one_box
+from utils.segmentation import segmentation_logits_to_probabilities, segmentation_probabilities_to_predictions, \
+    resize_segmentation_probabilities
 import os
 from torchvision import transforms
 import argparse
@@ -51,6 +53,23 @@ def _select_primary_corridor(corridor_mask: np.ndarray) -> np.ndarray:
         return corridor_mask
     return (labels == best_label).astype(np.uint8) * 255
 
+
+def _probabilities_to_original_frame(probabilities: torch.Tensor, shape, seg_mode):
+    pad_h = int(shape[1][1][1])
+    pad_w = int(shape[1][1][0])
+    if pad_h > 0:
+        probabilities = probabilities[..., pad_h:-pad_h, :]
+    if pad_w > 0:
+        probabilities = probabilities[..., :, pad_w:-pad_w]
+    original_height, original_width = shape[0]
+    probabilities = resize_segmentation_probabilities(
+        probabilities,
+        size=(original_height, original_width),
+    )
+    if seg_mode != MULTILABEL_MODE:
+        probabilities = probabilities / probabilities.sum(dim=1, keepdim=True).clamp_min(1e-12)
+    return probabilities
+
 parser = argparse.ArgumentParser('HybridNets: End-to-End Perception Network - DatVu')
 parser.add_argument('-p', '--project', type=str, default='bdd100k', help='Project file that contains parameters')
 parser.add_argument('-bb', '--backbone', type=str, help='Use timm to create another backbone replacing efficientnet. '
@@ -67,6 +86,10 @@ parser.add_argument('--show_det', type=boolean_string, default=False, help="Outp
 parser.add_argument('--show_seg', type=boolean_string, default=True, help="Output segmentation result exclusively")
 parser.add_argument('--cuda', type=boolean_string, default=True)
 parser.add_argument('--float16', type=boolean_string, default=True, help="Use float16 for faster inference")
+parser.add_argument('--save_seg_confidence', type=boolean_string, default=False,
+                    help="Save per-pixel segmentation probabilities, selected class, and confidence as .npz files")
+parser.add_argument('--seg_confidence_dir', type=str, default=None,
+                    help="Directory for per-pixel confidence logs. Defaults to <output>/seg_confidence")
 parser.add_argument('--speed_test', type=boolean_string, default=False,
                     help='Measure inference latency')
 args = parser.parse_args()
@@ -103,6 +126,9 @@ imwrite = args.imwrite
 show_det = args.show_det
 show_seg = args.show_seg
 os.makedirs(output, exist_ok=True)
+seg_confidence_dir = args.seg_confidence_dir or os.path.join(output, 'seg_confidence')
+if args.save_seg_confidence:
+    os.makedirs(seg_confidence_dir, exist_ok=True)
 
 use_cuda = True
 use_float16 = args.float16
@@ -188,6 +214,7 @@ with torch.no_grad():
     print("regression:", regression.size()) 
     print("classification:", classification.size())
     print("anchors:", anchors.size())
+    seg_probabilities = segmentation_logits_to_probabilities(seg.float(), seg_mode)
 
     # in case of MULTILABEL_MODE, each segmentation class gets their own inference image
     seg_mask_list = []
@@ -212,6 +239,22 @@ with torch.no_grad():
     print(seg_mask_list)
     print(len(seg_mask_list[0]))
     for i in range(seg.size(0)):
+        if args.save_seg_confidence:
+            frame_probabilities = _probabilities_to_original_frame(seg_probabilities[i:i + 1], shapes[i], seg_mode)
+            frame_prediction, frame_confidence = segmentation_probabilities_to_predictions(frame_probabilities, seg_mode)
+            frame_probabilities = frame_probabilities.squeeze(0).detach().cpu().numpy().astype(np.float32)
+            frame_confidence = frame_confidence.squeeze(0).detach().cpu().numpy().astype(np.float32)
+            frame_prediction = frame_prediction.squeeze(0).detach().cpu().numpy()
+            if seg_mode != MULTILABEL_MODE:
+                frame_prediction = frame_prediction.astype(np.uint8)
+            np.savez_compressed(
+                os.path.join(seg_confidence_dir, f'{i}_seg_confidence.npz'),
+                probabilities=frame_probabilities,
+                predicted_class=frame_prediction,
+                confidence=frame_confidence,
+                class_names=np.array(['background', *params.seg_list]),
+                seg_mode=np.array(seg_mode),
+            )
         #   print(i)
         for seg_class_index, seg_mask in enumerate(seg_mask_list):
             

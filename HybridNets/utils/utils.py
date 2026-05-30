@@ -201,7 +201,7 @@ def init_weights(model):
         is_conv_layer = isinstance(module, nn.Conv2d)
 
         if is_conv_layer:
-            if "conv_list" or "header" in name:
+            if "conv_list" in name or "header" in name:
                 variance_scaling_(module.weight.data)
             else:
                 nn.init.kaiming_uniform_(module.weight.data)
@@ -798,7 +798,7 @@ def letterbox(combination, new_shape=(384, 640), color=(114, 114, 114), auto=Tru
         img = cv2.resize(img, new_unpad, interpolation=cv2.INTER_LINEAR)
         if seg:
             for seg_class in seg:
-                seg[seg_class] = cv2.resize(seg[seg_class], new_unpad, interpolation=cv2.INTER_LINEAR)
+                seg[seg_class] = cv2.resize(seg[seg_class], new_unpad, interpolation=cv2.INTER_NEAREST)
 
     top, bottom = int(round(dh - 0.1)), int(round(dh + 0.1))
     left, right = int(round(dw - 0.1)), int(round(dw + 0.1))

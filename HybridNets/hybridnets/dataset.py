@@ -16,7 +16,7 @@ from utils.constants import *
 
 class BddDataset(Dataset):
     def __init__(self, params, is_train, inputsize=[640, 384], transform=None, seg_mode=MULTICLASS_MODE, debug=False,
-                 lazy_load_labels=False):
+                 lazy_load_labels=True):
         """
         initial all the characteristic
 
@@ -31,10 +31,15 @@ class BddDataset(Dataset):
         self.is_train = is_train
         self.transform = transform
         self.inputsize = inputsize
+        self.debug = debug
+        self.debug_sample_log_limit = 3
+        self._debug_sample_logs = 0
+        
         self.Tensor = transforms.ToTensor()
         img_root = Path(params.dataset['dataroot'])
         label_root = Path(params.dataset['labelroot'])
         seg_root = params.dataset['segroot']
+
         self.seg_list = params.seg_list
         if is_train:
             indicator = params.dataset['train_set']
@@ -68,7 +73,45 @@ class BddDataset(Dataset):
         self.mosaic_border = [-1 * self.inputsize[1] // 2, -1 * self.inputsize[0] // 2]
         self.seg_mode = seg_mode
         self.lazy_load_labels = lazy_load_labels
+
+        split_name = 'train' if self.is_train else 'validation/test'
+        print('[BddDataset] Initializing dataset')
+        print(f'[BddDataset]   split: {split_name} ({indicator})')
+        print(f'[BddDataset]   image root: {self.img_root}')
+        print(f'[BddDataset]   label root: {self.label_root}')
+        print(f'[BddDataset]   segmentation roots: {[str(root) for root in self.seg_root]}')
+        print(f'[BddDataset]   segmentation classes: {self.seg_list}')
+        print(f'[BddDataset]   segmentation mode: {self.seg_mode}')
+        print(f'[BddDataset]   detection classes: {self.obj_list}')
+        print(f'[BddDataset]   combined detection classes: {self.obj_combine}')
+        print(f'[BddDataset]   input size [width, height]: {self.inputsize}')
+        print(f'[BddDataset]   original image size [height, width]: {self.shapes.tolist()}')
+        print(f'[BddDataset]   lazy label loading: {self.lazy_load_labels}')
+        print(f'[BddDataset]   debug mode: {debug}')
+        print(f'[BddDataset]   label files found: {len(self.label_list)}')
+        print('[BddDataset]   transform pipeline:')
+        print(self.transform)
+        if self.is_train:
+            print('[BddDataset]   training augmentations:')
+            print(f"[BddDataset]     mosaic probability: {self.dataset['mosaic']}")
+            print(f"[BddDataset]     mixup probability: {self.dataset['mixup']}")
+            print(f"[BddDataset]     horizontal flip probability: {self.dataset['fliplr']}")
+            print(f"[BddDataset]     vertical flip probability: {self.dataset['flipud']}")
+            print(f"[BddDataset]     rotation: {self.dataset['rot_factor']}")
+            print(f"[BddDataset]     scale: {self.dataset['scale_factor']}")
+            print(f"[BddDataset]     shear: {self.dataset['shear']}")
+            print(f"[BddDataset]     translate: {self.dataset['translate']}")
+            print(f"[BddDataset]     HSV gains: h={self.dataset['hsv_h']}, s={self.dataset['hsv_s']}, v={self.dataset['hsv_v']}")
         self.db = self._get_db()
+        print(f'[BddDataset] Ready. Dataset length: {len(self.db)} samples')
+
+    def _log_sample(self, message):
+        if self.debug and self._debug_sample_logs < self.debug_sample_log_limit:
+            print(message)
+
+    def _finish_sample_log(self):
+        if self.debug and self._debug_sample_logs < self.debug_sample_log_limit:
+            self._debug_sample_logs += 1
 
     def _make_record_paths(self, label_path):
         label_path = str(label_path)
@@ -78,12 +121,19 @@ class BddDataset(Dataset):
             seg_path[self.seg_list[i]] = label_path.replace(str(self.label_root), str(self.seg_root[i])).replace(".json", ".png")
         return label_path, image_path, seg_path
 
-    def _load_detection_label(self, label_path):
+    def _load_detection_label(self, label_path, log_details=True):
+        if log_details:
+            self._log_sample(f'[BddDataset]   loading detection labels from JSON: {label_path}')
         height, width = self.shapes
         with open(label_path, 'r') as f:
             label = json.load(f)
         data = label['frames'][0]['objects']
+        original_count = len(data)
         data = self.select_data(data)
+        if log_details:
+            self._log_sample(
+                f'[BddDataset]   selected {len(data)} detection objects from {original_count} annotated objects'
+            )
         gt = np.zeros((len(data), 5))
         for idx, obj in enumerate(data):
             category = obj['category']
@@ -105,9 +155,12 @@ class BddDataset(Dataset):
         TODO: add docs
         """
         if self.lazy_load_labels:
-            print('indexing dataset files...')
+            print('[BddDataset] Building lightweight dataset index')
+            print('[BddDataset]   storing image, segmentation mask, and label JSON paths only')
+            print('[BddDataset]   JSON labels will be parsed inside DataLoader workers when samples are requested')
         else:
-            print('building database...')
+            print('[BddDataset] Building eager dataset database')
+            print('[BddDataset]   parsing every JSON label file now and storing converted detection targets')
         gt_db = []
         for label in tqdm(self.label_list, ascii=True):
             label_path, image_path, seg_path = self._make_record_paths(label)
@@ -122,15 +175,25 @@ class BddDataset(Dataset):
             if self.lazy_load_labels:
                 rec['label_path'] = label_path
             else:
-                rec['label'] = self._load_detection_label(label_path)
+                rec['label'] = self._load_detection_label(label_path, log_details=len(gt_db) < self.debug_sample_log_limit)
             # Since seg_path is a dynamic dict
             rec = {**rec, **seg_path}
 
             gt_db.append(rec)
         if self.lazy_load_labels:
-            print('dataset file indexing finish')
+            print('[BddDataset] Lightweight dataset index finished')
         else:
-            print('database build finish')
+            print('[BddDataset] Eager dataset database finished')
+        if gt_db:
+            sample_record = gt_db[0]
+            print('[BddDataset] Example database record:')
+            print(f"[BddDataset]   image: {sample_record['image']}")
+            if 'label_path' in sample_record:
+                print(f"[BddDataset]   label JSON: {sample_record['label_path']}")
+            else:
+                print(f"[BddDataset]   eager labels shape: {sample_record['label'].shape}")
+            for seg_class in self.seg_list:
+                print(f"[BddDataset]   {seg_class} mask: {sample_record[seg_class]}")
         return gt_db
 
 
@@ -148,28 +211,44 @@ class BddDataset(Dataset):
 
     def load_image(self, index):
         data = self.db[index]
+        self._log_sample(f'[BddDataset] Loading sample index {index}')
+        self._log_sample(f"[BddDataset]   reading image: {data['image']}")
         if self.lazy_load_labels:
             det_label = self._load_detection_label(data["label_path"])
         else:
             det_label = data["label"]
+            self._log_sample(f'[BddDataset]   using eager detection labels with shape: {det_label.shape}')
         img = cv2.imread(data["image"], cv2.IMREAD_COLOR | cv2.IMREAD_IGNORE_ORIENTATION)
+        if img is None:
+            raise FileNotFoundError(f"Failed to read image for dataset sample {index}: {data['image']}")
         img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
         # img = data["image"]
         seg_label = OrderedDict()
         for seg_class in self.seg_list:
+            self._log_sample(f"[BddDataset]   reading {seg_class} mask: {data[seg_class]}")
             seg_label[seg_class] = cv2.imread(data[seg_class], 0)
+            if seg_label[seg_class] is None:
+                raise FileNotFoundError(
+                    f"Failed to read {seg_class} mask for dataset sample {index}: {data[seg_class]}"
+                )
 
         resized_shape = self.inputsize
         if isinstance(resized_shape, list):
             resized_shape = max(resized_shape)
         h0, w0 = img.shape[:2]  # orig hw
+        self._log_sample(f'[BddDataset]   original image shape: height={h0}, width={w0}')
         r = resized_shape / max(h0, w0)  # resize image to img_sizeWW
         if r != 1:  # always resize down, only resize up if training with augmentation
             interp = cv2.INTER_AREA if r < 1 else cv2.INTER_LINEAR
             img = cv2.resize(img, (int(w0 * r), int(h0 * r)), interpolation=interp)
             for seg_class in self.seg_list:
-                seg_label[seg_class] = cv2.resize(seg_label[seg_class], (int(w0 * r), int(h0 * r)), interpolation=interp)
+                seg_label[seg_class] = cv2.resize(
+                    seg_label[seg_class],
+                    (int(w0 * r), int(h0 * r)),
+                    interpolation=cv2.INTER_NEAREST,
+                )
         h, w = img.shape[:2]
+        self._log_sample(f'[BddDataset]   resized image shape before letterbox: height={h}, width={w}')
     
         labels = []
         
@@ -183,6 +262,7 @@ class BddDataset(Dataset):
 
         for seg_class in seg_label:
             _, seg_label[seg_class] = cv2.threshold(seg_label[seg_class], 0, 255, cv2.THRESH_BINARY)
+            self._log_sample(f'[BddDataset]   thresholded {seg_class} mask to binary 0/255 values')
         # np.savetxt('seglabelroad_before', seg_label['road'])
     
         return img, labels, seg_label, (h0, w0), (h,w), None # data['image']
@@ -235,16 +315,17 @@ class BddDataset(Dataset):
                 labels4.append(labels)
 
         # Concat/clip labels
-        labels4 = np.concatenate(labels4, 0)
+        labels4 = np.concatenate(labels4, 0) if labels4 else np.zeros((0, 5))
         
-        new = labels4.copy()
-        new[:, 1:] = np.clip(new[:, 1:], 0, 2*w_mosaic)
-        new[:, 2:5:2] = np.clip(new[:, 2:5:2], 0, 2*h_mosaic)
+        if len(labels4):
+            new = labels4.copy()
+            new[:, 1:] = np.clip(new[:, 1:], 0, 2*w_mosaic)
+            new[:, 2:5:2] = np.clip(new[:, 2:5:2], 0, 2*h_mosaic)
 
-        # filter candidates
-        i = box_candidates(box1=labels4[:,1:5].T, box2=new[:,1:5].T)
-        labels4 = labels4[i]
-        labels4[:] = new[i] 
+            # filter candidates
+            i = box_candidates(box1=labels4[:,1:5].T, box2=new[:,1:5].T)
+            labels4 = labels4[i]
+            labels4[:] = new[i] 
 
         # cv2.imwrite('test_mosaic.jpg', img4)
         # for seg_class in seg4:
@@ -256,20 +337,24 @@ class BddDataset(Dataset):
         TODO: add docs
         """
         mosaic_this = False
+        self._log_sample(f'[BddDataset] __getitem__({idx}) starting')
         if self.is_train:
             if random.random() < self.dataset['mosaic']:
                 mosaic_this = True
+                self._log_sample('[BddDataset]   selected mosaic path: load 4 images, combine, then augment')
                 # TODO: this doubles training time with inherent stuttering in tqdm, prob cpu or io bottleneck, does prefetch_generator work with ddp? (no improvement)
                 # TODO: updated, mosaic is inherently slow, maybe cache the images in RAM? maybe it was IO bottleneck of reading 4 images everytime? time it
                 img, labels, seg_label, (h0, w0), (h, w), path = self.load_mosaic(idx)
 
                 # mixup is double mosaic, really slow
                 if random.random() < self.dataset['mixup']:
+                    self._log_sample('[BddDataset]   selected mixup path: mix current mosaic with another mosaic')
                     img2, labels2, seg_label2, (_, _), (_, _), _ = self.load_mosaic(random.randint(0, len(self.db) - 1))
                     img, labels, seg_label = mixup(img, labels, seg_label, img2, labels2, seg_label2)
 
             # albumentations
             else:
+                self._log_sample('[BddDataset]   selected normal image path: load one image and its masks')
                 img, labels, seg_label, (h0, w0), (h, w), path = self.load_image(idx)
             # TODO: multi-class seg with albumentations
                 # try:
@@ -284,6 +369,7 @@ class BddDataset(Dataset):
                 #     pass
 
             # augmentation
+            self._log_sample('[BddDataset]   applying random perspective augmentation')
             combination = (img, seg_label)
             (img, seg_label), labels = random_perspective(
                 combination=combination,
@@ -294,9 +380,11 @@ class BddDataset(Dataset):
                 shear=self.dataset['shear'],
                 border=self.mosaic_border if mosaic_this else (0, 0)
             )
+            self._log_sample('[BddDataset]   applying HSV augmentation')
             augment_hsv(img, hgain=self.dataset['hsv_h'], sgain=self.dataset['hsv_s'], vgain=self.dataset['hsv_v'])
 
             if random.random() < self.dataset['fliplr']:
+                self._log_sample('[BddDataset]   applying horizontal flip to image, boxes, and masks')
                 img = img[:, ::-1, :]
 
                 if len(labels):
@@ -313,6 +401,7 @@ class BddDataset(Dataset):
 
             # random up-down flip
             if random.random() < self.dataset['flipud']:
+                self._log_sample('[BddDataset]   applying vertical flip to image, boxes, and masks')
                 img = np.flipud(img)
 
                 if len(labels):
@@ -328,12 +417,15 @@ class BddDataset(Dataset):
                     seg_label[seg_class] = np.flipud(seg_label[seg_class])
                 
         else:
+            self._log_sample('[BddDataset]   validation path: load one image without training augmentations')
             img, labels, seg_label, (h0, w0), (h, w), path = self.load_image(idx)
 
         # np.savetxt('seglabelroad_before_lb', seg_label['road'])
+        self._log_sample('[BddDataset]   applying letterbox padding/resizing to model input size')
         (img, seg_label), ratio, pad = letterbox((img, seg_label), (self.inputsize[1], self.inputsize[0]), auto=False,
                                                              scaleup=self.is_train)
         shapes = (h0, w0), ((h / h0, w / w0), pad)  # for COCO mAP rescaling  
+        self._log_sample(f'[BddDataset]   letterbox ratio: {ratio}, pad: {pad}')
         labels_app = np.array([])
         if len(labels):
             # update labels after letterbox
@@ -345,15 +437,18 @@ class BddDataset(Dataset):
             labels_app = np.zeros((len(labels), 5))
             labels_app[:, 0:4] = labels[:, 1:5]
             labels_app[:, 4] = labels[:, 0]
+        self._log_sample(f'[BddDataset]   detection tensor rows after preprocessing: {len(labels_app)}')
 
         img = np.ascontiguousarray(img)
         
         if self.seg_mode == BINARY_MODE:
+            self._log_sample('[BddDataset]   building binary segmentation target tensor')
             for seg_class in seg_label:
                 # technically, the for-loop only goes once
                 segmentation = self.Tensor(seg_label[seg_class])
 
         elif self.seg_mode == MULTICLASS_MODE:
+            self._log_sample('[BddDataset]   building multiclass segmentation target: 0=background, 1..N=segmentation classes')
             # special treatment for lane-line of bdd100k for our dataset
             # since we increase lane-line from 2 to 8 pixels, we must take care of the overlap to other segmentation classes
             # e.g.: a pixel belongs to both road and lane-line, then we must prefer lane, or metrics would be wrong
@@ -375,6 +470,7 @@ class BddDataset(Dataset):
             # [1, 1, 1, 1]
 
         else:  # multi-label
+            self._log_sample('[BddDataset]   building multilabel segmentation target: one channel per class plus background')
             union = np.zeros(img.shape[:2], dtype=np.uint8)
             for seg_class in seg_label:
                 union |= seg_label[seg_class]
@@ -392,6 +488,9 @@ class BddDataset(Dataset):
             #            [0, 0, 0, 0]      [1, 1, 1, 1]        [1, 0, 0, 1]
 
         img = self.transform(img)
+        self._log_sample(f'[BddDataset]   final image tensor shape: {tuple(img.shape)}')
+        self._log_sample(f'[BddDataset]   final segmentation tensor shape: {tuple(segmentation.shape)}')
+        self._finish_sample_log()
 
         return img, path, shapes, torch.from_numpy(labels_app), segmentation.long()
 
