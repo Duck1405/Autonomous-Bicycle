@@ -19,12 +19,15 @@ spec:
 
               REPO_URL="https://github.com/Duck1405/Autonomous-Bicycle.git"
               TARGET_DIR="/data/Autonomous-Bicycle"
-              BRANCH="main"
+              BRANCH="$(git ls-remote --symref "${REPO_URL}" HEAD | awk '/^ref:/ {sub("refs/heads/", "", $2); print $2; exit}')"
+              BRANCH="${BRANCH:-main}"
+
+              git config --global --add safe.directory "${TARGET_DIR}"
 
               if [ -d "${TARGET_DIR}/.git" ]; then
                 git -C "${TARGET_DIR}" remote set-url origin "${REPO_URL}"
                 git -C "${TARGET_DIR}" fetch --depth=1 origin "${BRANCH}"
-                git -C "${TARGET_DIR}" reset --hard "origin/${BRANCH}"
+                git -C "${TARGET_DIR}" reset --hard FETCH_HEAD
                 git -C "${TARGET_DIR}" clean -fd
               else
                 TMP_DIR="${TARGET_DIR}.tmp"
@@ -47,9 +50,9 @@ spec:
               memory: 1Gi
               ephemeral-storage: 2Gi
             limits:
-              cpu: "2"
-              memory: 2Gi
-              ephemeral-storage: 5Gi
+              cpu: "1"
+              memory: 1Gi
+              ephemeral-storage: 2Gi
           volumeMounts:
             - name: data
               mountPath: /data
