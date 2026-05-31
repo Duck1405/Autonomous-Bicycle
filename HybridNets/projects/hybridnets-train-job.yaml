@@ -16,8 +16,8 @@ spec:
                   - key: nvidia.com/gpu.product
                     operator: In
                     values:
-                     # - NVIDIA-A40
-                      - NVIDIA-GEFORCE-RTX-3090
+                     - NVIDIA-A40
+                      # - NVIDIA-GEFORCE-RTX-3090
       containers:
         - name: trainer
           image: pytorch/pytorch:2.5.1-cuda12.1-cudnn9-runtime
@@ -77,21 +77,21 @@ spec:
                 --cal_map True \
                 --verbose True \
                 --plots True \
-                --num_gpus 4 \
+                --num_gpus 1 \
                 --amp True \
                 --mosaic False \
-                --gpu_memory_debug False
+                --gpu_memory_debug True
           resources:
             requests:
-              cpu: "12"
-              memory: 64Gi
+              cpu: "8"
+              memory: 32Gi
               ephemeral-storage: 50Gi
-              nvidia.com/a40: "2"
+              nvidia.com/a40: "1"
             limits:
               cpu: "12"
               memory: 64Gi
               ephemeral-storage: 100Gi
-              nvidia.com/a40: "2"
+              nvidia.com/a40: "1"
           volumeMounts:
             - name: data
               mountPath: /data
