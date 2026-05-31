@@ -36,7 +36,6 @@ class ModelWithLoss(nn.Module):
 
         tversky_loss = self.seg_criterion1(segmentation, seg_annot)
         focal_loss = self.seg_criterion2(segmentation, seg_annot)
-
         seg_loss = tversky_loss + 1 * focal_loss
 
         return cls_loss, reg_loss, seg_loss, regression, classification, anchors, segmentation
