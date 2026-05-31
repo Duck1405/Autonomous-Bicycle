@@ -1,7 +1,7 @@
 apiVersion: batch/v1
 kind: Job
 metadata:
-  name: hybridnets-train-ddp-a40
+  name: hybridnets-train-ddp-a10
   namespace: ucm-vista
 spec:
   backoffLimit: 0
@@ -16,7 +16,7 @@ spec:
                   - key: nvidia.com/gpu.product
                     operator: In
                     values:
-                      - NVIDIA-A40
+                      - NVIDIA-A10
       containers:
         - name: trainer
           image: pytorch/pytorch:2.5.1-cuda12.1-cudnn9-runtime
@@ -85,22 +85,16 @@ spec:
               cpu: "12"
               memory: 64Gi
               ephemeral-storage: 50Gi
-              nvidia.com/a40: "2"
+              nvidia.com/gpu: "2"
             limits:
               cpu: "12"
               memory: 64Gi
               ephemeral-storage: 100Gi
-              nvidia.com/a40: "2"
+              nvidia.com/gpu: "2"
           volumeMounts:
             - name: data
-              mountPath: /data
-            - name: dshm
-              mountPath: /dev/shm
+              mountPath: /data  
       volumes:
         - name: data
           persistentVolumeClaim:
             claimName: lanenet-data
-        - name: dshm
-          emptyDir:
-            medium: Memory
-            sizeLimit: 8Gi
