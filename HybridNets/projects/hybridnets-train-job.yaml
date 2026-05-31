@@ -16,7 +16,8 @@ spec:
                   - key: nvidia.com/gpu.product
                     operator: In
                     values:
-                      - NVIDIA-A40
+                     # - NVIDIA-A40
+                      - NVIDIA-GEFORCE-RTX-3090
       containers:
         - name: trainer
           image: pytorch/pytorch:2.5.1-cuda12.1-cudnn9-runtime
@@ -67,16 +68,16 @@ spec:
                 --freeze_seg False \
                 --lr 0.0001 \
                 --optim adamw \
-                --num_epochs 2 \
+                --num_epochs 20 \
                 --save_interval 10000 \
                 --val_interval 1 \
                 --saved_path /data/hybridnets_models/live/checkpoints \
                 --log_path /data/hybridnets/live/logs \
                 --debug False \
-                --cal_map False \
+                --cal_map True \
                 --verbose True \
-                --plots False \
-                --num_gpus 2 \
+                --plots True \
+                --num_gpus 4 \
                 --amp True \
                 --mosaic False \
                 --gpu_memory_debug False
