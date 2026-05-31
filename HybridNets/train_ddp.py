@@ -46,16 +46,6 @@ from train_functions import (get_args, should_log_gpu_memory,
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 
-
-
-
-
-
-
-
-            
-
-
 def train(rank, opt):
     print("Training process started for rank:", rank)
     torch.cuda.set_device(rank)
@@ -97,11 +87,7 @@ def train(rank, opt):
             weights_path = opt.load_weights
         else:
             weights_path = get_last_weights(opt.saved_path)
-        # try:
-        #     last_step = int(os.path.basename(weights_path).split('_')[-1].split('.')[0])
-        # except:
-        #     last_step = 0
-
+   
         try:
             if opt.gpu_memory_debug:
                 print_gpu_memory_summary(f'rank {rank} before checkpoint load', rank=rank, reset_peak=True)
