@@ -1,0 +1,152 @@
+# HybridNets DDP training Job (Kubernetes / NRP-Nautilus, namespace ucm-vista).
+#
+# The Job self-syncs the code on the PVC to a git commit before training, because the
+# repo on the `lanenet-data` volume is plain files (not a git checkout). It then sparse-
+# fetches only the HybridNets/ subtree (~29MB vs ~706MB) and hard-resets to it.
+#
+# Code source: Duck1405/Autonomous-Bicycle @ main.
+#   To run an unmerged branch (e.g. before a PR lands), override REPO/BRANCH below to a
+#   fork + branch, e.g. https://github.com/<you>/Autonomous-Bicycle.git / my-branch.
+#
+# GPU: targets NVIDIA A100-SXM4-80GB using resource nvidia.com/a100.
+#   NRP advertises A100/A6000/H100 etc. under custom resource names, not nvidia.com/gpu.
+#   ucm-vista has quota for 1 A100. Single GPU; no DDP.
+#
+# Tuning: -b is per-GPU batch (8 -> 16 global across 2 GPUs); raise toward 16-32 on A100
+#   (80GB) once VRAM headroom is confirmed via the gpu_memory_debug output. -n is dataloader
+#   workers per rank.
+#
+# Notes:
+#   * lanenet-data is RWO (Ceph RBD): only ONE pod can mount it at a time. Ensure no other
+#     pod (e.g. a data uploader) holds it, or this Job waits on a Multi-Attach error.
+#   * The 96Gi memory limit trips a non-blocking "memory ratio" admission warning; harmless.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: hybridnets-train
+  namespace: ucm-vista
+spec:
+  backoffLimit: 0
+  ttlSecondsAfterFinished: 3600
+  template:
+    spec:
+      restartPolicy: Never
+      affinity:
+        nodeAffinity:
+          # A6000 uses nvidia.com/rtxa6000 (not nvidia.com/gpu) — affinity + resource must agree.
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+              - matchExpressions:
+                  - key: nvidia.com/gpu.product
+                    operator: In
+                    values:
+                      - NVIDIA-A100-SXM4-80GB
+      containers:
+        - name: trainer
+          image: pytorch/pytorch:2.5.1-cuda12.1-cudnn9-runtime
+          imagePullPolicy: IfNotPresent
+          workingDir: /data/Autonomous-Bicycle/HybridNets
+          command: ["/bin/bash", "-lc"]
+          args:
+            - |
+              set -euxo pipefail
+
+              # Tee all output to a timestamped log on the PVC so it survives pod deletion.
+              mkdir -p /data/hybridnets/live/logs
+              exec > >(tee /data/hybridnets/live/logs/train_$(date +%s).log) 2>&1
+
+              # --- sync code on the PVC to the canonical commit ---
+              # /data/Autonomous-Bicycle is plain files, NOT a git checkout, so init in place.
+              command -v git || (apt-get update && apt-get install -y --no-install-recommends git)
+              git config --global --add safe.directory /data/Autonomous-Bicycle
+              cd /data/Autonomous-Bicycle
+              git init -q
+              REPO=https://github.com/Duck1405/Autonomous-Bicycle.git
+              BRANCH=main
+              git remote add origin "$REPO" 2>/dev/null || git remote set-url origin "$REPO"
+              # Only the HybridNets/ subtree is needed for training. Partial+sparse fetch pulls
+              # ~29MB instead of ~706MB (skips the 655MB model_test_iamges_jpg/ blobs entirely).
+              git sparse-checkout init --cone
+              git sparse-checkout set HybridNets
+              git fetch --depth 1 --filter=blob:none origin "$BRANCH"
+              git reset --hard FETCH_HEAD            # checks out only HybridNets/; leaves untracked datasets alone
+              echo "[Info] repo now at: $(git rev-parse --short HEAD) ($BRANCH)"
+              cd /data/Autonomous-Bicycle/HybridNets
+              grep -q get_segmentation_mode train_ddp.py || { echo "[FATAL] seg_mode fix not present after sync"; exit 1; }
+              grep -q _build_record hybridnets/dataset.py || { echo "[FATAL] lazy-loading change not present after sync"; exit 1; }
+
+              test -f train_ddp.py
+              test -f projects/bdd100k_nrp.yaml
+              test -d /data/100k_images
+              test -d /data/100k
+              test -d /data/bdd_seg_gt
+              test -d /data/bdd_lane_gt
+
+              export OMP_NUM_THREADS=1
+              export MKL_NUM_THREADS=1
+              export MPLCONFIGDIR=/tmp/matplotlib
+
+              python -m pip install --upgrade pip
+              python -m pip install --no-cache-dir --upgrade-strategy only-if-needed \
+                "albumentations>=1.3,<2" \
+                "matplotlib>=3.7,<4" \
+                "numpy>=1.26,<2" \
+                "opencv-python-headless>=4.8,<5" \
+                "psutil>=5.9,<7" \
+                "PyYAML>=6,<7" \
+                "scipy>=1.10,<2" \
+                "seaborn>=0.12,<1" \
+                "tensorboardX>=2.6,<3" \
+                "tqdm>=4.66,<5" \
+                "webcolors>=1.13,<2"
+              python -m pip install --no-cache-dir --no-deps \
+                efficientnet_pytorch==0.7.1 \
+                prefetch_generator==1.0.1 \
+                pretrainedmodels==0.7.4 \
+                timm==0.5.4
+
+              python train_ddp.py \
+                -p bdd100k_nrp \
+                -bb tf_efficientnet_b3 \
+                -b 8 \
+                -n 8 \
+                --freeze_backbone False \
+                --freeze_det True \
+                --freeze_seg False \
+                --lr 0.0001 \
+                --optim adamw \
+                --num_epochs 1 \
+                --save_interval 1000 \
+                --val_interval 1 \
+                --saved_path /data/hybridnets_models/live/checkpoints \
+                --log_path /data/hybridnets/live/logs \
+                --debug False \
+                --cal_map False \
+                --verbose True \
+                --plots False \
+                --num_gpus 1 \
+                --mosaic False
+          resources:
+            requests:
+              cpu: "12"
+              memory: 64Gi
+              ephemeral-storage: 50Gi
+              nvidia.com/a100: "1"
+            limits:
+              cpu: "12"
+              memory: 96Gi
+              ephemeral-storage: 100Gi
+              nvidia.com/a100: "1"
+          volumeMounts:
+            - name: data
+              mountPath: /data
+            - name: dshm
+              mountPath: /dev/shm
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: lanenet-data
+        - name: dshm
+          emptyDir:
+            medium: Memory
+            sizeLimit: 16Gi
