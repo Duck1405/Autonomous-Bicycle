@@ -338,6 +338,22 @@ def train(rank, opt):
                                                           step, best_fitness, best_loss, best_epoch, seg_mode)
                 if opt.gpu_memory_debug:
                     print_gpu_memory_summary(f'rank {rank} after validation epoch {epoch}', rank=rank)
+
+            if rank == 0:
+                epoch_ckpt = {
+                    'epoch': epoch,
+                    'step': step,
+                    'best_fitness': best_fitness,
+                    'best_loss': best_loss,
+                    'best_epoch': best_epoch,
+                    'model': model.module.model.state_dict(),
+                }
+                save_checkpoint(
+                    epoch_ckpt,
+                    opt.saved_path,
+                    f'hybridnets-d{opt.compound_coef}_epoch_{epoch + 1}_{step}.pth'
+                )
+                print(f'checkpoint saved for epoch {epoch + 1}')
     except KeyboardInterrupt:
         if rank == 0:
             save_checkpoint(model, opt.saved_path, f'hybridnets-d{opt.compound_coef}_{epoch}_{step}.pth')

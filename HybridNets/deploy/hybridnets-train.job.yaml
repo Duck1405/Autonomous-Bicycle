@@ -23,7 +23,7 @@
 apiVersion: batch/v1
 kind: Job
 metadata:
-  name: hybridnets-train-testin-2
+  name: hybridnets-train-trained
   namespace: ucm-vista
 spec:
   backoffLimit: 0
@@ -106,15 +106,14 @@ spec:
               python train_ddp.py \
                 -p bdd100k_nrp \
                 -bb tf_efficientnet_b3 \
-                -b 2 \
-                -n 2 \
+                -b 16 \
+                -n 16 \
                 --freeze_backbone False \
                 --freeze_det True \
                 --freeze_seg False \
                 --lr 0.0001 \
                 --optim adamw \
-                --num_epochs 1 \
-                --save_interval 10000 \
+                --num_epochs 20 \
                 --val_interval 1 \
                 --saved_path /data/hybridnets_models/live/checkpoints \
                 --log_path /data/hybridnets/live/logs \
@@ -123,15 +122,15 @@ spec:
                 --verbose True \
                 --plots False \
                 --num_gpus 1 \
-                --mosaic False
+                --mosaic True
           resources:
             requests:
-              cpu: "12"
+              cpu: "24"
               memory: 64Gi
               ephemeral-storage: 50Gi
               nvidia.com/a100: "1"
             limits:
-              cpu: "12"
+              cpu: "24"
               memory: 96Gi
               ephemeral-storage: 100Gi
               nvidia.com/a100: "1"
