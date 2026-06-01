@@ -301,6 +301,7 @@ def val(model, rank, optimizer, val_generator, params, opt, writer, epoch, step,
         incorrect_pixel_count = max(float(confidence_stats[12].item()), 1.0)
         validation_metrics = {
             'phase': 'val',
+            'run_name': opt.name,
             'project': opt.project,
             'epoch': epoch,
             'step': step,
@@ -408,17 +409,21 @@ def val(model, rank, optimizer, val_generator, params, opt, writer, epoch, step,
                 best_fitness = fi
                 best_epoch = epoch
                 ckpt = {
+                    'run_name': opt.name,
                     'epoch': epoch,
                     'step': step,
                     'best_fitness': best_fitness,
                     'model': model.module.model.state_dict(),
                 }
-                print("Saving checkpoint with best fitness", fi[0])
-                save_checkpoint(ckpt, opt.saved_path, f'hybridnets-d{opt.compound_coef}_{epoch}_{step}_best.pth')
+                checkpoint_name = f'hybridnets-d{opt.compound_coef}_{epoch}_{step}_best.pth'
+                print(f'Saving checkpoint with best fitness {fi[0]}: {checkpoint_name} (run name: {opt.name or "unnamed"})')
+                save_checkpoint(ckpt, opt.saved_path, checkpoint_name)
         elif loss + opt.es_min_delta < best_loss:
             best_loss = loss
             best_epoch = epoch
-            save_checkpoint(model, opt.saved_path, f'hybridnets-d{opt.compound_coef}_{epoch}_{step}_best.pth')
+            checkpoint_name = f'hybridnets-d{opt.compound_coef}_{epoch}_{step}_best.pth'
+            save_checkpoint(model, opt.saved_path, checkpoint_name)
+            print(f'Saving checkpoint with best loss {best_loss}: {checkpoint_name} (run name: {opt.name or "unnamed"})')
 
         validation_metrics['best_loss'] = float(best_loss)
         validation_metrics['best_epoch'] = int(best_epoch)

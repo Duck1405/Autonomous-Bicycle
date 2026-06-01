@@ -106,8 +106,8 @@ spec:
               python train_ddp.py \
                 -p bdd100k_nrp \
                 -bb tf_efficientnet_b3 \
-                -b 16 \
-                -n 16 \
+                -b 32 \
+                -n 32 \
                 --freeze_backbone False \
                 --freeze_det True \
                 --freeze_seg False \
@@ -115,22 +115,23 @@ spec:
                 --optim adamw \
                 --num_epochs 20 \
                 --val_interval 1 \
-                --saved_path /data/hybridnets_models/live/checkpoints \
+                --saved_path /data/hybridnets_models/hybridnets-train-trained \
                 --log_path /data/hybridnets/live/logs \
                 --debug False \
                 --cal_map False \
                 --verbose True \
                 --plots False \
                 --num_gpus 1 \
-                --mosaic True
+                --mosaic True \
+                --name hybridnets-train-trained
           resources:
             requests:
-              cpu: "24"
+              cpu: "36"
               memory: 64Gi
               ephemeral-storage: 50Gi
               nvidia.com/a100: "1"
             limits:
-              cpu: "24"
+              cpu: "36"
               memory: 96Gi
               ephemeral-storage: 100Gi
               nvidia.com/a100: "1"

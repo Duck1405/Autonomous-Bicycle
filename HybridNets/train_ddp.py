@@ -269,8 +269,9 @@ def train(rank, opt):
                     step += 1
 
                     if step % opt.save_interval == 0 and step > 0 and rank == 0:
-                        save_checkpoint(model, opt.saved_path, f'hybridnets-d{opt.compound_coef}_{epoch}_{step}.pth')
-                        print('checkpoint...')
+                        checkpoint_name = f'hybridnets-d{opt.compound_coef}_{epoch}_{step}.pth'
+                        save_checkpoint(model, opt.saved_path, checkpoint_name)
+                        print(f'checkpoint saved: {checkpoint_name} (run name: {opt.name or "unnamed"})')
 
                 except Exception as e:
                     print('[Error]', traceback.format_exc())
@@ -302,6 +303,7 @@ def train(rank, opt):
             if rank == 0:
                 train_metrics = {
                     'phase': 'train',
+                    'run_name': opt.name,
                     'project': opt.project,
                     'epoch': epoch,
                     'step': step,
@@ -341,6 +343,7 @@ def train(rank, opt):
 
             if rank == 0:
                 epoch_ckpt = {
+                    'run_name': opt.name,
                     'epoch': epoch,
                     'step': step,
                     'best_fitness': best_fitness,
@@ -353,10 +356,16 @@ def train(rank, opt):
                     opt.saved_path,
                     f'hybridnets-d{opt.compound_coef}_epoch_{epoch + 1}_{step}.pth'
                 )
-                print(f'checkpoint saved for epoch {epoch + 1}')
+                print(
+                    f'checkpoint saved for epoch {epoch + 1}: '
+                    f'hybridnets-d{opt.compound_coef}_epoch_{epoch + 1}_{step}.pth '
+                    f'(run name: {opt.name or "unnamed"})'
+                )
     except KeyboardInterrupt:
         if rank == 0:
-            save_checkpoint(model, opt.saved_path, f'hybridnets-d{opt.compound_coef}_{epoch}_{step}.pth')
+            checkpoint_name = f'hybridnets-d{opt.compound_coef}_{epoch}_{step}.pth'
+            save_checkpoint(model, opt.saved_path, checkpoint_name)
+            print(f'checkpoint saved after interrupt: {checkpoint_name} (run name: {opt.name or "unnamed"})')
     finally:
         if writer is not None:
             writer.close()
@@ -420,6 +429,7 @@ if __name__ == '__main__':
     opt = get_args()
     print("Arguments parsed.")
     print(opt)
+    print(f"Run/job name: {opt.name or 'unnamed'}")
     visible_gpu_count = torch.cuda.device_count()
     print(f"Visible GPU count: {visible_gpu_count}")
     print_resource_summary(visible_gpu_count)

@@ -41,6 +41,8 @@ from utils.utils import get_last_weights, init_weights, boolean_string, \
 def get_args():
     parser = argparse.ArgumentParser('HybridNets: End-to-End Perception Network - DatVu')
     parser.add_argument('-p', '--project', type=str, default='bdd100k', help='Project file that contains parameters')
+    parser.add_argument('--name', type=str, default=None,
+                        help='Optional run/job name to print and store with checkpoints')
     parser.add_argument('-bb', '--backbone', type=str, help='Use timm to create another backbone replacing efficientnet. '
                                                             'https://github.com/rwightman/pytorch-image-models')
     parser.add_argument('-c', '--compound_coef', type=int, default=3, help='Coefficient of efficientnet backbone')
@@ -356,4 +358,3 @@ def print_gpu_memory_summary(label='', rank=None, all_gpus=False, reset_peak=Fal
 
         if reset_peak:
             torch.cuda.reset_peak_memory_stats(device_id)
-
