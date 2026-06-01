@@ -133,7 +133,7 @@ def train(rank, opt):
 
     # wrap the model with loss function, to reduce the memory usage on gpu0 and speedup
     setup(rank, opt.num_gpus)
-    model = ModelWithLoss(model, seg_mode=seg_mode, debug=opt.debug)
+    model = ModelWithLoss(model, debug=opt.debug)
     model = nn.SyncBatchNorm.convert_sync_batchnorm(model)
     if opt.gpu_memory_debug:
         print_gpu_memory_summary(f'rank {rank} before model.to(cuda)', rank=rank, reset_peak=True)

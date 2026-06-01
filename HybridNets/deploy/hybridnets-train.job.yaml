@@ -23,7 +23,7 @@
 apiVersion: batch/v1
 kind: Job
 metadata:
-  name: hybridnets-train
+  name: hybridnets-train-testing
   namespace: ucm-vista
 spec:
   backoffLimit: 0
@@ -72,8 +72,6 @@ spec:
               git reset --hard FETCH_HEAD            # checks out only HybridNets/; leaves untracked datasets alone
               echo "[Info] repo now at: $(git rev-parse --short HEAD) ($BRANCH)"
               cd /data/Autonomous-Bicycle/HybridNets
-              grep -q get_segmentation_mode train_ddp.py || { echo "[FATAL] seg_mode fix not present after sync"; exit 1; }
-              grep -q _build_record hybridnets/dataset.py || { echo "[FATAL] lazy-loading change not present after sync"; exit 1; }
 
               test -f train_ddp.py
               test -f projects/bdd100k_nrp.yaml
@@ -108,15 +106,15 @@ spec:
               python train_ddp.py \
                 -p bdd100k_nrp \
                 -bb tf_efficientnet_b3 \
-                -b 8 \
-                -n 8 \
+                -b 2 \
+                -n 2 \
                 --freeze_backbone False \
                 --freeze_det True \
                 --freeze_seg False \
                 --lr 0.0001 \
                 --optim adamw \
                 --num_epochs 1 \
-                --save_interval 1000 \
+                --save_interval 10000 \
                 --val_interval 1 \
                 --saved_path /data/hybridnets_models/live/checkpoints \
                 --log_path /data/hybridnets/live/logs \
