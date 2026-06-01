@@ -20,7 +20,7 @@ class ModelWithLoss(nn.Module):
         self.seg_criterion2 = FocalLossSeg(mode=self.model.seg_mode, alpha=0.25)
         self.debug = debug
 
-    def forward(self, imgs, annotations, seg_annot, obj_list=None, skip_detection_loss=False):
+    def forward(self, imgs, annotations, seg_annot, obj_list=None, skip_detection_loss=False, skip_seg_loss=False):
         _, regression, classification, anchors, segmentation = self.model(imgs)
 
         if skip_detection_loss:
@@ -34,9 +34,12 @@ class ModelWithLoss(nn.Module):
             else:
                 cls_loss, reg_loss = self.criterion(classification, regression, anchors, annotations)
 
-        tversky_loss = self.seg_criterion1(segmentation, seg_annot)
-        focal_loss = self.seg_criterion2(segmentation, seg_annot)
-        seg_loss = tversky_loss + 1 * focal_loss
+        if skip_seg_loss:
+            seg_loss = segmentation.new_zeros(1)
+        else:
+            tversky_loss = self.seg_criterion1(segmentation, seg_annot)
+            focal_loss = self.seg_criterion2(segmentation, seg_annot)
+            seg_loss = tversky_loss + 1 * focal_loss
 
         return cls_loss, reg_loss, seg_loss, regression, classification, anchors, segmentation
 

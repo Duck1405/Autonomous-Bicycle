@@ -23,7 +23,7 @@
 apiVersion: batch/v1
 kind: Job
 metadata:
-  name: hybridnets-train-testing
+  name: hybridnets-train-testin-2
   namespace: ucm-vista
 spec:
   backoffLimit: 0
