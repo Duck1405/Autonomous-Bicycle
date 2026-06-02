@@ -8,6 +8,7 @@ import os
 import traceback
 
 import numpy as np
+import psutil
 import torch
 import torch.nn.functional as F
 from tensorboardX import SummaryWriter
@@ -338,6 +339,96 @@ def get_system_memory_info():
             '/sys/fs/cgroup/memory/memory.usage_in_bytes',
         ]),
     }
+
+
+def bytes_to_gib_value(value):
+    if value is None:
+        return None
+    return value / 1024 ** 3
+
+
+def collect_system_utilization_metrics(process=None):
+    if process is None:
+        process = psutil.Process(os.getpid())
+    system_cpu_percent = psutil.cpu_percent(interval=None)
+    process_cpu_percent = process.cpu_percent(interval=None)
+    ram = psutil.virtual_memory()
+    process_memory = process.memory_info()
+    memory = get_system_memory_info()
+    container_limit = memory['container_limit']
+    container_used = memory['container_used']
+    container_ram_percent = None
+    if container_limit:
+        container_ram_percent = (container_used or 0) / container_limit * 100.0
+
+    return {
+        'system_cpu_percent': system_cpu_percent,
+        'process_cpu_percent': process_cpu_percent,
+        'cpu_logical_count': psutil.cpu_count(logical=True),
+        'cpu_physical_count': psutil.cpu_count(logical=False),
+        'system_ram_percent': ram.percent,
+        'system_ram_used_gib': bytes_to_gib_value(ram.used),
+        'system_ram_available_gib': bytes_to_gib_value(ram.available),
+        'system_ram_total_gib': bytes_to_gib_value(ram.total),
+        'process_ram_rss_gib': bytes_to_gib_value(process_memory.rss),
+        'container_ram_percent': container_ram_percent,
+        'container_ram_used_gib': bytes_to_gib_value(container_used),
+        'container_ram_limit_gib': bytes_to_gib_value(container_limit),
+    }
+
+
+class SystemUtilizationSampler:
+    def __init__(self, total_steps, max_samples=100):
+        self.max_samples = max(1, int(max_samples))
+        self.total_steps = max(1, int(total_steps))
+        self.sample_interval = max(1, (self.total_steps + self.max_samples - 1) // self.max_samples)
+        self.samples = []
+        self.process = psutil.Process(os.getpid())
+        psutil.cpu_percent(interval=None)
+        self.process.cpu_percent(interval=None)
+
+    def maybe_sample(self, iteration):
+        if len(self.samples) >= self.max_samples:
+            return
+        if iteration % self.sample_interval == 0:
+            self.samples.append(collect_system_utilization_metrics(self.process))
+
+    def summarize(self):
+        if not self.samples:
+            self.samples.append(collect_system_utilization_metrics(self.process))
+
+        summary = {
+            'system_utilization_sample_count': len(self.samples),
+            'system_utilization_sample_interval_batches': self.sample_interval,
+        }
+        metric_keys = [
+            'system_cpu_percent',
+            'process_cpu_percent',
+            'system_ram_percent',
+            'system_ram_used_gib',
+            'system_ram_available_gib',
+            'process_ram_rss_gib',
+            'container_ram_percent',
+            'container_ram_used_gib',
+        ]
+        for key in metric_keys:
+            values = [sample[key] for sample in self.samples if sample.get(key) is not None]
+            if not values:
+                summary[f'{key}_mean'] = None
+                summary[f'{key}_max'] = None
+                continue
+            summary[f'{key}_mean'] = float(np.mean(values))
+            summary[f'{key}_max'] = float(np.max(values))
+
+        last_sample = self.samples[-1]
+        summary.update(last_sample)
+        summary.update({
+            'cpu_logical_count': last_sample['cpu_logical_count'],
+            'cpu_physical_count': last_sample['cpu_physical_count'],
+            'system_ram_total_gib': last_sample['system_ram_total_gib'],
+            'container_ram_limit_gib': last_sample['container_ram_limit_gib'],
+        })
+        return summary
 
 
 def print_resource_summary(visible_gpu_count):

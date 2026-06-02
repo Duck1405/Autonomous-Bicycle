@@ -23,7 +23,7 @@
 apiVersion: batch/v1
 kind: Job
 metadata:
-  name: hybridnets-train-trained-36-a40
+  name: hybridnets-train-trained-36-a100
   namespace: ucm-vista
 spec:
   backoffLimit: 0
@@ -46,7 +46,7 @@ spec:
         - name: trainer
           image: pytorch/pytorch:2.5.1-cuda12.1-cudnn9-runtime
           imagePullPolicy: IfNotPresent
-          workingDir: /data/Autonomous-Bicycle/HybridNets
+          workingDir: /data/aman/Autonomous-Bicycle/HybridNets
           command: ["/bin/bash", "-lc"]
           args:
             - |
@@ -121,7 +121,7 @@ spec:
                 --debug False \
                 --cal_map False \
                 --verbose True \
-                --plots False \
+                --plots True \
                 --num_gpus 1 \
                 --mosaic True \
                 --name hybridnets-train-trained-36-a100
@@ -130,14 +130,14 @@ spec:
               cpu: "24"
               memory: 64Gi
               ephemeral-storage: 50Gi
-              nvidia.com/a40: "1"
-              # nvidia.com/a100: "1"
+              # nvidia.com/a40: "1"
+              nvidia.com/a100: "1"
             limits:
               cpu: "24"
               memory: 96Gi
               ephemeral-storage: 100Gi
-              nvidia.com/a40: "1"
-              # nvidia.com/a100: "1"
+              # nvidia.com/a40: "1"
+              nvidia.com/a100: "1"
           volumeMounts:
             - name: data
               mountPath: /data

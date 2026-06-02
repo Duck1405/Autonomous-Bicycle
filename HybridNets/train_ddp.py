@@ -40,6 +40,7 @@ from train_functions import (get_args, should_log_gpu_memory,
                              summarize_segmentation_confusion_sums, bytes_to_gib,
                              read_cgroup_memory_value,
                              get_system_memory_info,
+                             SystemUtilizationSampler,
                              print_resource_summary, 
                              print_gpu_memory_summary)
 
@@ -199,6 +200,7 @@ def train(rank, opt):
                 device=rank,
             )
             train_dataloader.sampler.set_epoch(epoch)
+            system_utilization_sampler = SystemUtilizationSampler(num_iter_per_epoch, max_samples=100) if rank == 0 else None
             progress_bar = tqdm(train_dataloader, ascii=True, disable=rank != 0)
             for iter, data in enumerate(progress_bar):
                 if iter < step - last_epoch * num_iter_per_epoch:
@@ -281,6 +283,7 @@ def train(rank, opt):
                         # log learning_rate
                         current_lr = optimizer.param_groups[0]['lr']
                         writer.add_scalars('Learning_rate', {'train': current_lr}, step)
+                        system_utilization_sampler.maybe_sample(iter)
                     step += 1
 
                     if step % opt.save_interval == 0 and step > 0 and rank == 0:
@@ -323,6 +326,7 @@ def train(rank, opt):
             scheduler.step(train_loss)
 
             if rank == 0:
+                system_utilization_metrics = system_utilization_sampler.summarize()
                 train_metrics = {
                     'phase': 'train',
                     # 'run_name': opt.name,
@@ -352,6 +356,7 @@ def train(rank, opt):
                     'segmentation_classes': segmentation_class_names,
                     # 'detection_classes': params.obj_list,
                 }
+                train_metrics.update(system_utilization_metrics)
                 train_metrics.update(train_segmentation_metrics)
                 append_jsonl(opt.metrics_path, standardize_metric_record(train_metrics))
 
