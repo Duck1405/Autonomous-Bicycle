@@ -16,7 +16,7 @@ from val_ddp import val
 from backbone import HybridNetsBackbone
 from hybridnets.loss import FocalLoss
 from utils.utils import get_last_weights, init_weights, boolean_string, save_checkpoint, Params
-from utils.metrics_logging import append_jsonl
+from utils.metrics_logging import append_jsonl, standardize_metric_record
 from hybridnets.dataset import BddDataset
 from hybridnets.loss import FocalLossSeg, TverskyLoss
 from hybridnets.autoanchor import run_anchor
@@ -35,7 +35,9 @@ from train_functions import (get_args, should_log_gpu_memory,
                              load_checkpoint, average_tensor,
                              all_ranks_have_valid_loss, 
                              segmentation_metric_sums,
-                             summarize_segmentation_metric_sums,bytes_to_gib,
+                             segmentation_confusion_metric_sums,
+                             summarize_segmentation_metric_sums,
+                             summarize_segmentation_confusion_sums, bytes_to_gib,
                              read_cgroup_memory_value,
                              get_system_memory_info,
                              print_resource_summary, 
@@ -187,7 +189,15 @@ def train(rank, opt):
             epoch_cls_loss = []
             epoch_reg_loss = []
             epoch_seg_loss = []
+            segmentation_class_names = ['background', *params.seg_list] if seg_mode != BINARY_MODE else params.seg_list
+            num_segmentation_classes = len(segmentation_class_names)
             epoch_segmentation_metric_sums = torch.zeros(17, dtype=torch.float64, device=rank)
+            epoch_segmentation_confusion_sums = torch.zeros(
+                num_segmentation_classes,
+                4,
+                dtype=torch.float64,
+                device=rank,
+            )
             train_dataloader.sampler.set_epoch(epoch)
             progress_bar = tqdm(train_dataloader, ascii=True, disable=rank != 0)
             for iter, data in enumerate(progress_bar):
@@ -246,6 +256,12 @@ def train(rank, opt):
                     epoch_reg_loss.append(reg_loss.detach().item())
                     epoch_seg_loss.append(seg_loss.detach().item())
                     epoch_segmentation_metric_sums += segmentation_metric_sums(segmentation, seg_annot, seg_mode)
+                    epoch_segmentation_confusion_sums += segmentation_confusion_metric_sums(
+                        segmentation,
+                        seg_annot,
+                        seg_mode,
+                        num_segmentation_classes,
+                    )
 
                     avg_loss = average_tensor(loss, opt.num_gpus)
                     avg_cls_loss = average_tensor(cls_loss, opt.num_gpus)
@@ -264,8 +280,7 @@ def train(rank, opt):
 
                         # log learning_rate
                         current_lr = optimizer.param_groups[0]['lr']
-                        writer.add_scalar('learning_rate', current_lr, step)
-
+                        writer.add_scalars('Learning_rate', {'train': current_lr}, step)
                     step += 1
 
                     if step % opt.save_interval == 0 and step > 0 and rank == 0:
@@ -297,14 +312,21 @@ def train(rank, opt):
             train_seg_loss = train_loss_sums[3].item() / train_count
             train_optimizer_steps = int(train_count / max(opt.num_gpus, 1))
             dist.all_reduce(epoch_segmentation_metric_sums, op=dist.ReduceOp.SUM)
+            dist.all_reduce(epoch_segmentation_confusion_sums, op=dist.ReduceOp.SUM)
             train_segmentation_metrics = summarize_segmentation_metric_sums(epoch_segmentation_metric_sums)
+            train_segmentation_metrics.update(
+                summarize_segmentation_confusion_sums(
+                    epoch_segmentation_confusion_sums,
+                    segmentation_class_names,
+                )
+            )
             scheduler.step(train_loss)
 
             if rank == 0:
                 train_metrics = {
                     'phase': 'train',
-                    'run_name': opt.name,
-                    'project': opt.project,
+                    # 'run_name': opt.name,
+                    # 'project': opt.project,
                     'epoch': epoch,
                     'step': step,
                     'loss': train_loss,
@@ -318,20 +340,20 @@ def train(rank, opt):
                     'global_batch_size': opt.batch_size * opt.num_gpus,
                     'num_gpus': opt.num_gpus,
                     'num_workers_per_rank': opt.num_workers,
-                    'freeze_backbone': opt.freeze_backbone,
-                    'freeze_det': opt.freeze_det,
-                    'freeze_seg': opt.freeze_seg,
+                    # 'freeze_backbone': opt.freeze_backbone,
+                    # 'freeze_det': opt.freeze_det,
+                    # 'freeze_seg': opt.freeze_seg,
                     'mosaic': params.dataset['mosaic'],
                     'mixup': params.dataset['mixup'],
                     'amp': opt.amp,
                     'conf_thres': opt.conf_thres,
                     'iou_thres': opt.iou_thres,
                     'segmentation_mode': seg_mode,
-                    'segmentation_classes': ['background', *params.seg_list] if seg_mode != BINARY_MODE else params.seg_list,
-                    'detection_classes': params.obj_list,
+                    'segmentation_classes': segmentation_class_names,
+                    # 'detection_classes': params.obj_list,
                 }
                 train_metrics.update(train_segmentation_metrics)
-                append_jsonl(opt.metrics_path, train_metrics)
+                append_jsonl(opt.metrics_path, standardize_metric_record(train_metrics))
 
             if epoch % opt.val_interval == 0:
                 if opt.gpu_memory_debug:

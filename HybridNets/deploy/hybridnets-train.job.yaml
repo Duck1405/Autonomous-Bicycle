@@ -23,7 +23,7 @@
 apiVersion: batch/v1
 kind: Job
 metadata:
-  name: hybridnets-train-trained-24-a40
+  name: hybridnets-train-trained-36-a40
   namespace: ucm-vista
 spec:
   backoffLimit: 0
@@ -40,8 +40,8 @@ spec:
                   - key: nvidia.com/gpu.product
                     operator: In
                     values:
-                      - NVIDIA-A10
-                      #- NVIDIA-A100-SXM4-80GB
+                      # - NVIDIA-A10
+                      - NVIDIA-A100-SXM4-80GB
       containers:
         - name: trainer
           image: pytorch/pytorch:2.5.1-cuda12.1-cudnn9-runtime
@@ -60,7 +60,7 @@ spec:
               # /data/Autonomous-Bicycle is plain files, NOT a git checkout, so init in place.
               command -v git || (apt-get update && apt-get install -y --no-install-recommends git)
               git config --global --add safe.directory /data/Autonomous-Bicycle
-              cd /data/Autonomous-Bicycle
+              cd /data/aman/Autonomous-Bicycle
               git init -q
               REPO=https://github.com/Duck1405/Autonomous-Bicycle.git
               BRANCH=main
@@ -72,7 +72,7 @@ spec:
               git fetch --depth 1 --filter=blob:none origin "$BRANCH"
               git reset --hard FETCH_HEAD            # checks out only HybridNets/; leaves untracked datasets alone
               echo "[Info] repo now at: $(git rev-parse --short HEAD) ($BRANCH)"
-              cd /data/Autonomous-Bicycle/HybridNets
+              cd /data/aman/Autonomous-Bicycle/HybridNets
 
               test -f train_ddp.py
               test -f projects/bdd100k_nrp.yaml
@@ -107,24 +107,24 @@ spec:
               python train_ddp.py \
                 -p bdd100k_nrp \
                 -bb tf_efficientnet_b3 \
-                -b 3 \
-                -n 24 \
+                -b 48 \
+                -n 36 \
                 --freeze_backbone False \
                 --freeze_det True \
                 --freeze_seg False \
                 --lr 0.0001 \
                 --optim adamw \
-                --num_epochs 20 \
+                --num_epochs 30 \
                 --val_interval 1 \
-                --saved_path /data/hybridnets_models/hybridnets-train-trained \
-                --log_path /data/hybridnets/live/logs \
+                --saved_path /data/aman/hybridnets_models/hybridnets-train-trained \
+                --log_path /data/aman/hybridnets/live/logs \
                 --debug False \
                 --cal_map False \
                 --verbose True \
                 --plots False \
                 --num_gpus 1 \
                 --mosaic True \
-                --name hybridnets-train-trained-24-a10
+                --name hybridnets-train-trained-36-a100
           resources:
             requests:
               cpu: "24"

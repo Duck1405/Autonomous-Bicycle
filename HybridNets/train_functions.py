@@ -15,6 +15,7 @@ from torch import nn
 from torchvision import transforms
 from tqdm.autonotebook import tqdm
 
+from utils import smp_metrics
 from val_ddp import val
 from backbone import HybridNetsBackbone
 from hybridnets.loss import FocalLoss
@@ -60,7 +61,7 @@ def get_args():
                                                                    ' very final stage then switch to \'sgd\'')
     parser.add_argument('--num_epochs', type=int, default=500)
     parser.add_argument('--val_interval', type=int, default=1, help='Number of epoches between valing phases')
-    parser.add_argument('--save_interval', type=int, default=500, help='Number of steps between saving')
+    parser.add_argument('--save_interval', type=int, default=999999999999, help='Number of steps between saving')
     parser.add_argument('--es_min_delta', type=float, default=0.0,
                         help='Early stopping\'s parameter: minimum change loss to qualify as an improvement')
     parser.add_argument('--es_patience', type=int, default=0,
@@ -202,6 +203,68 @@ def segmentation_metric_sums(segmentation, seg_annot, seg_mode):
     stats[15] = true_class_probability.numel()
     stats[16] = true_class_probability.detach().double().sum()
     return stats
+
+
+@torch.no_grad()
+def segmentation_confusion_metric_sums(segmentation, seg_annot, seg_mode, num_classes):
+    device = segmentation.device
+    logits = segmentation.detach().float()
+    target = seg_annot.detach().long().to(device)
+
+    if seg_mode == MULTICLASS_MODE:
+        prediction = logits.softmax(dim=1).argmax(dim=1)
+    else:
+        prediction = torch.sigmoid(logits)
+
+    tp_seg, fp_seg, fn_seg, tn_seg = smp_metrics.get_stats(
+        prediction,
+        target,
+        mode=seg_mode,
+        threshold=0.5 if seg_mode != MULTICLASS_MODE else None,
+        num_classes=num_classes if seg_mode == MULTICLASS_MODE else None,
+    )
+    return torch.stack(
+        [
+            tp_seg.sum(0),
+            fp_seg.sum(0),
+            fn_seg.sum(0),
+            tn_seg.sum(0),
+        ],
+        dim=1,
+    ).to(device=device, dtype=torch.float64)
+
+
+def summarize_segmentation_confusion_sums(stats, class_names):
+    per_class_metrics = {}
+    for i, name in enumerate(class_names):
+        true_positive = stats[i, 0].item()
+        false_positive = stats[i, 1].item()
+        false_negative = stats[i, 2].item()
+        true_negative = stats[i, 3].item()
+        predicted_pixels = true_positive + false_positive
+        target_pixels = true_positive + false_negative
+
+        precision = true_positive / max(predicted_pixels, 1.0)
+        recall = true_positive / max(target_pixels, 1.0)
+        f1_score = (2.0 * precision * recall) / max(precision + recall, 1e-12)
+        iou = true_positive / max(true_positive + false_positive + false_negative, 1.0)
+        true_negative_rate = true_negative / max(true_negative + false_positive, 1.0)
+
+        per_class_metrics[name] = {
+            'iou': iou,
+            'balanced_accuracy': 0.5 * (recall + true_negative_rate),
+            'precision': precision,
+            'recall': recall,
+            'f1_score': f1_score,
+            'dice': f1_score,
+            'target_pixels': int(target_pixels),
+            'predicted_pixels': int(predicted_pixels),
+            'true_positive_pixels': int(true_positive),
+            'false_positive_pixels': int(false_positive),
+            'false_negative_pixels': int(false_negative),
+            'true_negative_pixels': int(true_negative),
+        }
+    return {'per_class': per_class_metrics}
 
 
 def summarize_segmentation_metric_sums(stats):

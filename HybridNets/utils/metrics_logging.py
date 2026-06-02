@@ -6,6 +6,49 @@ import numpy as np
 import torch
 
 
+STANDARD_METRIC_KEYS = (
+    'phase',
+    'epoch',
+    'step',
+    'loss',
+    'classification_loss',
+    'regression_loss',
+    'segmentation_loss',
+    'learning_rate',
+    'num_batches',
+    'num_rank_batches',
+    'num_images',
+    'batch_size_per_rank',
+    'global_batch_size',
+    'num_gpus',
+    'num_workers_per_rank',
+    'mosaic',
+    'mixup',
+    'amp',
+    'cal_map_enabled',
+    'conf_thres',
+    'iou_thres',
+    'segmentation_mode',
+    'segmentation_classes',
+    # 'detection_classes',
+    'pixel_accuracy',
+    'segmentation_log_loss',
+    'mean_true_class_probability',
+    'mean_iou',
+    'mean_balanced_accuracy',
+    'foreground_background_iou',
+    'lane_background_iou',
+    'confidence',
+    'uncertainty',
+    'per_class',
+    # 'deis tection',
+    # 'fitness',
+    'best_loss',
+    'best_epoch',
+   # 'best_fitness',
+)
+
+
 def to_jsonable(value):
     if isinstance(value, torch.Tensor):
         if value.numel() == 1:
@@ -20,6 +63,13 @@ def to_jsonable(value):
     if isinstance(value, (list, tuple)):
         return [to_jsonable(item) for item in value]
     return value
+
+
+def standardize_metric_record(record):
+    """Return a stable JSONL schema for train and validation metric rows."""
+    standardized = {key: None for key in STANDARD_METRIC_KEYS}
+    standardized.update(record)
+    return standardized
 
 
 def append_jsonl(path, record):

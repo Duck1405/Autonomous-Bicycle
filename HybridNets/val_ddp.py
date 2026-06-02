@@ -8,7 +8,7 @@ from tqdm.autonotebook import tqdm
 
 from utils import smp_metrics
 from utils.constants import BINARY_MODE, MULTICLASS_MODE
-from utils.metrics_logging import append_jsonl
+from utils.metrics_logging import append_jsonl, standardize_metric_record
 from utils.utils import (
     BBoxTransform,
     ClipBoxes,
@@ -277,12 +277,14 @@ def val(model, rank, optimizer, val_generator, params, opt, writer, epoch, step,
             true_negative = segmentation_confusion_stats[i, 3].item()
             predicted_pixels = true_positive + false_positive
             target_pixels = true_positive + false_negative
+            f1_score = (2.0 * true_positive) / max(2.0 * true_positive + false_positive + false_negative, 1.0)
             per_class_metrics[name] = {
                 'iou': float(gathered_iou[i]),
                 'balanced_accuracy': float(gathered_f1[i]),
                 'precision': true_positive / max(predicted_pixels, 1.0),
                 'recall': true_positive / max(target_pixels, 1.0),
-                'dice': (2.0 * true_positive) / max(2.0 * true_positive + false_positive + false_negative, 1.0),
+                'f1_score': f1_score,
+                'dice': f1_score,
                 'target_pixels': int(target_pixels),
                 'predicted_pixels': int(predicted_pixels),
                 'true_positive_pixels': int(true_positive),
@@ -309,8 +311,21 @@ def val(model, rank, optimizer, val_generator, params, opt, writer, epoch, step,
             'classification_loss': cls_loss,
             'regression_loss': reg_loss,
             'segmentation_loss': seg_loss,
+            'learning_rate': optimizer.param_groups[0]['lr'],
+            'num_batches': len(val_generator),
+            'num_rank_batches': len(val_generator),
             'num_images': seen,
             'num_pixels': int(confidence_stats[4].item()),
+            'batch_size_per_rank': opt.batch_size,
+            'global_batch_size': opt.batch_size * opt.num_gpus,
+            'num_gpus': opt.num_gpus,
+            'num_workers_per_rank': opt.num_workers,
+            'freeze_backbone': opt.freeze_backbone,
+            'freeze_det': opt.freeze_det,
+            'freeze_seg': opt.freeze_seg,
+            'mosaic': params.dataset.get('mosaic'),
+            'mixup': params.dataset.get('mixup'),
+            'amp': opt.amp,
             'pixel_accuracy': confidence_stats[8].item() / pixel_count,
             'segmentation_log_loss': segmentation_log_loss_stats[0].item() / log_loss_count,
             'mean_true_class_probability': segmentation_log_loss_stats[2].item() / log_loss_count,
@@ -338,6 +353,7 @@ def val(model, rank, optimizer, val_generator, params, opt, writer, epoch, step,
             'iou_thres': opt.iou_thres,
             'segmentation_mode': seg_mode,
             'segmentation_classes': class_names,
+            'detection_classes': params.obj_list,
         }
 
         nt = torch.zeros(1)
@@ -428,7 +444,7 @@ def val(model, rank, optimizer, val_generator, params, opt, writer, epoch, step,
         validation_metrics['best_loss'] = float(best_loss)
         validation_metrics['best_epoch'] = int(best_epoch)
         validation_metrics['best_fitness'] = float(best_fitness[0] if hasattr(best_fitness, '__len__') else best_fitness)
-        append_jsonl(opt.metrics_path, validation_metrics)
+        append_jsonl(opt.metrics_path, standardize_metric_record(validation_metrics))
 
     best_loss_epoch = torch.tensor([float(best_loss), float(best_epoch)], dtype=torch.float64, device=device)
     dist.broadcast(best_loss_epoch, src=0)
