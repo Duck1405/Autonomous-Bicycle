@@ -1,0 +1,163 @@
+aman@aman-pc:~/Projects/Auto/Autonomous-Bicycle/ros2_ws$ kubectl describe pod hybridnets-train-trained-24-kf58q
+ -n ucm-vista
+Name:             hybridnets-train-trained-24-kf58q
+Namespace:        ucm-vista
+Priority:         0
+Service Account:  default
+Node:             gpengine-uams.areon.net/208.90.105.242
+Start Time:       Tue, 02 Jun 2026 01:04:02 -0700
+Labels:           batch.kubernetes.io/controller-uid=ccb3ec2a-ab57-4add-a905-46d0859f57f0
+                  batch.kubernetes.io/job-name=hybridnets-train-trained-24
+                  controller-uid=ccb3ec2a-ab57-4add-a905-46d0859f57f0
+                  job-name=hybridnets-train-trained-24
+Annotations:      cni.projectcalico.org/containerID: dae190b11b10f833d8c1127dd442dc4ab2c1440764bca1c8bf285a92bbd8974c
+                  cni.projectcalico.org/podIP: 10.244.198.48/32
+                  cni.projectcalico.org/podIPs: 10.244.198.48/32
+                  nrp.ai/username: http://cilogon.org/serverE/users/401944
+Status:           Running
+IP:               10.244.198.48
+IPs:
+  IP:           10.244.198.48
+Controlled By:  Job/hybridnets-train-trained-24
+Containers:
+  trainer:
+    Container ID:  containerd://06071547ece48d2ad0feaf4dda0a2f8ecad2f4f423f0a4bcebc45ddec48f69f8
+    Image:         pytorch/pytorch:2.5.1-cuda12.1-cudnn9-runtime
+    Image ID:      docker.io/pytorch/pytorch@sha256:831247999fbf7e08f61b3e39f6d77ee434f38f6f07f769d00db451e853878067
+    Port:          <none>
+    Host Port:     <none>
+    Command:
+      /bin/bash
+      -lc
+    Args:
+      set -euxo pipefail
+      
+      # Tee all output to a timestamped log on the PVC so it survives pod deletion.
+      mkdir -p /data/hybridnets/live/logs
+      exec > >(tee /data/hybridnets/live/logs/train_$(date +%s).log) 2>&1
+      
+      # --- sync code on the PVC to the canonical commit ---
+      # /data/Autonomous-Bicycle is plain files, NOT a git checkout, so init in place.
+      command -v git || (apt-get update && apt-get install -y --no-install-recommends git)
+      git config --global --add safe.directory /data/Autonomous-Bicycle
+      cd /data/Autonomous-Bicycle
+      git init -q
+      REPO=https://github.com/Duck1405/Autonomous-Bicycle.git
+      BRANCH=main
+      git remote add origin "$REPO" 2>/dev/null || git remote set-url origin "$REPO"
+      # Only the HybridNets/ subtree is needed for training. Partial+sparse fetch pulls
+      # ~29MB instead of ~706MB (skips the 655MB model_test_iamges_jpg/ blobs entirely).
+      git sparse-checkout init --cone
+      git sparse-checkout set HybridNets
+      git fetch --depth 1 --filter=blob:none origin "$BRANCH"
+      git reset --hard FETCH_HEAD            # checks out only HybridNets/; leaves untracked datasets alone
+      echo "[Info] repo now at: $(git rev-parse --short HEAD) ($BRANCH)"
+      cd /data/Autonomous-Bicycle/HybridNets
+      
+      test -f train_ddp.py
+      test -f projects/bdd100k_nrp.yaml
+      test -d /data/100k_images
+      test -d /data/100k
+      test -d /data/bdd_seg_gt
+      test -d /data/bdd_lane_gt
+      
+      export OMP_NUM_THREADS=1
+      export MKL_NUM_THREADS=1
+      export MPLCONFIGDIR=/tmp/matplotlib
+      
+      python -m pip install --upgrade pip
+      python -m pip install --no-cache-dir --upgrade-strategy only-if-needed \
+        "albumentations>=1.3,<2" \
+        "matplotlib>=3.7,<4" \
+        "numpy>=1.26,<2" \
+        "opencv-python-headless>=4.8,<5" \
+        "psutil>=5.9,<7" \
+        "PyYAML>=6,<7" \
+        "scipy>=1.10,<2" \
+        "seaborn>=0.12,<1" \
+        "tensorboardX>=2.6,<3" \
+        "tqdm>=4.66,<5" \
+        "webcolors>=1.13,<2"
+      python -m pip install --no-cache-dir --no-deps \
+        efficientnet_pytorch==0.7.1 \
+        prefetch_generator==1.0.1 \
+        pretrainedmodels==0.7.4 \
+        timm==0.5.4
+      
+      python train_ddp.py \
+        -p bdd100k_nrp \
+        -bb tf_efficientnet_b3 \
+        -b 32 \
+        -n 32 \
+        --freeze_backbone False \
+        --freeze_det True \
+        --freeze_seg False \
+        --lr 0.0001 \
+        --optim adamw \
+        --num_epochs 20 \
+        --val_interval 1 \
+        --saved_path /data/hybridnets_models/hybridnets-train-trained \
+        --log_path /data/hybridnets/live/logs \
+        --debug False \
+        --cal_map False \
+        --verbose True \
+        --plots False \
+        --num_gpus 1 \
+        --mosaic True \
+        --name hybridnets-train-trained-24
+      
+    State:          Running
+      Started:      Tue, 02 Jun 2026 01:04:35 -0700
+    Ready:          True
+    Restart Count:  0
+    Limits:
+      cpu:                24
+      ephemeral-storage:  100Gi
+      memory:             96Gi
+      nvidia.com/a100:    1
+    Requests:
+      cpu:                24
+      ephemeral-storage:  50Gi
+      memory:             64Gi
+      nvidia.com/a100:    1
+    Environment:          <none>
+    Mounts:
+      /data from data (rw)
+      /dev/shm from dshm (rw)
+      /var/run/secrets/kubernetes.io/serviceaccount from kube-api-access-dqbwl (ro)
+Conditions:
+  Type                        Status
+  PodReadyToStartContainers   True 
+  Initialized                 True 
+  Ready                       True 
+  ContainersReady             True 
+  PodScheduled                True 
+Volumes:
+  data:
+    Type:       PersistentVolumeClaim (a reference to a PersistentVolumeClaim in the same namespace)
+    ClaimName:  lanenet-data
+    ReadOnly:   false
+  dshm:
+    Type:       EmptyDir (a temporary directory that shares a pod's lifetime)
+    Medium:     Memory
+    SizeLimit:  16Gi
+  kube-api-access-dqbwl:
+    Type:                    Projected (a volume that contains injected data from multiple sources)
+    TokenExpirationSeconds:  3607
+    ConfigMapName:           kube-root-ca.crt
+    Optional:                false
+    DownwardAPI:             true
+QoS Class:                   Burstable
+Node-Selectors:              <none>
+Tolerations:                 node.kubernetes.io/not-ready:NoExecute op=Exists for 300s
+                             node.kubernetes.io/unreachable:NoExecute op=Exists for 300s
+                             nvidia.com/gpu:PreferNoSchedule op=Exists
+Events:
+  Type     Reason                  Age                  From                     Message
+  ----     ------                  ----                 ----                     -------
+  Warning  FailedScheduling        39m (x116 over 10h)  default-scheduler        0/523 nodes are available: 1 node(s) had untolerated taint {nautilus.io/issue: 1368}, 1 node(s) had untolerated taint {nautilus.io/issue: 1541}, 1 node(s) had untolerated taint {nautilus.io/issue: 1574}, 1 node(s) had untolerated taint {nautilus.io/issue: 1593-1685}, 1 node(s) had untolerated taint {nautilus.io/issue: 1607}, 1 node(s) had untolerated taint {nautilus.io/issue: 1610-1685}, 1 node(s) had untolerated taint {nautilus.io/issue: 1641}, 1 node(s) had untolerated taint {nautilus.io/issue: 1661}, 1 node(s) had untolerated taint {nautilus.io/issue: slow-network}, 1 node(s) had untolerated taint {nautilus.io/issue: testing}, 1 node(s) had untolerated taint {nautilus.io/reservation: internet2}, 1 node(s) had untolerated taint {nautilus.io/reservation: nrp-llm}, 1 node(s) had untolerated taint {nautilus.io/reservation: sage}, 1 node(s) had untolerated taint {nautilus.io/reservation: sdccd}, 1 node(s) had untolerated taint {nautilus.io/reservation: suncave}, 1 node(s) had untolerated taint {nautilus.io/ ...
+  Normal   SuccessfulAttachVolume  31m                  attachdetach-controller  AttachVolume.Attach succeeded for volume "pvc-51020504-9c4e-4402-b6c0-706ca0217927"
+  Normal   Pulled                  31m                  kubelet                  spec.containers{trainer}: Container image "pytorch/pytorch:2.5.1-cuda12.1-cudnn9-runtime" already present on machine
+  Normal   Created                 31m                  kubelet                  spec.containers{trainer}: Created container: trainer
+  Normal   Started                 31m                  kubelet                  spec.containers{trainer}: Started container trainer
+aman@aman-pc:~/Projects/Auto/Autonomous-Bicycle/ros2_ws$ 

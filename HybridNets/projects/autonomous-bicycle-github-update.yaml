@@ -1,7 +1,7 @@
 apiVersion: batch/v1
 kind: Job
 metadata:
-  name: autonomous-bicycle-github-update
+  name: autonomous-bicycle-github-update-2
   namespace: ucm-vista
 spec:
   backoffLimit: 0
@@ -23,7 +23,7 @@ spec:
               BRANCH="${BRANCH:-main}"
 
               git config --global --add safe.directory "${TARGET_DIR}"
-
+`
               if [ -d "${TARGET_DIR}/.git" ]; then
                 git -C "${TARGET_DIR}" remote set-url origin "${REPO_URL}"
                 git -C "${TARGET_DIR}" fetch --depth=1 origin "${BRANCH}"
@@ -46,13 +46,13 @@ spec:
               git -C "${TARGET_DIR}" rev-parse HEAD
           resources:
             requests:
-              cpu: "100m"
-              memory: 128Mi
-              ephemeral-storage: 2Gi
+              cpu: "6"
+              memory: 16Gi
+              ephemeral-storage: 100Gi
             limits:
-              cpu: "500m"
-              memory: 512Mi
-              ephemeral-storage: 2Gi
+              cpu: "6"
+              memory: 16Gi
+              ephemeral-storage: 100Gi
           volumeMounts:
             - name: data
               mountPath: /data

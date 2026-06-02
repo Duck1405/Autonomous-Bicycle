@@ -27,8 +27,31 @@ new_data.tar
 LaneNet/CuLane Extra
 LaneNet/CuLane
 
+
+# Send output files
 Send/numpy_videos
 Send/numpy_output
 
 Send/numpy_concat
 Send/numpy_videos_concat
+
+
+
+# ROS2 workspace files
+
+ros2_ws/*.pyc
+ros2_ws/*.iml
+ros2_ws/*.swp
+ros2_ws/.project
+ros2_ws/.pydevproject
+ros2_ws/.DS_Store
+ros2_ws/.idea
+
+ros2_ws/.vscode/*
+ros2_ws/!.vscode/extensions.json
+ros2_ws/!.vscode/settings.json
+
+# colcon/CMake output
+ros2_ws/build
+ros2_ws/install
+ros2_ws/log

@@ -1,0 +1,118 @@
+<?xml version="1.0" ?>
+<sdf version="1.6">
+  <world name="straight_road_world">
+    <physics name="default_physics" type="ode">
+      <max_step_size>0.001</max_step_size>
+      <real_time_update_rate>1000</real_time_update_rate>
+      <real_time_factor>1.0</real_time_factor>
+    </physics>
+
+    <scene>
+      <ambient>0.45 0.45 0.45 1</ambient>
+      <background>0.7 0.8 1.0 1</background>
+      <shadows>true</shadows>
+    </scene>
+
+    <include>
+      <uri>model://sun</uri>
+    </include>
+
+    <model name="grass_ground">
+      <static>true</static>
+      <link name="ground_link">
+        <collision name="ground_collision">
+          <geometry>
+            <box>
+              <size>100 30 0.02</size>
+            </box>
+          </geometry>
+        </collision>
+        <visual name="ground_visual">
+          <geometry>
+            <box>
+              <size>100 30 0.02</size>
+            </box>
+          </geometry>
+          <material>
+            <ambient>0.18 0.35 0.16 1</ambient>
+            <diffuse>0.18 0.35 0.16 1</diffuse>
+          </material>
+        </visual>
+      </link>
+      <pose>0 0 -0.02 0 0 0</pose>
+    </model>
+
+    <model name="straight_asphalt_road">
+      <static>true</static>
+      <link name="road_link">
+        <collision name="road_collision">
+          <geometry>
+            <box>
+              <size>90 7 0.04</size>
+            </box>
+          </geometry>
+        </collision>
+        <visual name="road_visual">
+          <geometry>
+            <box>
+              <size>90 7 0.04</size>
+            </box>
+          </geometry>
+          <material>
+            <ambient>0.025 0.025 0.025 1</ambient>
+            <diffuse>0.035 0.035 0.035 1</diffuse>
+            <specular>0.01 0.01 0.01 1</specular>
+          </material>
+        </visual>
+      </link>
+      <pose>0 0 0.01 0 0 0</pose>
+    </model>
+
+    <model name="white_edge_lines">
+      <static>true</static>
+      <link name="edge_lines_link">
+        <visual name="left_edge_line">
+          <pose>0 3.05 0.035 0 0 0</pose>
+          <geometry>
+            <box>
+              <size>88 0.12 0.01</size>
+            </box>
+          </geometry>
+          <material>
+            <ambient>1 1 1 1</ambient>
+            <diffuse>1 1 1 1</diffuse>
+          </material>
+        </visual>
+        <visual name="right_edge_line">
+          <pose>0 -3.05 0.035 0 0 0</pose>
+          <geometry>
+            <box>
+              <size>88 0.12 0.01</size>
+            </box>
+          </geometry>
+          <material>
+            <ambient>1 1 1 1</ambient>
+            <diffuse>1 1 1 1</diffuse>
+          </material>
+        </visual>
+      </link>
+    </model>
+
+    <model name="dashed_yellow_center_line">
+      <static>true</static>
+      <link name="center_line_link">
+        <visual name="dash_00"><pose>-40 0 0.04 0 0 0</pose><geometry><box><size>3 0.12 0.012</size></box></geometry><material><ambient>1 0.85 0.05 1</ambient><diffuse>1 0.85 0.05 1</diffuse></material></visual>
+        <visual name="dash_01"><pose>-32 0 0.04 0 0 0</pose><geometry><box><size>3 0.12 0.012</size></box></geometry><material><ambient>1 0.85 0.05 1</ambient><diffuse>1 0.85 0.05 1</diffuse></material></visual>
+        <visual name="dash_02"><pose>-24 0 0.04 0 0 0</pose><geometry><box><size>3 0.12 0.012</size></box></geometry><material><ambient>1 0.85 0.05 1</ambient><diffuse>1 0.85 0.05 1</diffuse></material></visual>
+        <visual name="dash_03"><pose>-16 0 0.04 0 0 0</pose><geometry><box><size>3 0.12 0.012</size></box></geometry><material><ambient>1 0.85 0.05 1</ambient><diffuse>1 0.85 0.05 1</diffuse></material></visual>
+        <visual name="dash_04"><pose>-8 0 0.04 0 0 0</pose><geometry><box><size>3 0.12 0.012</size></box></geometry><material><ambient>1 0.85 0.05 1</ambient><diffuse>1 0.85 0.05 1</diffuse></material></visual>
+        <visual name="dash_05"><pose>0 0 0.04 0 0 0</pose><geometry><box><size>3 0.12 0.012</size></box></geometry><material><ambient>1 0.85 0.05 1</ambient><diffuse>1 0.85 0.05 1</diffuse></material></visual>
+        <visual name="dash_06"><pose>8 0 0.04 0 0 0</pose><geometry><box><size>3 0.12 0.012</size></box></geometry><material><ambient>1 0.85 0.05 1</ambient><diffuse>1 0.85 0.05 1</diffuse></material></visual>
+        <visual name="dash_07"><pose>16 0 0.04 0 0 0</pose><geometry><box><size>3 0.12 0.012</size></box></geometry><material><ambient>1 0.85 0.05 1</ambient><diffuse>1 0.85 0.05 1</diffuse></material></visual>
+        <visual name="dash_08"><pose>24 0 0.04 0 0 0</pose><geometry><box><size>3 0.12 0.012</size></box></geometry><material><ambient>1 0.85 0.05 1</ambient><diffuse>1 0.85 0.05 1</diffuse></material></visual>
+        <visual name="dash_09"><pose>32 0 0.04 0 0 0</pose><geometry><box><size>3 0.12 0.012</size></box></geometry><material><ambient>1 0.85 0.05 1</ambient><diffuse>1 0.85 0.05 1</diffuse></material></visual>
+        <visual name="dash_10"><pose>40 0 0.04 0 0 0</pose><geometry><box><size>3 0.12 0.012</size></box></geometry><material><ambient>1 0.85 0.05 1</ambient><diffuse>1 0.85 0.05 1</diffuse></material></visual>
+      </link>
+    </model>
+  </world>
+</sdf>
