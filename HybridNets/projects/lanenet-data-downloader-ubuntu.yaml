@@ -1,0 +1,18 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: lanenet-data-downloader
+  namespace: ucm-vista
+spec:
+  restartPolicy: Never
+  containers:
+    - name: uploader
+      image: ubuntu:22.04
+      command: ["sh", "-c", "sleep 600"]
+      volumeMounts:
+        - name: lanenet-data
+          mountPath: /data
+  volumes:
+    - name: lanenet-data
+      persistentVolumeClaim:
+        claimName: lanenet-data
