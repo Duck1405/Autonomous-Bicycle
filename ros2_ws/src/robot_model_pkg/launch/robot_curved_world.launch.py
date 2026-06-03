@@ -1,0 +1,60 @@
+from launch import LaunchDescription
+from launch.actions import IncludeLaunchDescription
+from launch.launch_description_sources import PythonLaunchDescriptionSource
+from launch.substitutions import Command, PathJoinSubstitution
+from launch_ros.actions import Node
+from launch_ros.substitutions import FindPackageShare
+
+
+def generate_launch_description():
+    robot_description = Command([
+        'xacro ',
+        PathJoinSubstitution([
+            FindPackageShare('robot_model_pkg'),
+            'urdf',
+            'robot.xacro',
+        ]),
+    ])
+
+    gazebo_launch = PathJoinSubstitution([
+        FindPackageShare('gazebo_ros'),
+        'launch',
+        'gazebo.launch.py',
+    ])
+
+    world = PathJoinSubstitution([
+        FindPackageShare('autonomous_bicycle_gazebo'),
+        'worlds',
+        'curved.world',
+    ])
+
+    return LaunchDescription([
+        IncludeLaunchDescription(
+            PythonLaunchDescriptionSource(gazebo_launch),
+            launch_arguments={
+                'world': world,
+                'verbose': 'true',
+            }.items(),
+        ),
+        Node(
+            package='robot_state_publisher',
+            executable='robot_state_publisher',
+            parameters=[{
+                'robot_description': robot_description,
+                'use_sim_time': True,
+            }],
+            output='screen',
+        ),
+        Node(
+            package='gazebo_ros',
+            executable='spawn_entity.py',
+            arguments=[
+                '-entity', 'drive_car',
+                '-topic', 'robot_description',
+                '-x', '0.0',
+                '-y', '0.0',
+                '-z', '0.30',
+            ],
+            output='screen',
+        ),
+    ])
