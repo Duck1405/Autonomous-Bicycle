@@ -46,20 +46,21 @@ spec:
         - name: trainer
           image: pytorch/pytorch:2.5.1-cuda12.1-cudnn9-runtime
           imagePullPolicy: IfNotPresent
-          workingDir: /data/aman/Autonomous-Bicycle/HybridNets
+          workingDir: /data
           command: ["/bin/bash", "-lc"]
           args:
             - |
               set -euxo pipefail
 
               # Tee all output to a timestamped log on the PVC so it survives pod deletion.
-              mkdir -p /data/hybridnets/live/logs
-              exec > >(tee /data/hybridnets/live/logs/train_$(date +%s).log) 2>&1
+              mkdir -p /data/aman/hybridnets/live/logs
+              exec > >(tee /data/aman/hybridnets/live/logs/train_$(date +%s).log) 2>&1
 
               # --- sync code on the PVC to the canonical commit ---
-              # /data/Autonomous-Bicycle is plain files, NOT a git checkout, so init in place.
+              # /data/aman/Autonomous-Bicycle is plain files, NOT a git checkout, so init in place.
               command -v git || (apt-get update && apt-get install -y --no-install-recommends git)
-              git config --global --add safe.directory /data/Autonomous-Bicycle
+              git config --global --add safe.directory /data/aman/Autonomous-Bicycle
+              mkdir -p /data/aman/Autonomous-Bicycle
               cd /data/aman/Autonomous-Bicycle
               git init -q
               REPO=https://github.com/Duck1405/Autonomous-Bicycle.git

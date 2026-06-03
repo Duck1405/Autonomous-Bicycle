@@ -1,0 +1,92 @@
+<?xml version="1.0" ?>
+
+<!-- ######################################## -->
+<!-- GAZEBO ADDITIONAL DESCRIPTION OF THE 4-WHEELED ROBOT -->
+<!-- Made by Aleksandar Haber -->
+<!-- October 2023 -->
+<!-- ######################################## -->
+
+<robot>
+
+<!-- Everything is described here -->
+<!-- http://classic.gazebosim.org/tutorials?tut=ros_urdf&cat=connect_ros -->
+<!-- mu1 and mu2 are friction coefficients -->
+
+<gazebo reference="body_link">
+    <mu1>0.2</mu1>
+    <mu2>0.2</mu2>
+    <material>Gazebo/Red</material>
+</gazebo>
+
+<gazebo reference="wheel1_link">
+    <mu1>0.2</mu1>
+    <mu2>0.2</mu2>
+    <material>Gazebo/Yellow</material>
+</gazebo>
+
+<gazebo reference="wheel2_link">
+    <mu1>0.2</mu1>
+    <mu2>0.2</mu2>
+    <material>Gazebo/Yellow</material>
+</gazebo>
+
+<gazebo reference="wheel3_link">
+    <mu1>0.2</mu1>
+    <mu2>0.2</mu2>
+    <material>Gazebo/Yellow</material>
+</gazebo>
+
+
+<gazebo reference="wheel4_link">
+    <mu1>0.2</mu1>
+    <mu2>0.2</mu2>
+    <material>Gazebo/Yellow</material>
+</gazebo>
+
+
+<gazebo>
+  <plugin name="skid_steer_drive_controller"
+          filename="libgazebo_ros_diff_drive.so">
+
+    <!-- Control update rate in Hz -->
+    <update_rate>100.0</update_rate>
+
+    <!-- Robot kinematics -->
+    <num_wheel_pairs>2</num_wheel_pairs>
+
+    <left_joint>wheel4_joint</left_joint>
+    <right_joint>wheel3_joint</right_joint>
+    <left_joint>wheel2_joint</left_joint>
+    <right_joint>wheel1_joint</right_joint>
+
+    <wheel_separation>${body_link_y_dim + wheel_link_length}</wheel_separation>
+    <wheel_separation>${body_link_y_dim + wheel_link_length}</wheel_separation>
+    <wheel_diameter>${2.0 * wheel_link_radius}</wheel_diameter>
+    <wheel_diameter>${2.0 * wheel_link_radius}</wheel_diameter>
+
+    <!-- Maximum torque which the wheels can produce, in Nm, defaults to 5 Nm -->
+    <max_wheel_torque>1000</max_wheel_torque>
+
+    <!-- Topic to receive geometry_msgs/Twist message commands, defaults to `cmd_vel` -->
+    <command_topic>cmd_vel</command_topic>
+
+    <!-- Topic to publish nav_msgs/Odometry messages, defaults to `odom` -->
+    <odometry_topic>odom</odometry_topic>
+
+    <!-- Odometry frame, defaults to `odom` -->
+    <odometry_frame>odom</odometry_frame>
+
+    <!-- Robot frame to calculate odometry from, defaults to `base_footprint` -->
+    <robot_base_frame>dummy</robot_base_frame>
+
+    <!-- Set to true to publish transforms for the wheel links, defaults to false -->
+    <publish_wheel_tf>true</publish_wheel_tf>
+
+    <!-- Set to true to publish transforms for the odometry, defaults to true -->
+    <publish_odom>true</publish_odom>
+    <publish_odom_tf>true</publish_odom_tf>
+
+  </plugin>
+</gazebo>
+
+</robot>
