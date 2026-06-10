@@ -75,7 +75,59 @@
       <pose>0 0 0.01 0 0 0</pose>
     </model>
 
-    <model name="white_edge_lines">
+    <model name="white_edge_left">
+      <static>true</static>
+      <link name="white_edge_left_link">
+        <visual name="white_edge_left_visual">
+          <pose>0 3.05 0.035 0 0 0</pose>
+          <geometry>
+            <box>
+              <size>88 0.12 0.01</size>
+            </box>
+          </geometry>
+          <material>
+            <ambient>1 1 1 1</ambient>
+            <diffuse>1 1 1 1</diffuse>
+          </material>
+        </visual>
+      </link>
+    </model>
+    <model name="white_edge_right">
+      <static>true</static>
+      <link name="white_edge_right_link">
+        <visual name="white_edge_right_visual">
+          <pose>0 -3.05 0.035 0 0 0</pose>
+          <geometry>
+            <box>
+              <size>88 0.12 0.01</size>
+            </box>
+          </geometry>
+          <material>
+            <ambient>1 1 1 1</ambient>
+            <diffuse>1 1 1 1</diffuse>
+          </material>
+        </visual>
+      </link>
+    </model>
+    <model name="white_edge_middle">
+      <static>true</static>
+      <link name="white_edge_middle_link">
+        <visual name="white_edge_middle_visual">
+          <pose>0 0 0.035 0 0 0</pose>
+          <geometry>
+            <box>
+              <size>88 0.12 0.01</size>
+            </box>
+          </geometry>
+          <material>
+            <ambient>1 1 1 1</ambient>
+            <diffuse>1 1 1 1</diffuse>
+          </material>
+        </visual>
+      </link>
+    </model>
+
+    <!-- <model name="white_edge_lines">
       <static>true</static>
       <link name="edge_lines_link">
         <visual name="left_edge_line">
@@ -115,7 +167,7 @@
           </material>
         </visual>
       </link>
-    </model>
+    </model> -->
 
     <!-- <model name="dashed_yellow_center_line">
       <static>true</static>
