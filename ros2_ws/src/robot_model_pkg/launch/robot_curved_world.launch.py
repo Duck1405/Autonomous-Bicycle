@@ -1,5 +1,6 @@
 from launch import LaunchDescription
 from launch.actions import IncludeLaunchDescription
+from launch.actions import SetEnvironmentVariable
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import Command, PathJoinSubstitution
 from launch_ros.actions import Node
@@ -28,7 +29,15 @@ def generate_launch_description():
         'curved.world',
     ])
 
+    gazebo_model_path = PathJoinSubstitution([
+        FindPackageShare('autonomous_bicycle_gazebo'),
+        'models',
+    ])
+
     return LaunchDescription([
+        SetEnvironmentVariable('GAZEBO_MODEL_PATH', gazebo_model_path),
+        SetEnvironmentVariable('GAZEBO_MODEL_DATABASE_URI', ''),
+        SetEnvironmentVariable('QT_X11_NO_MITSHM', '1'),
         IncludeLaunchDescription(
             PythonLaunchDescriptionSource(gazebo_launch),
             launch_arguments={
@@ -51,8 +60,8 @@ def generate_launch_description():
             arguments=[
                 '-entity', 'drive_car',
                 '-topic', 'robot_description',
-                '-x', '0.0',
-                '-y', '0.0',
+                '-x', '-35',
+                '-y', '0',
                 '-z', '0.30',
             ],
             output='screen',

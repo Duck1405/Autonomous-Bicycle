@@ -1,40 +1,46 @@
 <?xml version="1.0" ?>
 <sdf version="1.6">
-  <world name="straight_road_world">
-  <!-- Physics of the world -->
+  <world name="curved_road_world">
     <physics name="default_physics" type="ode">
       <max_step_size>0.001</max_step_size>
       <real_time_update_rate>1000</real_time_update_rate>
       <real_time_factor>1.0</real_time_factor>
     </physics>
 
-    <!-- Scene of the envirnoment-->
-    <!-- <scene>
+    <scene>
       <ambient>0.45 0.45 0.45 1</ambient>
       <background>0.7 0.8 1.0 1</background>
       <shadows>true</shadows>
-    </scene> -->
+    </scene>
 
-    <!-- <include>
-      <uri>model://sun</uri>
-    </include> -->
+    <light type="directional" name="sun">
+      <cast_shadows>true</cast_shadows>
+      <pose>0 0 10 0 0 0</pose>
+      <diffuse>0.8 0.8 0.8 1</diffuse>
+      <specular>0.2 0.2 0.2 1</specular>
+      <attenuation>
+        <range>1000</range>
+        <constant>0.9</constant>
+        <linear>0.01</linear>
+        <quadratic>0.001</quadratic>
+      </attenuation>
+      <direction>-0.5 0.1 -0.9</direction>
+    </light>
 
     <model name="grass_ground">
-      <!-- Static meaning the ground doesn't move at all -->
       <static>true</static>
       <link name="ground_link">
         <collision name="ground_collision">
           <geometry>
             <box>
-            <!-- Format: x y z-->
-              <size>100 30 0.02</size>
+              <size>120 120 0.02</size>
             </box>
           </geometry>
         </collision>
         <visual name="ground_visual">
           <geometry>
             <box>
-              <size>100 30 0.02</size>
+              <size>120 120 0.02</size>
             </box>
           </geometry>
           <material>
@@ -43,147 +49,12 @@
           </material>
         </visual>
       </link>
-      <!-- Format: x y z roll pitch yaw -->
-      <pose>0 0 -0.02 0 0 0</pose> 
+      <pose>10 20 -0.03 0 0 0</pose>
     </model>
 
-    <model name="straight_asphalt_road">
-      <!-- Static meaning the ground doesn't move at all -->
-      <static>true</static>
-      <link name="road_link">
-        <collision name="road_collision">
-          <geometry>
-            <box>
-              <!-- Collision Size: x y z -->
-              <size>90 7 0.04</size>
-            </box>
-          </geometry>
-        </collision>
-        <visual name="road_visual">
-          <geometry>
-            <box>
-              <size>90 7 0.04</size>
-            </box>
-          </geometry>
-          <material>
-            <ambient>0.025 0.025 0.025 1</ambient>
-            <diffuse>0.035 0.035 0.035 1</diffuse>
-            <specular>0.01 0.01 0.01 1</specular>
-          </material>
-        </visual>
-      </link>
-      <pose>0 0 0.01 0 0 0</pose>
-    </model>
-
-    <model name="white_edge_left">
-      <static>true</static>
-      <link name="white_edge_left_link">
-        <visual name="white_edge_left_visual">
-          <pose>0 3.05 0.035 0 0 0</pose>
-          <geometry>
-            <box>
-              <size>88 0.12 0.01</size>
-            </box>
-          </geometry>
-          <material>
-            <ambient>1 1 1 1</ambient>
-            <diffuse>1 1 1 1</diffuse>
-          </material>
-        </visual>
-      </link>
-    </model>
-    <model name="white_edge_right">
-      <static>true</static>
-      <link name="white_edge_right_link">
-        <visual name="white_edge_right_visual">
-          <pose>0 -3.05 0.035 0 0 0</pose>
-          <geometry>
-            <box>
-              <size>88 0.12 0.01</size>
-            </box>
-          </geometry>
-          <material>
-            <ambient>1 1 1 1</ambient>
-            <diffuse>1 1 1 1</diffuse>
-          </material>
-        </visual>
-      </link>
-    </model>
-    <model name="white_edge_middle">
-      <static>true</static>
-      <link name="white_edge_middle_link">
-        <visual name="white_edge_middle_visual">
-          <pose>0 0 0.035 0 0 0</pose>
-          <geometry>
-            <box>
-              <size>88 0.12 0.01</size>
-            </box>
-          </geometry>
-          <material>
-            <ambient>1 1 1 1</ambient>
-            <diffuse>1 1 1 1</diffuse>
-          </material>
-        </visual>
-      </link>
-    </model>
-
-    <!-- <model name="white_edge_lines">
-      <static>true</static>
-      <link name="edge_lines_link">
-        <visual name="left_edge_line">
-          <pose>0 3.05 0.035 0 0 0</pose>
-          <geometry>
-            <box>
-              <size>88 0.12 0.01</size>
-            </box>
-          </geometry>
-          <material>
-            <ambient>1 1 1 1</ambient>
-            <diffuse>1 1 1 1</diffuse>
-          </material>
-        </visual>
-        <visual name="right_edge_line">
-          <pose>0 -3.05 0.035 0 0 0</pose>
-          <geometry>
-            <box>
-              <size>88 0.12 0.01</size>
-            </box>
-          </geometry>
-          <material>
-            <ambient>1 1 1 1</ambient>
-            <diffuse>1 1 1 1</diffuse>
-          </material>
-        </visual>
-        <visual name="middle_line">
-          <pose>0 0 0.035 0 0 0</pose>
-          <geometry>
-            <box>
-              <size>88 0.12 0.01</size>
-            </box>
-          </geometry>
-          <material>
-            <ambient>1 1 1 1</ambient>
-            <diffuse>1 1 1 1</diffuse>
-          </material>
-        </visual>
-      </link>
-    </model> -->
-
-    <!-- <model name="dashed_yellow_center_line">
-      <static>true</static>
-      <link name="center_line_link">
-        <visual name="dash_00"><pose>-40 0 0.04 0 0 0</pose><geometry><box><size>3 0.12 0.012</size></box></geometry><material><ambient>1 0.85 0.05 1</ambient><diffuse>1 0.85 0.05 1</diffuse></material></visual>
-        <visual name="dash_01"><pose>-32 0 0.04 0 0 0</pose><geometry><box><size>3 0.12 0.012</size></box></geometry><material><ambient>1 0.85 0.05 1</ambient><diffuse>1 0.85 0.05 1</diffuse></material></visual>
-        <visual name="dash_02"><pose>-24 0 0.04 0 0 0</pose><geometry><box><size>3 0.12 0.012</size></box></geometry><material><ambient>1 0.85 0.05 1</ambient><diffuse>1 0.85 0.05 1</diffuse></material></visual>
-        <visual name="dash_03"><pose>-16 0 0.04 0 0 0</pose><geometry><box><size>3 0.12 0.012</size></box></geometry><material><ambient>1 0.85 0.05 1</ambient><diffuse>1 0.85 0.05 1</diffuse></material></visual>
-        <visual name="dash_04"><pose>-8 0 0.04 0 0 0</pose><geometry><box><size>3 0.12 0.012</size></box></geometry><material><ambient>1 0.85 0.05 1</ambient><diffuse>1 0.85 0.05 1</diffuse></material></visual>
-        <visual name="dash_05"><pose>0 0 0.04 0 0 0</pose><geometry><box><size>3 0.12 0.012</size></box></geometry><material><ambient>1 0.85 0.05 1</ambient><diffuse>1 0.85 0.05 1</diffuse></material></visual>
-        <visual name="dash_06"><pose>8 0 0.04 0 0 0</pose><geometry><box><size>3 0.12 0.012</size></box></geometry><material><ambient>1 0.85 0.05 1</ambient><diffuse>1 0.85 0.05 1</diffuse></material></visual>
-        <visual name="dash_07"><pose>16 0 0.04 0 0 0</pose><geometry><box><size>3 0.12 0.012</size></box></geometry><material><ambient>1 0.85 0.05 1</ambient><diffuse>1 0.85 0.05 1</diffuse></material></visual>
-        <visual name="dash_08"><pose>24 0 0.04 0 0 0</pose><geometry><box><size>3 0.12 0.012</size></box></geometry><material><ambient>1 0.85 0.05 1</ambient><diffuse>1 0.85 0.05 1</diffuse></material></visual>
-        <visual name="dash_09"><pose>32 0 0.04 0 0 0</pose><geometry><box><size>3 0.12 0.012</size></box></geometry><material><ambient>1 0.85 0.05 1</ambient><diffuse>1 0.85 0.05 1</diffuse></material></visual>
-        <visual name="dash_10"><pose>40 0 0.04 0 0 0</pose><geometry><box><size>3 0.12 0.012</size></box></geometry><material><ambient>1 0.85 0.05 1</ambient><diffuse>1 0.85 0.05 1</diffuse></material></visual>
-      </link>
-    </model> -->
+    <include>
+      <uri>model://curved_road</uri>
+      <pose>0 0 0 0 0 0</pose>
+    </include>
   </world>
 </sdf>

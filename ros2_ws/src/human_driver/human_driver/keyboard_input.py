@@ -19,13 +19,13 @@ class Keyboard(Node):
         twist = Twist()
         try:
             if key.char == 'w':
-                twist.linear.x = 1.0
+                twist.linear.x = 10.0
             if key.char == 's':
-                twist.linear.x = -1.0
+                twist.linear.x = -10.0
             if key.char == 'a':
-                twist.angular.z = 1.0
+                twist.angular.z = 10.0
             if key.char == 'd':
-                twist.angular.z = -1.0
+                twist.angular.z = -10.0
         except AttributeError:
             pass
         

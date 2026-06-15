@@ -5,9 +5,9 @@ ROAD_WIDTH = 7.0
 EDGE_LINE_WIDTH = 0.12
 CENTER_LINE_WIDTH = 0.12
 Z_ROAD = 0.02
-Z_LINE = 0.035
+Z_LINE = 0.08
 
-OUT = Path("curved_road")
+OUT = Path(__file__).resolve().parent / "curved_road"
 MESH = OUT / "meshes"
 MESH.mkdir(parents=True, exist_ok=True)
 
@@ -108,8 +108,8 @@ def write_obj(path, left, right):
             c = n + i + 2
             d = n + i + 1
 
-            f.write(f"f {a} {b} {c}\n")
-            f.write(f"f {a} {c} {d}\n")
+            f.write(f"f {a} {c} {b}\n")
+            f.write(f"f {a} {d} {c}\n")
 
 
 def write_centerline_csv(path, points):
