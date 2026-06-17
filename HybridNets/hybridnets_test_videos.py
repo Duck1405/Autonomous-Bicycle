@@ -3,6 +3,7 @@ import torch
 from torch.backends import cudnn
 from backbone import HybridNetsBackbone
 import cv2
+import sys
 import numpy as np
 from glob import glob
 from utils.utils import letterbox, scale_coords, postprocess, BBoxTransform, ClipBoxes, restricted_float, \
@@ -15,7 +16,7 @@ from utils.constants import *
 
 parser = argparse.ArgumentParser('HybridNets: End-to-End Perception Network - DatVu')
 parser.add_argument('-p', '--project', type=str, default='bdd100k', help='Project file that contains parameters')
-parser.add_argument('-bb', '--backbone', type=str, help='Use timm to create another backbone replacing efficientnet. ''https://github.com/rwightman/pytorch-image-models')
+parser.add_argument('-bb', '--backbone', default="tf_efficientnet_b3" type=str, help='Use timm to create another backbone replacing efficientnet. ''https://github.com/rwightman/pytorch-image-models')
 parser.add_argument('-c', '--compound_coef', type=int, default=3, help='Coefficient of efficientnet backbone')
 parser.add_argument('--source', type=str, default='demo/video', help='The demo video folder')
 parser.add_argument('--output', type=str, default='demo_result', help='Output folder')
@@ -73,6 +74,8 @@ transform = transforms.Compose([
 ])
 # print(x.shape)
 weight = torch.load(weight, map_location='cuda' if use_cuda else 'cpu')
+if use_cuda != "cuda":
+    print(sys.exit())
 weight_last_layer_seg = weight.get('model', weight)['segmentation_head.0.weight']
 if weight_last_layer_seg.size(0) == 1:
     seg_mode = BINARY_MODE
@@ -136,10 +139,10 @@ for video_index, video_src in enumerate(video_srcs):
         x.unsqueeze_(0)
         with torch.no_grad():
             features, regression, classification, anchors, seg = model(x)
-            print("features:", features.size())
-            print("regression:", regression.size())
-            print("classification:", classification.size())
-            print("anchors:", anchors.size())
+            # print("features:", features.size())
+            # print("regression:", regression.size())
+            # print("classification:", classification.size())
+            # print("anchors:", anchors.size())
 
             seg = seg[:, :, int(pad[1]):int(h+pad[1]), int(pad[0]):int(w+pad[0])]
             # (1, C, W, H) -> (1, W, H)

@@ -33,8 +33,8 @@ def build_parser() -> argparse.ArgumentParser:
         default=None,
         help="Output .npy file that stores one uint8 segmentation mask per video frame",
     )
-    parser.add_argument("--image-width", type=int, default=640)
-    parser.add_argument("--image-height", type=int, default=384)
+    parser.add_argument("--image-width", type=int, default=320)
+    parser.add_argument("--image-height", type=int, default=192)
     parser.add_argument("--output-width", type=int, default=640, help="Output video width")
     parser.add_argument("--output-height", type=int, default=384, help="Output video height")
     parser.add_argument("--compound-coef", type=int, default=3)
@@ -169,7 +169,12 @@ def main(rank: int, world_size: int, gpu_ids: list[int]) -> None:
     print(f"Rank {rank}: selected device {device}")
     use_amp = bool(args.amp and device.type == "cuda")
     print(f"Rank {rank}: AMP enabled: {use_amp}")
-
+    print(f"weights_path: {weights_path}")
+    print(f"compound: {args.compound_coef}")
+    print(f"Backbone: {args.backbone}")
+    print(device)
+    print(device_id)
+    print(use_ddp)
     model = load_model(weights_path, args.compound_coef, args.backbone, device, device_id, use_ddp)
 
     capture = cv2.VideoCapture(str(video_path))

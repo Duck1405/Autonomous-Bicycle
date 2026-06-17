@@ -16,6 +16,12 @@ new_data
 __pycache__/
 *.pyc
 *.pth
+*.pt
+*.engine
+*.plan
+*.trt
+*.mp4
+*.mov
 data/
 .data/
 /home/aman/Projects/Auto/Autonomous-Bicycle/HybridNets/data
@@ -27,6 +33,9 @@ new_data.tar
 LaneNet/CuLane Extra
 LaneNet/CuLane
 
+Send/onnx
+*.onnx
+*.onnxruntime
 
 # Send output files
 Send/numpy_videos

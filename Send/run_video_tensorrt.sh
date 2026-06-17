@@ -13,13 +13,14 @@ elif [[ -f "/home/aman/miniconda3/etc/profile.d/conda.sh" ]]; then
   # shellcheck source=/dev/null
   source "/home/aman/miniconda3/etc/profile.d/conda.sh"
 else
-  echo "Unable to find conda.sh. Activate hybridnets-local manually and rerun." >&2
+  echo "Unable to find conda.sh. Activate hybridOnnxInference manually and rerun." >&2
   exit 1
 fi
 
-conda activate hybridnets-local
+conda activate hybridOnnxInference
 unset PYTHONPATH
 export PYTHONNOUSERSITE=1
+export LD_LIBRARY_PATH="/usr/local/cuda/lib64:/usr/lib/aarch64-linux-gnu:${LD_LIBRARY_PATH:-}"
 export MPLCONFIGDIR="${TMPDIR:-/tmp}/mpl-hybridnets-send"
 
 python "$SCRIPT_DIR/InferRoadVideoTensorRT.py" \

@@ -45,11 +45,21 @@ from train_functions import (get_args, should_log_gpu_memory,
                              print_gpu_memory_summary)
 
 
-
+import sys
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 
 def train(rank, opt):
+    print("Python:", sys.version)
+    print("PyTorch:", torch.__version__)
+    print("CUDA:", torch.version.cuda)
+    print("GPU:", torch.cuda.get_device_name(0))
+    print("Capability:", torch.cuda.get_device_capability(0))
+    print("Arch list:", torch.cuda.get_arch_list())
+
+    # wget https://github.com -O /tmp/onnxruntime_gpu-1.24.0-cp310-cp310-linux_aarch64.whl
+
+
     print("Training process started for rank:", rank)
     torch.cuda.set_device(rank)
     if opt.gpu_memory_debug:

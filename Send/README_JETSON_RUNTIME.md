@@ -31,7 +31,8 @@ The original `HybridNets` repo contains training code, validation code, notebook
 
 ## Environment
 
-The launch scripts assume a conda env named `hybridnets-local`.
+The PyTorch launch scripts assume a conda env named `hybridnets-local`.
+The ONNX Runtime / TensorRT launcher assumes a conda env named `hybridOnnxInference`.
 
 Important:
 

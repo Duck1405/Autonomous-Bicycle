@@ -11,8 +11,9 @@ from runtime_utils import letterbox
 
 
 ROOT = Path(__file__).resolve().parent
-DEFAULT_WEIGHTS = ROOT / "hybridnets_epoch_030_weights.pth"
-DEFAULT_VIDEO = ROOT / "input.mp4"
+
+DEFAULT_WEIGHTS = ROOT / "hybridnets-d3_19_43740_best.pth"
+DEFAULT_VIDEO = "/home/rayan/aman/Autonomous-Bicycle/HybridNets/demo/video/new_video(2min).mp4"
 DEFAULT_OUTPUT = ROOT / "output_stanley.mp4"
 MEAN = np.array((0.485, 0.456, 0.406), dtype=np.float32)
 STD = np.array((0.229, 0.224, 0.225), dtype=np.float32)

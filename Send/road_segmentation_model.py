@@ -30,7 +30,7 @@ class HybridNetsRoadSegmentationModel(nn.Module):
         )
 
     def load_weights(self, weights_path: Path) -> dict:
-        checkpoint = torch.load(weights_path, map_location="cpu")
+        checkpoint = torch.load(weights_path, map_location="cuda")
         state_dict = checkpoint.get("model", checkpoint) if isinstance(checkpoint, dict) else checkpoint
         self.backbone.load_state_dict(state_dict, strict=False)
         return checkpoint if isinstance(checkpoint, dict) else {}
@@ -56,10 +56,11 @@ def build_road_segmentation_model(
     model.load_weights(weights_path)
     model = model.to(device)
 
-    if device.type == "cuda":
-        model = model.to(memory_format=torch.channels_last)
+    # if device.type == "cuda":
+    #     model = model.to(memory_format=torch.channels_last)
 
     if use_ddp:
+
         model = DDP(
             model,
             device_ids=[device_id],

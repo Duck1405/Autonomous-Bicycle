@@ -23,8 +23,8 @@ def build_provider_stack(
             providers.append("TensorrtExecutionProvider")
             provider_options.append(
                 {
-                    "trt_fp16_enable": "1" if enable_trt_fp16 else "0",
-                    "trt_engine_cache_enable": "1",
+                    "trt_fp16_enable": "True" if enable_trt_fp16 else "False",
+                    "trt_engine_cache_enable": "True",
                     "trt_engine_cache_path": str(engine_cache_dir) if engine_cache_dir is not None else ".",
                     "trt_max_workspace_size": str(max(int(trt_workspace_size_bytes), 1)),
                 }
