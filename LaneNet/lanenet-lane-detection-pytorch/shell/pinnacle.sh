@@ -8,6 +8,9 @@
 #SBATCH --output=logs/%j.out
 #SBATCH --error=logs/%j.err
 
+
+module load anaconda3
+
 conda activate LaneNet310
 
 python /home/anindra/data/Autonomous-Bicycle/LaneNet/lanenet-lane-detection-pytorch/train.py \
