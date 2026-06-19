@@ -28,14 +28,27 @@ print(f"You are using Device: {DEVICE} ")
 def train():
     args = parse_args()
     save_path = args.save
+    print("Starting LaneNet training")
+    print("Dataset directory: {}".format(args.dataset))
+    print("Save directory: {}".format(save_path))
+    print("Model type: {}".format(args.model_type))
+    print("Loss type: {}".format(args.loss_type))
+    print("Resize target: {}x{}".format(args.width, args.height))
+    print("Batch size: {}".format(args.bs))
+    print("Learning rate: {}".format(args.lr))
+
     if not os.path.isdir(save_path):
+        print("Creating save directory: {}".format(save_path))
         os.makedirs(save_path)
 
     train_dataset_file = os.path.join(args.dataset, 'train.txt')
     val_dataset_file = os.path.join(args.dataset, 'val.txt')
+    print("Training index: {}".format(train_dataset_file))
+    print("Validation index: {}".format(val_dataset_file))
 
     resize_height = args.height
     resize_width = args.width
+    print("Building transforms")
 
     data_transforms = {
         'train': transforms.Compose([
@@ -54,9 +67,11 @@ def train():
         Rescale((resize_width, resize_height)),
     ])
 
+    print("Loading training dataset")
     train_dataset = TusimpleSet(train_dataset_file, transform=data_transforms['train'], target_transform=target_transforms)
     train_loader = DataLoader(train_dataset, batch_size=args.bs, shuffle=True)
 
+    print("Loading validation dataset")
     val_dataset = TusimpleSet(val_dataset_file, transform=data_transforms['val'], target_transform=target_transforms)
     val_loader = DataLoader(val_dataset, batch_size=args.bs, shuffle=True)
 
@@ -65,14 +80,23 @@ def train():
         'val' : val_loader
     }
     dataset_sizes = {'train': len(train_loader.dataset), 'val' : len(val_loader.dataset)}
+    print("Training samples: {}".format(dataset_sizes['train']))
+    print("Validation samples: {}".format(dataset_sizes['val']))
+    print("Training batches per epoch: {}".format(len(train_loader)))
+    print("Validation batches per epoch: {}".format(len(val_loader)))
 
+    print("Building model")
     model = LaneNet(arch=args.model_type)
+    print("Moving model to device: {}".format(DEVICE))
     model.to(DEVICE)
 
+    print("Creating optimizer")
     optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
     print(f"{args.epochs} epochs {len(train_dataset)} training samples\n")
 
+    print("Entering train_model")
     model, log = train_model(model, optimizer, scheduler=None, dataloaders=dataloaders, dataset_sizes=dataset_sizes, device=DEVICE, loss_type=args.loss_type, num_epochs=args.epochs)
+    print("Training loop finished; writing artifacts")
     df=pd.DataFrame({'epoch':[],'training_loss':[],'val_loss':[]})
     df['epoch'] = log['epoch']
     df['training_loss'] = log['training_loss']

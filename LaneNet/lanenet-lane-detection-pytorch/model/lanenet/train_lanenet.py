@@ -5,6 +5,7 @@ from torch.optim import lr_scheduler
 import numpy as np
 import time
 import copy
+from tqdm import tqdm
 from model.lanenet.loss import DiscriminativeLoss, FocalLoss
 
 def compute_loss(net_output, binary_label, instance_label, loss_type = 'FocalLoss'):
@@ -42,6 +43,10 @@ def train_model(model, optimizer, scheduler, dataloaders, dataset_sizes, device,
     best_loss = float("inf")
 
     best_model_wts = copy.deepcopy(model.state_dict())
+    print(f'Device: {device} in Train Model')
+    print("Starting training loop")
+    print("Loss type: {}".format(loss_type))
+    print("Dataset sizes: train={} val={}".format(dataset_sizes['train'], dataset_sizes['val']))
 
     for epoch in range(num_epochs):
         training_log['epoch'].append(epoch)
@@ -59,8 +64,13 @@ def train_model(model, optimizer, scheduler, dataloaders, dataset_sizes, device,
             running_loss_b = 0.0
             running_loss_i = 0.0
 
+            print("Starting {} phase with {} batches".format(phase, len(dataloaders[phase])))
+
             # Iterate over data.
-            for inputs, binarys, instances in dataloaders[phase]:
+            progress_bar = tqdm(dataloaders[phase], desc="{} epoch {}".format(phase, epoch), leave=False)
+            samples_seen = 0
+            for inputs, binarys, instances in progress_bar:
+                batch_size = inputs.size(0)
                 inputs = inputs.type(torch.FloatTensor).to(device)
                 binarys = binarys.type(torch.LongTensor).to(device)
                 instances = instances.type(torch.FloatTensor).to(device)
@@ -83,6 +93,12 @@ def train_model(model, optimizer, scheduler, dataloaders, dataset_sizes, device,
                 running_loss += loss[0].item() * inputs.size(0)
                 running_loss_b += loss[1].item() * inputs.size(0)
                 running_loss_i += loss[2].item() * inputs.size(0)
+                samples_seen += batch_size
+                progress_bar.set_postfix({
+                    'loss': '{:.4f}'.format(running_loss / max(samples_seen, 1)),
+                    'binary': '{:.4f}'.format(running_loss_b / max(samples_seen, 1)),
+                    'instance': '{:.4f}'.format(running_loss_i / max(samples_seen, 1)),
+                })
 
             if phase == 'train':
                 if scheduler != None:
