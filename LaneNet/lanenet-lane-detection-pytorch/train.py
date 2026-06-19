@@ -21,6 +21,7 @@ import cv2
 
 DEVICE = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 
+print(f"You are using Device: {DEVICE} ")
 
 if torch.cuda.is_available() == False:
     sys.exit()
