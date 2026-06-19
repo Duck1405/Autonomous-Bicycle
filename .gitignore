@@ -33,6 +33,11 @@ new_data.tar
 LaneNet/CuLane Extra
 LaneNet/CuLane
 
+
+/Send/numpy_output
+
+
+
 HybridNets_Jetson/onnx
 *.onnx
 *.onnxruntime
