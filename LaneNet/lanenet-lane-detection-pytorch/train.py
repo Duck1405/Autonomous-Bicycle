@@ -24,22 +24,43 @@ DEVICE = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 print(f"You are using Device: {DEVICE} ")
 
 
+def get_next_train_dir(save_root):
+    if not os.path.isdir(save_root):
+        print("Creating save root directory: {}".format(save_root))
+        os.makedirs(save_root)
+
+    run_numbers = []
+    for name in os.listdir(save_root):
+        path = os.path.join(save_root, name)
+        if not os.path.isdir(path):
+            continue
+        if not name.startswith('train_'):
+            continue
+
+        run_number = name.split('train_', 1)[1]
+        if run_number.isdigit():
+            run_numbers.append(int(run_number))
+
+    next_run_number = max(run_numbers, default=0) + 1
+    train_dir = os.path.join(save_root, 'train_{}'.format(next_run_number))
+    os.makedirs(train_dir)
+    return train_dir
+
+
 
 def train():
     args = parse_args()
-    save_path = args.save
+    save_root = args.save
+    save_path = get_next_train_dir(save_root)
     print("Starting LaneNet training")
     print("Dataset directory: {}".format(args.dataset))
-    print("Save directory: {}".format(save_path))
+    print("Save root directory: {}".format(save_root))
+    print("Current training run directory: {}".format(save_path))
     print("Model type: {}".format(args.model_type))
     print("Loss type: {}".format(args.loss_type))
     print("Resize target: {}x{}".format(args.width, args.height))
     print("Batch size: {}".format(args.bs))
     print("Learning rate: {}".format(args.lr))
-
-    if not os.path.isdir(save_path):
-        print("Creating save directory: {}".format(save_path))
-        os.makedirs(save_path)
 
     train_dataset_file = os.path.join(args.dataset, 'train.txt')
     val_dataset_file = os.path.join(args.dataset, 'val.txt')
@@ -95,7 +116,7 @@ def train():
     print(f"{args.epochs} epochs {len(train_dataset)} training samples\n")
 
     print("Entering train_model")
-    model, log = train_model(model, optimizer, scheduler=None, dataloaders=dataloaders, dataset_sizes=dataset_sizes, device=DEVICE, loss_type=args.loss_type, num_epochs=args.epochs)
+    model, log = train_model(model, optimizer, scheduler=None, dataloaders=dataloaders, dataset_sizes=dataset_sizes, device=DEVICE, loss_type=args.loss_type, num_epochs=args.epochs, save_path=save_path)
     print("Training loop finished; writing artifacts")
     df=pd.DataFrame({'epoch':[],'training_loss':[],'val_loss':[]})
     df['epoch'] = log['epoch']

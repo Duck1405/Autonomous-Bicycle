@@ -5,6 +5,7 @@ from torch.optim import lr_scheduler
 import numpy as np
 import time
 import copy
+import os
 from tqdm import tqdm
 from model.lanenet.loss import DiscriminativeLoss, FocalLoss
 
@@ -37,7 +38,7 @@ def compute_loss(net_output, binary_label, instance_label, loss_type = 'FocalLos
     return total_loss, binary_loss, instance_loss, out
 
 
-def train_model(model, optimizer, scheduler, dataloaders, dataset_sizes, device, loss_type = 'FocalLoss', num_epochs=25):
+def train_model(model, optimizer, scheduler, dataloaders, dataset_sizes, device, loss_type = 'FocalLoss', num_epochs=25, save_path=None):
     since = time.time()
     training_log = {'epoch':[], 'training_loss':[], 'val_loss':[]}
     best_loss = float("inf")
@@ -47,6 +48,8 @@ def train_model(model, optimizer, scheduler, dataloaders, dataset_sizes, device,
     print("Starting training loop")
     print("Loss type: {}".format(loss_type))
     print("Dataset sizes: train={} val={}".format(dataset_sizes['train'], dataset_sizes['val']))
+    if save_path is not None:
+        print("Saving epoch checkpoints to: {}".format(save_path))
 
     for epoch in range(num_epochs):
         training_log['epoch'].append(epoch)
@@ -117,6 +120,11 @@ def train_model(model, optimizer, scheduler, dataloaders, dataset_sizes, device,
                 if epoch_loss < best_loss:
                     best_loss = epoch_loss
                     best_model_wts = copy.deepcopy(model.state_dict())
+
+        if save_path is not None:
+            epoch_save_filename = os.path.join(save_path, 'epoch_{:03d}.pth'.format(epoch + 1))
+            torch.save(model.state_dict(), epoch_save_filename)
+            print("epoch checkpoint is saved: {}".format(epoch_save_filename))
 
         print()
 
