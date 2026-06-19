@@ -11,6 +11,8 @@
 
 module load anaconda3
 
+conda init
+
 conda activate LaneNet310
 
 python /home/anindra/data/Autonomous-Bicycle/LaneNet/lanenet-lane-detection-pytorch/train.py \
