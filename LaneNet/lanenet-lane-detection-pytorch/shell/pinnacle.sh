@@ -1,6 +1,6 @@
 #!/bin/bash
 #SBATCH --job-name=lanenet_train
-#SBATCH --partition=gpu
+#SBATCH --partition=long
 #SBATCH --nodes=1
 #SBATCH --ntasks-per-node=1
 #SBATCH --gres=gpu:h100:1
