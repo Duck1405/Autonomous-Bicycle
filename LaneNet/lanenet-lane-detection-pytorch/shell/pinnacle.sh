@@ -3,8 +3,8 @@
 #SBATCH --partition=gpu
 #SBATCH --nodes=1
 #SBATCH --ntasks-per-node=1
-#SBATCH --gres=gpu:h100:1
-#SBATCH --time=24:00:00
+#SBATCH --gres=gpu:1
+#SBATCH --time=6:00:00
 #SBATCH --output=logs/%j.out
 #SBATCH --error=logs/%j.err
 
