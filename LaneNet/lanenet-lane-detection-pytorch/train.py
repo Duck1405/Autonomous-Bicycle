@@ -14,12 +14,16 @@ from torchvision import transforms
 
 from model.utils.cli_helper import parse_args
 from model.eval_function import Eval_Score
-
+import sys
 import numpy as np
 import pandas as pd
 import cv2
 
 DEVICE = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
+
+
+if torch.cuda.is_available() == False:
+    sys.exit()
 
 def train():
     args = parse_args()
@@ -38,12 +42,6 @@ def train():
             transforms.Resize((resize_height, resize_width)),
             transforms.ColorJitter(brightness=0.1, contrast=0.1, saturation=0.1, hue=0.1),
             transforms.ToTensor(),
-            transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
-        ]),
-        'val': transforms.Compose([
-            transforms.Resize((resize_height, resize_width)),
-            transforms.ToTensor(),
-            transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
         ]),
     }
 
