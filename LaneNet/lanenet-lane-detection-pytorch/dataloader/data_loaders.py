@@ -18,12 +18,13 @@ import random
 
 
 class TusimpleSet(Dataset):
-    def __init__(self, dataset, n_labels=3, transform=None, target_transform=None):
+    def __init__(self, dataset, n_labels=3, transform=None, target_transform=None, joint_transform=None):
         self._gt_img_list = []
         self._gt_label_binary_list = []
         self._gt_label_instance_list = []
         self.transform = transform
         self.target_transform = target_transform
+        self.joint_transform = joint_transform
         self.n_labels = n_labels
 
         with open(dataset, 'r') as file:
@@ -53,9 +54,22 @@ class TusimpleSet(Dataset):
 
         # load all
 
-        img = Image.open(self._gt_img_list[idx])
+        img = Image.open(self._gt_img_list[idx]).convert('RGB')
         label_instance_img = cv2.imread(self._gt_label_instance_list[idx], cv2.IMREAD_UNCHANGED)
         label_img = cv2.imread(self._gt_label_binary_list[idx], cv2.IMREAD_COLOR)
+
+        if self.joint_transform:
+            image = np.array(img)
+            binary_mask = cv2.cvtColor(label_img, cv2.COLOR_BGR2GRAY)
+            binary_mask = (binary_mask > 0).astype(np.uint8)
+
+            augmented = self.joint_transform(
+                image=image,
+                binary_mask=binary_mask,
+                instance_mask=label_instance_img,
+            )
+
+            return augmented['image'], augmented['binary_mask'], augmented['instance_mask']
 
         # optional transformations
         if self.transform:

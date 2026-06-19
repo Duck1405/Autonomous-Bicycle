@@ -11,6 +11,12 @@ from torch.utils.data import DataLoader
 from torch.autograd import Variable
 
 from torchvision import transforms
+try:
+    import albumentations as A
+    from albumentations.pytorch import ToTensorV2
+except ImportError:
+    A = None
+    ToTensorV2 = None
 
 from model.utils.cli_helper import parse_args
 from model.eval_function import Eval_Score
@@ -47,6 +53,105 @@ def get_next_train_dir(save_root):
     return train_dir
 
 
+def _build_random_shadow():
+    try:
+        return A.RandomShadow(
+            shadow_roi=(0, 0.5, 1, 1),
+            num_shadows_limit=(1, 3),
+            shadow_dimension=5,
+            p=0.4,
+        )
+    except TypeError:
+        return A.RandomShadow(
+            shadow_roi=(0, 0.5, 1, 1),
+            num_shadows_lower=1,
+            num_shadows_upper=3,
+            shadow_dimension=5,
+            p=0.4,
+        )
+
+
+def _build_random_fog():
+    try:
+        return A.RandomFog(fog_coef_range=(0.1, 0.3), p=0.15)
+    except TypeError:
+        return A.RandomFog(fog_coef_lower=0.1, fog_coef_upper=0.3, p=0.15)
+
+
+def _build_random_sun_flare():
+    try:
+        return A.RandomSunFlare(
+            flare_roi=(0, 0, 1, 0.5),
+            angle_range=(0.5, 1.0),
+            p=0.1,
+        )
+    except TypeError:
+        return A.RandomSunFlare(
+            flare_roi=(0, 0, 1, 0.5),
+            angle_lower=0.5,
+            p=0.1,
+        )
+
+
+def _build_gauss_noise():
+    try:
+        return A.GaussNoise(std_range=(0.03, 0.08), p=0.2)
+    except TypeError:
+        return A.GaussNoise(var_limit=(10, 50), p=0.2)
+
+
+def _build_image_compression():
+    try:
+        return A.ImageCompression(quality_range=(75, 95), p=0.2)
+    except TypeError:
+        return A.ImageCompression(quality_lower=75, quality_upper=95, p=0.2)
+
+
+def build_train_transform(resize_height, resize_width):
+    if A is None or ToTensorV2 is None:
+        raise ImportError(
+            "albumentations is required for training augmentation. "
+            "Install albumentations and albumentations[pytorch] in the training environment."
+        )
+
+    return A.Compose([
+        A.Resize(height=resize_height, width=resize_width),
+        A.Affine(
+            scale=(0.8, 1.2),
+            translate_percent=(-0.1, 0.1),
+            rotate=(-10, 10),
+            p=0.5,
+        ),
+        A.Perspective(scale=(0.05, 0.1), p=0.3),
+        A.RandomBrightnessContrast(
+            brightness_limit=0.3,
+            contrast_limit=0.3,
+            p=0.5,
+        ),
+        A.HueSaturationValue(
+            hue_shift_limit=10,
+            sat_shift_limit=30,
+            val_shift_limit=20,
+            p=0.4,
+        ),
+        A.RandomGamma(gamma_limit=(80, 120), p=0.3),
+        A.CLAHE(clip_limit=2.0, p=0.2),
+        _build_random_shadow(),
+        _build_random_fog(),
+        _build_random_sun_flare(),
+        A.OneOf([
+            A.MotionBlur(blur_limit=5, p=1.0),
+            A.GaussianBlur(blur_limit=(3, 5), p=1.0),
+            A.MedianBlur(blur_limit=3, p=1.0),
+        ], p=0.2),
+        _build_gauss_noise(),
+        _build_image_compression(),
+        A.Normalize(mean=[0.485, 0.456, 0.406],
+                    std=[0.229, 0.224, 0.225]),
+        ToTensorV2(),
+    ], additional_targets={'binary_mask': 'mask', 'instance_mask': 'mask'})
+
+
 
 def train():
     args = parse_args()
@@ -71,12 +176,8 @@ def train():
     resize_width = args.width
     print("Building transforms")
 
+    train_transform = build_train_transform(resize_height, resize_width)
     data_transforms = {
-        'train': transforms.Compose([
-            transforms.Resize((resize_height, resize_width)),
-            transforms.ColorJitter(brightness=0.1, contrast=0.1, saturation=0.1, hue=0.1),
-            transforms.ToTensor(),
-        ]),
         'val': transforms.Compose([
             transforms.Resize((resize_height, resize_width)),
             transforms.ToTensor(),
@@ -89,7 +190,7 @@ def train():
     ])
 
     print("Loading training dataset")
-    train_dataset = TusimpleSet(train_dataset_file, transform=data_transforms['train'], target_transform=target_transforms)
+    train_dataset = TusimpleSet(train_dataset_file, joint_transform=train_transform)
     train_loader = DataLoader(train_dataset, batch_size=args.bs, shuffle=True)
 
     print("Loading validation dataset")
