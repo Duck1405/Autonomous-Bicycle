@@ -131,7 +131,7 @@ def main(args):
     print(f"height: {height}")
     output_video = args.output_file
     fourcc = cv2.VideoWriter_fourcc(*'mp4v')
-
+    total_frames = int(video_cap.get(cv2.CAP_PROP_FRAME_COUNT))
     video_writer = cv2.VideoWriter(output_video, fourcc, fps, (int(width), int(height)))
     
     while success:
@@ -142,9 +142,6 @@ def main(args):
             new_frame = frame(model, img, orig, DEVICE)
             count += 1
             video_writer.write(new_frame)
-        count += 1
-        if count > 200:
-            break
         
     video_writer.release()
     print("Video successfully generated!")
