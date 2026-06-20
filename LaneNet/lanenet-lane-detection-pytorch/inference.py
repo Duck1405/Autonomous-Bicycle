@@ -36,13 +36,13 @@ def get_args():
     
     
 
-def frame(model, dummy_input, frame):
+def frame(model, dummy_input, frame, DEVICE):
     # dummy_input = load_test_data(image_file, transform).to(DEVICE)
     # orig = np.array(Image.open(image_file).convert("RGB"))
     
     orig_h, orig_w = frame.shape[:2]
 
-    dummy_input = torch.unsqueeze(dummy_input, dim=0)
+    dummy_input = torch.unsqueeze(dummy_input, dim=0).to(DEVICE)
     with torch.no_grad():
         outputs = model(dummy_input)
         
@@ -139,7 +139,7 @@ def main(args):
         if success:  
             img = transform(image=np.array(image))['image']
             orig = np.array(image)
-            new_frame = frame(model, img, orig)
+            new_frame = frame(model, img, orig, DEVICE)
             count += 1
             video_writer.write(new_frame)
         count += 1
