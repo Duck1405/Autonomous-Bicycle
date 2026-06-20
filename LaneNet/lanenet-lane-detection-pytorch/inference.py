@@ -11,12 +11,9 @@ from torch.utils.data import DataLoader
 from torch.autograd import Variable
 from PIL import Image
 from torchvision import transforms
-try:
-    import albumentations as A
-    from albumentations.pytorch import ToTensorV2
-except ImportError:
-    A = None
-    ToTensorV2 = None
+
+import albumentations as A
+from albumentations.pytorch import ToTensorV2
 
 from model.utils.cli_helper import parse_args
 from model.eval_function import Eval_Score
@@ -49,15 +46,12 @@ def frame(model, dummy_input, frame):
     with torch.no_grad():
         outputs = model(dummy_input)
         
-    
-
     outputs.keys()
 
     instanc_pred = torch.squeeze(outputs['instance_seg_logits'].detach().to('cpu')).numpy() * 255
     binary_pred = torch.squeeze(outputs['binary_seg_pred']).to('cpu').numpy().astype(np.uint8)
 
     pred_mask_orig = cv2.resize(binary_pred, (orig_w, orig_h), interpolation=cv2.INTER_NEAREST)
-
 
     lane_components, num_lanes = label(pred_mask_orig == 1)
     component_sizes = np.bincount(lane_components.ravel())
@@ -93,9 +87,6 @@ def frame(model, dummy_input, frame):
             )
         )
 
-
-
-    print(type(overlay))
     blended = cv2.addWeighted(frame, 0.7, overlay, 0.3, 0)
     return blended
 

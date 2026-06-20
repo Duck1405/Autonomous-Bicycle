@@ -53,7 +53,6 @@ class LaneNet(nn.Module):
         self.sigmoid = nn.Sigmoid().to(DEVICE)
 
     def forward(self, input_tensor):
-        print("dasd")
         if self._arch == 'UNet':
             c1, c2, c3, c4, c5 = self._encoder(input_tensor)
             binary = self._decoder_binary(c1, c2, c3, c4, c5)
