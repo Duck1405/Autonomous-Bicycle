@@ -191,11 +191,11 @@ def train():
 
     print("Loading training dataset")
     train_dataset = TusimpleSet(train_dataset_file, joint_transform=train_transform)
-    train_loader = DataLoader(train_dataset, batch_size=args.bs, shuffle=True)
+    train_loader = DataLoader(train_dataset, batch_size=args.bs, num_workers=24, shuffle=True)
 
     print("Loading validation dataset")
     val_dataset = TusimpleSet(val_dataset_file, transform=data_transforms['val'], target_transform=target_transforms)
-    val_loader = DataLoader(val_dataset, batch_size=args.bs, shuffle=True)
+    val_loader = DataLoader(val_dataset, batch_size=args.bs,num_workers=24, shuffle=True)
 
     dataloaders = {
         'train' : train_loader,
