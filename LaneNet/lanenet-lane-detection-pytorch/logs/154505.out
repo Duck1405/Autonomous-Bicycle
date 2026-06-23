@@ -1,0 +1,14 @@
+no change     /opt/spack/opt/spack/linux-rhel8-icelake/gcc-12.2.0/anaconda3-2023.09-0-cnhkdqo23hjp6vajx75rg2skgd46qyjv/condabin/conda
+no change     /opt/spack/opt/spack/linux-rhel8-icelake/gcc-12.2.0/anaconda3-2023.09-0-cnhkdqo23hjp6vajx75rg2skgd46qyjv/bin/conda
+no change     /opt/spack/opt/spack/linux-rhel8-icelake/gcc-12.2.0/anaconda3-2023.09-0-cnhkdqo23hjp6vajx75rg2skgd46qyjv/bin/conda-env
+no change     /opt/spack/opt/spack/linux-rhel8-icelake/gcc-12.2.0/anaconda3-2023.09-0-cnhkdqo23hjp6vajx75rg2skgd46qyjv/bin/activate
+no change     /opt/spack/opt/spack/linux-rhel8-icelake/gcc-12.2.0/anaconda3-2023.09-0-cnhkdqo23hjp6vajx75rg2skgd46qyjv/bin/deactivate
+no change     /opt/spack/opt/spack/linux-rhel8-icelake/gcc-12.2.0/anaconda3-2023.09-0-cnhkdqo23hjp6vajx75rg2skgd46qyjv/etc/profile.d/conda.sh
+no change     /opt/spack/opt/spack/linux-rhel8-icelake/gcc-12.2.0/anaconda3-2023.09-0-cnhkdqo23hjp6vajx75rg2skgd46qyjv/etc/fish/conf.d/conda.fish
+no change     /opt/spack/opt/spack/linux-rhel8-icelake/gcc-12.2.0/anaconda3-2023.09-0-cnhkdqo23hjp6vajx75rg2skgd46qyjv/shell/condabin/Conda.psm1
+no change     /opt/spack/opt/spack/linux-rhel8-icelake/gcc-12.2.0/anaconda3-2023.09-0-cnhkdqo23hjp6vajx75rg2skgd46qyjv/shell/condabin/conda-hook.ps1
+no change     /opt/spack/opt/spack/linux-rhel8-icelake/gcc-12.2.0/anaconda3-2023.09-0-cnhkdqo23hjp6vajx75rg2skgd46qyjv/lib/python3.11/site-packages/xontrib/conda.xsh
+no change     /opt/spack/opt/spack/linux-rhel8-icelake/gcc-12.2.0/anaconda3-2023.09-0-cnhkdqo23hjp6vajx75rg2skgd46qyjv/etc/profile.d/conda.csh
+no change     /home/anindra/.bashrc
+No action taken.
+/opt/spack/opt/spack/linux-rhel8-icelake/gcc-12.2.0/anaconda3-2023.09-0-cnhkdqo23hjp6vajx75rg2skgd46qyjv/bin/python
