@@ -70,10 +70,11 @@ class LaneNet(nn.Module):
 
         binary_seg_ret = torch.argmax(F.softmax(binary, dim=1), dim=1, keepdim=True)
 
-        pix_embedding = self.sigmoid(instance)
+        # pix_embedding = self.sigmoid(instance)
+        pix_embedding = instance
 
         return {
-            'instance_seg_logits': pix_embedding,
+            'instance_embedding': pix_embedding,
             'binary_seg_pred': binary_seg_ret,
             'binary_seg_logits': binary
         }
