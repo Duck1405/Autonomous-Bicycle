@@ -25,9 +25,14 @@ class FocalLoss(nn.Module):
         self.device = device
 
     def forward(self, input, target):
+        target = target.to(device=input.device, dtype=torch.long)
         pt = F.softmax(input, dim=1)
         pt = pt.clamp(min=0.000001,max=0.999999)
-        target_onehot = torch.zeros((target.size(0), self.n_class, target.size(1),target.size(2))).to(self.device)
+        target_onehot = torch.zeros(
+            (target.size(0), self.n_class, target.size(1), target.size(2)),
+            dtype=input.dtype,
+            device=input.device,
+        )
         loss = 0
         for i in range(self.n_class):
             target_onehot[:,i,...][target == i] = 1
@@ -116,5 +121,4 @@ class DiscriminativeLoss(_Loss):
         reg_loss = reg_loss / batch_size
 
         return var_loss, dist_loss, reg_loss
-
 

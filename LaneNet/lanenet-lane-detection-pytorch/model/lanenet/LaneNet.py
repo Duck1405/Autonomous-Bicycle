@@ -27,7 +27,7 @@ class LaneNet(nn.Module):
             self._decoder_binary = UNet_Decoder(2)
             self._decoder_instance = UNet_Decoder(self.no_of_instances)
         elif self._arch == 'ENet':
-            self._encoder = ENet_Encoder(in_ch).to(device)
+            self._encoder = ENet_Encoder(in_ch, device).to(device)
             self._decoder_binary = ENet_Decoder(2).to(device)
             self._decoder_instance = ENet_Decoder(self.no_of_instances).to(device)
         elif self._arch == 'DeepLabv3+':
