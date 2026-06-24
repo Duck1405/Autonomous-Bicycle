@@ -12,7 +12,6 @@ Refence: https://arxiv.org/pdf/1606.02147.pdf
 Code is written by Iroh Cao
 '''
 
-DEVICE = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 
 def weights_init_kaiming(m):
     classname = m.__class__.__name__
@@ -132,9 +131,9 @@ class BottleneckModule(nn.Module):
             maxp_branch = self.maxpool(x)
             bs, conv_ch, h, w = conv_branch.size()
             maxp_ch = maxp_branch.size()[1]
-            padding = torch.zeros(bs, conv_ch - maxp_ch, h, w).to(DEVICE)
+            padding = torch.zeros(bs, conv_ch - maxp_ch, h, w)
 
-            maxp_branch = torch.cat([maxp_branch, padding], 1).to(DEVICE)
+            maxp_branch = torch.cat([maxp_branch, padding], 1)
             output = maxp_branch + conv_branch
         elif self.module_type == 'upsampling':
             conv_branch = self.conv(x)
