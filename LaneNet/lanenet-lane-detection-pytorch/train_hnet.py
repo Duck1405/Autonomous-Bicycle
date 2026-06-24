@@ -34,7 +34,7 @@ def parse_args():
     p.add_argument("--label_glob", default="label_data_*.json",
                    help="glob (relative to --tusimple_root) matching label json files")
     p.add_argument("--save", default="./log_hnet")
-    p.add_argument("--epochs", type=int, default=200)
+    p.add_argument("--epochs", type=int, default=50)
     p.add_argument("--bs", type=int, default=10)
     p.add_argument("--lr", type=float, default=5e-5)
     p.add_argument("--poly_order", type=int, default=3)
