@@ -105,9 +105,9 @@ def main():
         collate_fn=hnet_collate,
         pin_memory=device.type == "cuda",
     )
-    train_loader = DataLoader(train_dataset,  num_workers=32, batch_size=args.bs, 
+    train_loader = DataLoader(train_dataset, batch_size=args.bs,
                               shuffle=True, drop_last=True, **loader_kwargs)
-    val_loader = DataLoader(val_dataset, num_workers=32, batch_size=args.bs,
+    val_loader = DataLoader(val_dataset, batch_size=args.bs,
                             shuffle=False, drop_last=False, **loader_kwargs)
 
     model = H_Net().to(device)
