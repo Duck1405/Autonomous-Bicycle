@@ -9,7 +9,7 @@ import torch.nn.functional as F
 
 from model.lanenet.loss import DiscriminativeLoss
 from model.lanenet.backbone.UNet import UNet_Encoder, UNet_Decoder
-from model.lanenet.backbone.ENet import ENet_Encoder, ENet_Decoder
+from model.lanenet.backbone.ENet import ENet_Encoder, ENet_Stage3, ENet_Decoder
 from model.lanenet.backbone.deeplabv3_plus.deeplabv3plus import Deeplabv3plus_Encoder, Deeplabv3plus_Decoder
 
 
@@ -18,7 +18,7 @@ class LaneNet(nn.Module):
     def __init__(self, in_ch = 3, arch="ENet", device = None):
         super(LaneNet, self).__init__()
         # no of instances for segmentation
-        self.no_of_instances = 3  # if you want to output RGB instance map, it should be 3.
+        self.no_of_instances = 4  # embedding dimension N (the paper uses 4).
         print("Use {} as backbone".format(arch))
         self._arch = arch
         if self._arch == 'UNet':
@@ -27,7 +27,11 @@ class LaneNet(nn.Module):
             self._decoder_binary = UNet_Decoder(2)
             self._decoder_instance = UNet_Decoder(self.no_of_instances)
         elif self._arch == 'ENet':
-            self._encoder = ENet_Encoder(in_ch)
+            # Paper (Neven et al., 2018, Sec. II-A): share only ENet stages 1
+            # and 2; stage 3 and the decoder are separate for each branch.
+            self._encoder = ENet_Encoder(in_ch, include_stage3=False)
+            self._stage3_binary = ENet_Stage3()
+            self._stage3_instance = ENet_Stage3()
             self._decoder_binary = ENet_Decoder(2)
             self._decoder_instance = ENet_Decoder(self.no_of_instances)
         elif self._arch == 'DeepLabv3+':
@@ -48,8 +52,8 @@ class LaneNet(nn.Module):
             instance = self._decoder_instance(c1, c2, c3, c4, c5)
         elif self._arch == 'ENet':
             c = self._encoder(input_tensor)
-            binary = self._decoder_binary(c)
-            instance = self._decoder_instance(c)
+            binary = self._decoder_binary(self._stage3_binary(c))
+            instance = self._decoder_instance(self._stage3_instance(c))
         elif self._arch == 'DeepLabv3+':
             c1, c2 = self._encoder(input_tensor)
             binary = self._decoder_binary(c1, c2)

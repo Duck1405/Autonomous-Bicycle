@@ -147,10 +147,16 @@ class BottleneckModule(nn.Module):
 
 class ENet_Encoder(nn.Module):
     
-    def __init__(self, in_ch=3, dropout_prob=0):
+    def __init__(self, in_ch=3, dropout_prob=0, include_stage3=True):
         super(ENet_Encoder, self).__init__()
 
         # Encoder
+        # When include_stage3 is False the encoder only contains the ENet
+        # "shared" stages (1 and 2). Stage 3 is then instantiated separately
+        # per task branch (see ENet_Stage3), as prescribed by the LaneNet paper
+        # (Neven et al., 2018, Sec. II-A): only stages 1 and 2 are shared
+        # between the binary segmentation and instance embedding branches.
+        self.include_stage3 = include_stage3
 
         self.initial_block = InitialBlock(in_ch, 16)
 
@@ -170,14 +176,15 @@ class ENet_Encoder(nn.Module):
         self.bottleneck2_7 = BottleneckModule(128, 128, module_type = 'asymmetric', padding = 2, asymmetric=5, dropout_prob = dropout_prob)
         self.bottleneck2_8 = BottleneckModule(128, 128, module_type = 'dilated', padding = 16, dilated = 16, dropout_prob = dropout_prob)
 
-        self.bottleneck3_0 = BottleneckModule(128, 128, module_type = 'regular', padding = 1, dropout_prob = dropout_prob)
-        self.bottleneck3_1 = BottleneckModule(128, 128, module_type = 'dilated', padding = 2, dilated = 2, dropout_prob = dropout_prob)
-        self.bottleneck3_2 = BottleneckModule(128, 128, module_type = 'asymmetric', padding = 2, asymmetric=5, dropout_prob = dropout_prob)
-        self.bottleneck3_3 = BottleneckModule(128, 128, module_type = 'dilated', padding = 4, dilated = 4, dropout_prob = dropout_prob)
-        self.bottleneck3_4 = BottleneckModule(128, 128, module_type = 'regular', padding = 1, dropout_prob = dropout_prob)
-        self.bottleneck3_5 = BottleneckModule(128, 128, module_type = 'dilated', padding = 8, dilated = 8, dropout_prob = dropout_prob)
-        self.bottleneck3_6 = BottleneckModule(128, 128, module_type = 'asymmetric', padding = 2, asymmetric=5, dropout_prob = dropout_prob)
-        self.bottleneck3_7 = BottleneckModule(128, 128, module_type = 'dilated', padding = 16, dilated = 16, dropout_prob = dropout_prob)
+        if include_stage3:
+            self.bottleneck3_0 = BottleneckModule(128, 128, module_type = 'regular', padding = 1, dropout_prob = dropout_prob)
+            self.bottleneck3_1 = BottleneckModule(128, 128, module_type = 'dilated', padding = 2, dilated = 2, dropout_prob = dropout_prob)
+            self.bottleneck3_2 = BottleneckModule(128, 128, module_type = 'asymmetric', padding = 2, asymmetric=5, dropout_prob = dropout_prob)
+            self.bottleneck3_3 = BottleneckModule(128, 128, module_type = 'dilated', padding = 4, dilated = 4, dropout_prob = dropout_prob)
+            self.bottleneck3_4 = BottleneckModule(128, 128, module_type = 'regular', padding = 1, dropout_prob = dropout_prob)
+            self.bottleneck3_5 = BottleneckModule(128, 128, module_type = 'dilated', padding = 8, dilated = 8, dropout_prob = dropout_prob)
+            self.bottleneck3_6 = BottleneckModule(128, 128, module_type = 'asymmetric', padding = 2, asymmetric=5, dropout_prob = dropout_prob)
+            self.bottleneck3_7 = BottleneckModule(128, 128, module_type = 'dilated', padding = 16, dilated = 16, dropout_prob = dropout_prob)
 
         for m in self.modules():
             if isinstance(m, nn.Conv2d):
@@ -204,6 +211,48 @@ class ENet_Encoder(nn.Module):
         x = self.bottleneck2_7(x)
         x = self.bottleneck2_8(x)
 
+        if self.include_stage3:
+            x = self.bottleneck3_0(x)
+            x = self.bottleneck3_1(x)
+            x = self.bottleneck3_2(x)
+            x = self.bottleneck3_3(x)
+            x = self.bottleneck3_4(x)
+            x = self.bottleneck3_5(x)
+            x = self.bottleneck3_6(x)
+            x = self.bottleneck3_7(x)
+
+        return x
+
+
+class ENet_Stage3(nn.Module):
+    """ENet stage 3 (bottleneck 3.x), kept separate per task branch.
+
+    In the LaneNet paper (Neven et al., 2018, Sec. II-A) only ENet stages 1
+    and 2 are shared between the binary segmentation and instance embedding
+    branches; stage 3 and the decoder belong to each branch separately. Input
+    and output are both 128-channel feature maps at 1/8 resolution, so an
+    encoder built with include_stage3=False feeds directly into this module.
+    """
+
+    def __init__(self, dropout_prob=0):
+        super(ENet_Stage3, self).__init__()
+
+        self.bottleneck3_0 = BottleneckModule(128, 128, module_type = 'regular', padding = 1, dropout_prob = dropout_prob)
+        self.bottleneck3_1 = BottleneckModule(128, 128, module_type = 'dilated', padding = 2, dilated = 2, dropout_prob = dropout_prob)
+        self.bottleneck3_2 = BottleneckModule(128, 128, module_type = 'asymmetric', padding = 2, asymmetric=5, dropout_prob = dropout_prob)
+        self.bottleneck3_3 = BottleneckModule(128, 128, module_type = 'dilated', padding = 4, dilated = 4, dropout_prob = dropout_prob)
+        self.bottleneck3_4 = BottleneckModule(128, 128, module_type = 'regular', padding = 1, dropout_prob = dropout_prob)
+        self.bottleneck3_5 = BottleneckModule(128, 128, module_type = 'dilated', padding = 8, dilated = 8, dropout_prob = dropout_prob)
+        self.bottleneck3_6 = BottleneckModule(128, 128, module_type = 'asymmetric', padding = 2, asymmetric=5, dropout_prob = dropout_prob)
+        self.bottleneck3_7 = BottleneckModule(128, 128, module_type = 'dilated', padding = 16, dilated = 16, dropout_prob = dropout_prob)
+
+        for m in self.modules():
+            if isinstance(m, nn.Conv2d):
+                weights_init_kaiming(m)
+            elif isinstance(m, nn.BatchNorm2d):
+                weights_init_kaiming(m)
+
+    def forward(self, x):
         x = self.bottleneck3_0(x)
         x = self.bottleneck3_1(x)
         x = self.bottleneck3_2(x)

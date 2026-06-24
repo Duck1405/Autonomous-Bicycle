@@ -8,11 +8,13 @@ import copy
 import os
 from tqdm import tqdm
 import torch.distributed as dist
-from model.lanenet.loss import DiscriminativeLoss, FocalLoss
+from model.lanenet.loss import DiscriminativeLoss, FocalLoss, BoundedInverseWeightedCrossEntropy
 
-def compute_loss(net_output, binary_label, instance_label, loss_type = 'FocalLoss'):
-    k_binary = 10    #1.7
-    k_instance = 0.3
+def compute_loss(net_output, binary_label, instance_label, loss_type = 'BoundedInverseCE'):
+    # Paper (Neven et al., 2018): total loss L = L_var + L_dist, with the binary
+    # segmentation and instance embedding branches equally weighted.
+    k_binary = 1.0
+    k_instance = 1.0
     k_dist = 1.0
 
     if(loss_type == 'FocalLoss'):
@@ -20,8 +22,10 @@ def compute_loss(net_output, binary_label, instance_label, loss_type = 'FocalLos
     elif(loss_type == 'CrossEntropyLoss'):
         loss_fn = nn.CrossEntropyLoss()
     else:
-        # print("Wrong loss type, will use the default CrossEntropyLoss")
-        loss_fn = nn.CrossEntropyLoss()
+        # Paper-faithful default ('BoundedInverseCE'): standard cross-entropy
+        # with ENet-style bounded inverse class weighting for the highly
+        # unbalanced lane/background binary segmentation branch.
+        loss_fn = BoundedInverseWeightedCrossEntropy(n_class=2)
     
     binary_seg_logits = net_output["binary_seg_logits"]
     binary_loss = loss_fn(binary_seg_logits, binary_label)
@@ -29,7 +33,7 @@ def compute_loss(net_output, binary_label, instance_label, loss_type = 'FocalLos
     pix_embedding = net_output.get("instance_embedding")
     if pix_embedding is None:
         pix_embedding = net_output["instance_seg_logits"]
-    ds_loss_fn = DiscriminativeLoss(0.5, 1.5, 1.0, 1.0, 0.001)
+    ds_loss_fn = DiscriminativeLoss(delta_var=0.5, delta_dist=3.0, norm=2)
     var_loss, dist_loss, reg_loss = ds_loss_fn(pix_embedding, instance_label)
     binary_loss = binary_loss * k_binary
     var_loss = var_loss * k_instance
@@ -69,7 +73,7 @@ def _reduce_phase_stats(running_loss, running_loss_b, running_loss_i, samples_se
     return stats.tolist()
 
 
-def train_model(model, optimizer, scheduler, dataloaders, dataset_sizes, device, loss_type = 'FocalLoss',
+def train_model(model, optimizer, scheduler, dataloaders, dataset_sizes, device, loss_type = 'BoundedInverseCE',
                 num_epochs=25, save_path=None, is_main_process=True, samplers=None):
     since = time.time()
     training_log = {'epoch':[], 'training_loss':[], 'val_loss':[]}

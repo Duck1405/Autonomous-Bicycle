@@ -43,8 +43,34 @@ class FocalLoss(nn.Module):
             loss = torch.mean(loss)
         elif self.reduction == 'sum':
             loss = torch.sum(loss)
-            
+
         return loss
+
+class BoundedInverseWeightedCrossEntropy(nn.Module):
+    """Cross-entropy with ENet-style bounded inverse class weighting.
+
+    The LaneNet paper (Neven et al., 2018, Sec. II-A) trains the binary
+    segmentation branch with "standard cross-entropy ... with bounded inverse
+    class weighting, as described in [ENet]". ENet (Paszke et al., 2016) uses
+
+        w_class = 1 / ln(c + p_class)
+
+    with c = 1.02, which bounds the per-class weights to roughly [1, 50].
+    Here the class probabilities p_class are estimated from the current batch
+    (a self-contained approximation of the dataset-level statistics).
+    """
+
+    def __init__(self, n_class=2, c=1.02):
+        super().__init__()
+        self.n_class = n_class
+        self.c = c
+
+    def forward(self, logits, target):
+        target = target.to(device=logits.device, dtype=torch.long)
+        counts = torch.bincount(target.reshape(-1), minlength=self.n_class).to(logits.dtype)
+        prob = counts / counts.sum().clamp(min=1.0)
+        weight = 1.0 / torch.log(self.c + prob)
+        return nn.functional.cross_entropy(logits, target, weight=weight)
 
 class DiscriminativeLoss(_Loss):
     def __init__(self, delta_var=0.5, delta_dist=1.5, norm=2, alpha=1.0, beta=1.0, gamma=0.001,
@@ -76,7 +102,8 @@ class DiscriminativeLoss(_Loss):
             embedding_b = embedding[b]  # (embed_dim, H*W)
             seg_gt_b = seg_gt[b]  # (H*W)
 
-            labels, indexs = torch.unique(seg_gt_b, return_inverse=True)
+            labels = torch.unique(seg_gt_b)
+            labels = labels[labels != 0]
             num_lanes = len(labels)
             if num_lanes == 0:
                 _nonsense = embedding.sum()
@@ -99,6 +126,8 @@ class DiscriminativeLoss(_Loss):
                 # ---------- var_loss -------------
                 var_loss = var_loss + torch.sum(F.relu(
                     torch.norm(embedding_i[:,seg_mask_i] - mean_i.reshape(embed_dim, 1), dim=0) - self.delta_var) ** 2) / torch.sum(seg_mask_i) / num_lanes
+            if len(centroid_mean) == 0:
+                continue
             centroid_mean = torch.stack(centroid_mean)  # (n_lane, embed_dim)
 
             if num_lanes > 1:
@@ -109,9 +138,11 @@ class DiscriminativeLoss(_Loss):
                 dist = dist + torch.eye(num_lanes, dtype=dist.dtype,
                                         device=dist.device) * self.delta_dist
 
-                # divided by two for double calculated loss above, for implementation convenience
+                # Eq. (1): normalize by the number of ordered cluster pairs,
+                # C*(C-1). Summing over the full (symmetric) distance matrix
+                # already counts each pair twice, which matches that denominator.
                 dist_loss = dist_loss + torch.sum(F.relu(-dist + self.delta_dist) ** 2) / (
-                        num_lanes * (num_lanes - 1)) / 2
+                        num_lanes * (num_lanes - 1))
 
             # reg_loss is not used in original paper
             # reg_loss = reg_loss + torch.mean(torch.norm(centroid_mean, dim=1))
@@ -121,4 +152,3 @@ class DiscriminativeLoss(_Loss):
         reg_loss = reg_loss / batch_size
 
         return var_loss, dist_loss, reg_loss
-
