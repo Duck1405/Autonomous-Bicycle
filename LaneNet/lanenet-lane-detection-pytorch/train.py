@@ -318,7 +318,7 @@ def train():
     rank0_print("Validation batches per process per epoch: {}".format(len(val_loader)))
 
     rank0_print("Building model")
-    model = LaneNet(arch=args.model_type, device)
+    model = LaneNet(arch=args.model_type, device=device)
     rank0_print("Moving model to device: {}".format(device))
     model.to(device)
 

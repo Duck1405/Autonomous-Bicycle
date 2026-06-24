@@ -126,7 +126,7 @@ class BottleneckModule(nn.Module):
             raise("Module Type error")
 
     def forward(self, x):
-        print(f"X Device: {x.device}")
+        print(f": {x.device}")
         if self.module_type == 'downsampling':
             
             conv_branch = self.conv(x)

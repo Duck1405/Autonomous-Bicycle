@@ -15,7 +15,7 @@ from model.lanenet.backbone.deeplabv3_plus.deeplabv3plus import Deeplabv3plus_En
 
 
 class LaneNet(nn.Module):
-    def __init__(self, in_ch = 3, arch="ENet", device):
+    def __init__(self, in_ch = 3, arch="ENet", device = "cuda"):
         super(LaneNet, self).__init__()
         # no of instances for segmentation
         self.no_of_instances = 3  # if you want to output RGB instance map, it should be 3.
