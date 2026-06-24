@@ -187,6 +187,8 @@ class ENet_Encoder(nn.Module):
     
     def forward(self, x):
         x = self.initial_block(x)
+        print(f"Enet type: {type(x)}")
+        print(f"Enet device: {x.get_device()}")
 
         x = self.bottleneck1_0(x)
         x = self.bottleneck1_1(x)
