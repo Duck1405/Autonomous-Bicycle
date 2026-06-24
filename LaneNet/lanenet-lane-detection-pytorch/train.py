@@ -11,6 +11,7 @@ from model.lanenet.LaneNet import LaneNet
 from torch.utils.data import DataLoader
 from torch.utils.data.distributed import DistributedSampler
 from torchvision import transforms
+import sys
 try:
     import albumentations as A
     from albumentations.pytorch import ToTensorV2
@@ -160,13 +161,15 @@ def rank0_print(message):
 def setup_distributed():
     if 'RANK' not in os.environ or 'WORLD_SIZE' not in os.environ:
         device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
-        return {
-            'distributed': False,
-            'rank': 0,
-            'local_rank': 0,
-            'world_size': 1,
-            'device': device,
-        }
+        print("setup_distributed RANK not in OS.Environ")
+        sys.exit()
+        # return {
+        #     'distributed': False,
+        #     'rank': 0,
+        #     'local_rank': 0,
+        #     'world_size': 1,
+        #     'device': device,
+        # }
 
     rank = int(os.environ['RANK'])
     local_rank = int(os.environ.get('LOCAL_RANK', 0))
@@ -176,9 +179,12 @@ def setup_distributed():
         torch.cuda.set_device(local_rank)
         backend = 'nccl'
         device = torch.device('cuda', local_rank)
+       
     else:
         backend = 'gloo'
         device = torch.device('cpu')
+        print("Setup Distributed: CPU")
+        sys.exit()
 
     dist.init_process_group(backend=backend, init_method='env://')
     return {
@@ -219,6 +225,7 @@ def train():
     world_size = dist_info['world_size']
     distributed = dist_info['distributed']
 
+    
     save_root = args.save
     save_path = get_shared_train_dir(save_root)
     rank0_print("Starting LaneNet training")
