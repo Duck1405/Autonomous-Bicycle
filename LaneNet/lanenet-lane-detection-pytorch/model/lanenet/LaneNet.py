@@ -24,33 +24,24 @@ class LaneNet(nn.Module):
         self._arch = arch
         if self._arch == 'UNet':
             self._encoder = UNet_Encoder(in_ch)
-            self._encoder.to(DEVICE)
 
             self._decoder_binary = UNet_Decoder(2)
             self._decoder_instance = UNet_Decoder(self.no_of_instances)
-            self._decoder_binary.to(DEVICE)
-            self._decoder_instance.to(DEVICE)
         elif self._arch == 'ENet':
             self._encoder = ENet_Encoder(in_ch)
-            self._encoder.to(DEVICE)
 
             self._decoder_binary = ENet_Decoder(2)
             self._decoder_instance = ENet_Decoder(self.no_of_instances)
-            self._decoder_binary.to(DEVICE)
-            self._decoder_instance.to(DEVICE)
         elif self._arch == 'DeepLabv3+':
             self._encoder = Deeplabv3plus_Encoder()
-            self._encoder.to(DEVICE)
 
             self._decoder_binary = Deeplabv3plus_Decoder(2)
             self._decoder_instance = Deeplabv3plus_Decoder(self.no_of_instances)
-            self._decoder_binary.to(DEVICE)
-            self._decoder_instance.to(DEVICE)
         else:
             raise("Please select right model.")
 
-        self.relu = nn.ReLU().to(DEVICE)
-        self.sigmoid = nn.Sigmoid().to(DEVICE)
+        self.relu = nn.ReLU()
+        self.sigmoid = nn.Sigmoid()
 
     def forward(self, input_tensor):
         if self._arch == 'UNet':
@@ -74,6 +65,7 @@ class LaneNet(nn.Module):
         pix_embedding = instance
 
         return {
+            'instance_seg_logits': pix_embedding,
             'instance_embedding': pix_embedding,
             'binary_seg_pred': binary_seg_ret,
             'binary_seg_logits': binary

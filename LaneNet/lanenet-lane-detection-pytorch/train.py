@@ -1,15 +1,15 @@
-import time
 import os
-import sys
+import random
 
 import torch
+import torch.distributed as dist
+from torch.nn.parallel import DistributedDataParallel
 from model.lanenet.train_lanenet import train_model
 from dataloader.data_loaders import TusimpleSet
 from dataloader.transformers import Rescale
 from model.lanenet.LaneNet import LaneNet
 from torch.utils.data import DataLoader
-from torch.autograd import Variable
-
+from torch.utils.data.distributed import DistributedSampler
 from torchvision import transforms
 try:
     import albumentations as A
@@ -17,17 +17,9 @@ try:
 except ImportError:
     A = None
     ToTensorV2 = None
-
 from model.utils.cli_helper import parse_args
-from model.eval_function import Eval_Score
-import sys
 import numpy as np
 import pandas as pd
-import cv2
-
-DEVICE = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
-
-print(f"You are using Device: {DEVICE} ")
 
 
 def get_next_train_dir(save_root):
@@ -152,29 +144,103 @@ def build_train_transform(resize_height, resize_width):
     ], additional_targets={'binary_mask': 'mask', 'instance_mask': 'mask'})
 
 
+def is_dist_initialized():
+    return dist.is_available() and dist.is_initialized()
+
+
+def is_main_process():
+    return not is_dist_initialized() or dist.get_rank() == 0
+
+
+def rank0_print(message):
+    if is_main_process():
+        print(message)
+
+
+def setup_distributed():
+    if 'RANK' not in os.environ or 'WORLD_SIZE' not in os.environ:
+        device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
+        return {
+            'distributed': False,
+            'rank': 0,
+            'local_rank': 0,
+            'world_size': 1,
+            'device': device,
+        }
+
+    rank = int(os.environ['RANK'])
+    local_rank = int(os.environ.get('LOCAL_RANK', 0))
+    world_size = int(os.environ['WORLD_SIZE'])
+
+    if torch.cuda.is_available():
+        torch.cuda.set_device(local_rank)
+        backend = 'nccl'
+        device = torch.device('cuda', local_rank)
+    else:
+        backend = 'gloo'
+        device = torch.device('cpu')
+
+    dist.init_process_group(backend=backend, init_method='env://')
+    return {
+        'distributed': True,
+        'rank': rank,
+        'local_rank': local_rank,
+        'world_size': world_size,
+        'device': device,
+    }
+
+
+def cleanup_distributed():
+    if is_dist_initialized():
+        dist.destroy_process_group()
+
+
+def get_shared_train_dir(save_root):
+    save_path = [None]
+    if is_main_process():
+        save_path[0] = get_next_train_dir(save_root)
+    if is_dist_initialized():
+        dist.broadcast_object_list(save_path, src=0)
+    return save_path[0]
+
+
+def unwrap_model(model):
+    if hasattr(model, 'module'):
+        return model.module
+    return model
+
 
 def train():
     args = parse_args()
+    dist_info = setup_distributed()
+    device = dist_info['device']
+    rank = dist_info['rank']
+    local_rank = dist_info['local_rank']
+    world_size = dist_info['world_size']
+    distributed = dist_info['distributed']
+
     save_root = args.save
-    save_path = get_next_train_dir(save_root)
-    print("Starting LaneNet training")
-    print("Dataset directory: {}".format(args.dataset))
-    print("Save root directory: {}".format(save_root))
-    print("Current training run directory: {}".format(save_path))
-    print("Model type: {}".format(args.model_type))
-    print("Loss type: {}".format(args.loss_type))
-    print("Resize target: {}x{}".format(args.width, args.height))
-    print("Batch size: {}".format(args.bs))
-    print("Learning rate: {}".format(args.lr))
+    save_path = get_shared_train_dir(save_root)
+    rank0_print("Starting LaneNet training")
+    rank0_print("Distributed: {} rank={}/{} local_rank={}".format(distributed, rank, world_size, local_rank))
+    rank0_print("Device: {}".format(device))
+    rank0_print("Dataset directory: {}".format(args.dataset))
+    rank0_print("Save root directory: {}".format(save_root))
+    rank0_print("Current training run directory: {}".format(save_path))
+    rank0_print("Model type: {}".format(args.model_type))
+    rank0_print("Loss type: {}".format(args.loss_type))
+    rank0_print("Resize target: {}x{}".format(args.width, args.height))
+    rank0_print("Batch size per process: {}".format(args.bs))
+    rank0_print("Learning rate: {}".format(args.lr))
 
     train_dataset_file = os.path.join(args.dataset, 'train.txt')
     val_dataset_file = os.path.join(args.dataset, 'val.txt')
-    print("Training index: {}".format(train_dataset_file))
-    print("Validation index: {}".format(val_dataset_file))
+    rank0_print("Training index: {}".format(train_dataset_file))
+    rank0_print("Validation index: {}".format(val_dataset_file))
 
     resize_height = args.height
     resize_width = args.width
-    print("Building transforms")
+    rank0_print("Building transforms")
 
     train_transform = build_train_transform(resize_height, resize_width)
     data_transforms = {
@@ -189,48 +255,111 @@ def train():
         Rescale((resize_width, resize_height)),
     ])
 
-    print("Loading training dataset")
-    train_dataset = TusimpleSet(train_dataset_file, joint_transform=train_transform)
-    train_loader = DataLoader(train_dataset, batch_size=args.bs, num_workers=24, shuffle=True)
+    base_seed = 69
+    random.seed(base_seed)
+    np.random.seed(base_seed + rank)
+    torch.manual_seed(base_seed + rank)
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed_all(base_seed + rank)
 
-    print("Loading validation dataset")
+    rank0_print("Loading training dataset")
+    train_dataset = TusimpleSet(train_dataset_file, joint_transform=train_transform)
+    train_sampler = DistributedSampler(
+        train_dataset,
+        num_replicas=world_size,
+        rank=rank,
+        shuffle=True,
+    ) if distributed else None
+    train_loader = DataLoader(
+        train_dataset,
+        batch_size=args.bs,
+        num_workers=args.num_workers,
+        shuffle=train_sampler is None,
+        sampler=train_sampler,
+        pin_memory=device.type == 'cuda',
+    )
+
+    rank0_print("Loading validation dataset")
     val_dataset = TusimpleSet(val_dataset_file, transform=data_transforms['val'], target_transform=target_transforms)
-    val_loader = DataLoader(val_dataset, batch_size=args.bs,num_workers=24, shuffle=True)
+    val_sampler = DistributedSampler(
+        val_dataset,
+        num_replicas=world_size,
+        rank=rank,
+        shuffle=False,
+    ) if distributed else None
+    val_loader = DataLoader(
+        val_dataset,
+        batch_size=args.bs,
+        num_workers=args.num_workers,
+        shuffle=False,
+        sampler=val_sampler,
+        pin_memory=device.type == 'cuda',
+    )
 
     dataloaders = {
         'train' : train_loader,
         'val' : val_loader
     }
-    dataset_sizes = {'train': len(train_loader.dataset), 'val' : len(val_loader.dataset)}
-    print("Training samples: {}".format(dataset_sizes['train']))
-    print("Validation samples: {}".format(dataset_sizes['val']))
-    print("Training batches per epoch: {}".format(len(train_loader)))
-    print("Validation batches per epoch: {}".format(len(val_loader)))
+    samplers = {
+        'train': train_sampler,
+        'val': val_sampler,
+    }
+    dataset_sizes = {'train': len(train_dataset), 'val' : len(val_dataset)}
+    rank0_print("Training samples: {}".format(dataset_sizes['train']))
+    rank0_print("Validation samples: {}".format(dataset_sizes['val']))
+    rank0_print("Training batches per process per epoch: {}".format(len(train_loader)))
+    rank0_print("Validation batches per process per epoch: {}".format(len(val_loader)))
 
-    print("Building model")
+    rank0_print("Building model")
     model = LaneNet(arch=args.model_type)
-    print("Moving model to device: {}".format(DEVICE))
-    model.to(DEVICE)
+    rank0_print("Moving model to device: {}".format(device))
+    model.to(device)
 
-    print("Creating optimizer")
+    if distributed:
+        if device.type == 'cuda':
+            model = DistributedDataParallel(model, device_ids=[local_rank], output_device=local_rank)
+        else:
+            model = DistributedDataParallel(model)
+
+    rank0_print("Creating optimizer")
     optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
-    print(f"{args.epochs} epochs {len(train_dataset)} training samples\n")
+    rank0_print("{} epochs {} training samples\n".format(args.epochs, len(train_dataset)))
 
-    print("Entering train_model")
-    model, log = train_model(model, optimizer, scheduler=None, dataloaders=dataloaders, dataset_sizes=dataset_sizes, device=DEVICE, loss_type=args.loss_type, num_epochs=args.epochs, save_path=save_path)
-    print("Training loop finished; writing artifacts")
-    df=pd.DataFrame({'epoch':[],'training_loss':[],'val_loss':[]})
-    df['epoch'] = log['epoch']
-    df['training_loss'] = log['training_loss']
-    df['val_loss'] = log['val_loss']
+    rank0_print("Entering train_model")
+    model, log = train_model(
+        model,
+        optimizer,
+        scheduler=None,
+        dataloaders=dataloaders,
+        dataset_sizes=dataset_sizes,
+        device=device,
+        loss_type=args.loss_type,
+        num_epochs=args.epochs,
+        save_path=save_path,
+        is_main_process=is_main_process(),
+        samplers=samplers,
+    )
 
-    train_log_save_filename = os.path.join(save_path, 'training_log.csv')
-    df.to_csv(train_log_save_filename, columns=['epoch','training_loss','val_loss'], header=True,index=False,encoding='utf-8')
-    print("training log is saved: {}".format(train_log_save_filename))
-    
-    model_save_filename = os.path.join(save_path, 'best_model.pth')
-    torch.save(model.state_dict(), model_save_filename)
-    print("model is saved: {}".format(model_save_filename))
+    if is_main_process():
+        print("Training loop finished; writing artifacts")
+        df=pd.DataFrame({'epoch':[],'training_loss':[],'val_loss':[]})
+        df['epoch'] = log['epoch']
+        df['training_loss'] = log['training_loss']
+        df['val_loss'] = log['val_loss']
+
+        train_log_save_filename = os.path.join(save_path, 'training_log.csv')
+        df.to_csv(train_log_save_filename, columns=['epoch','training_loss','val_loss'], header=True,index=False,encoding='utf-8')
+        print("training log is saved: {}".format(train_log_save_filename))
+
+        model_save_filename = os.path.join(save_path, 'best_model.pth')
+        torch.save(unwrap_model(model).state_dict(), model_save_filename)
+        print("model is saved: {}".format(model_save_filename))
+
+    if is_dist_initialized():
+        dist.barrier()
 
 if __name__ == '__main__':
-    train()
+    try:
+        train()
+    finally:
+        cleanup_distributed()
