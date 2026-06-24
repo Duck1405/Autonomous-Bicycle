@@ -126,13 +126,17 @@ class BottleneckModule(nn.Module):
             raise("Module Type error")
 
     def forward(self, x):
+        print(f"X Device: {x.device}")
         if self.module_type == 'downsampling':
+            
             conv_branch = self.conv(x)
             maxp_branch = self.maxpool(x)
             bs, conv_ch, h, w = conv_branch.size()
             maxp_ch = maxp_branch.size()[1]
             padding = torch.zeros(bs, conv_ch - maxp_ch, h, w)
-
+            
+            print(maxp_branch.device)
+            print(padding.device)
             maxp_branch = torch.cat([maxp_branch, padding], 1)
             output = maxp_branch + conv_branch
         elif self.module_type == 'upsampling':

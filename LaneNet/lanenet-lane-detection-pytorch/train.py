@@ -225,7 +225,7 @@ def train():
     world_size = dist_info['world_size']
     distributed = dist_info['distributed']
 
-    
+
     save_root = args.save
     save_path = get_shared_train_dir(save_root)
     rank0_print("Starting LaneNet training")
@@ -318,7 +318,7 @@ def train():
     rank0_print("Validation batches per process per epoch: {}".format(len(val_loader)))
 
     rank0_print("Building model")
-    model = LaneNet(arch=args.model_type)
+    model = LaneNet(arch=args.model_type, device)
     rank0_print("Moving model to device: {}".format(device))
     model.to(device)
 
