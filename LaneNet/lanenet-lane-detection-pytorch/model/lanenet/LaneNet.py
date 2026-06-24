@@ -15,7 +15,7 @@ from model.lanenet.backbone.deeplabv3_plus.deeplabv3plus import Deeplabv3plus_En
 
 
 class LaneNet(nn.Module):
-    def __init__(self, in_ch = 3, arch="ENet", device = "cuda"):
+    def __init__(self, in_ch = 3, arch="ENet", device = None):
         super(LaneNet, self).__init__()
         # no of instances for segmentation
         self.no_of_instances = 3  # if you want to output RGB instance map, it should be 3.
@@ -27,9 +27,9 @@ class LaneNet(nn.Module):
             self._decoder_binary = UNet_Decoder(2)
             self._decoder_instance = UNet_Decoder(self.no_of_instances)
         elif self._arch == 'ENet':
-            self._encoder = ENet_Encoder(in_ch, device).to(device)
-            self._decoder_binary = ENet_Decoder(2).to(device)
-            self._decoder_instance = ENet_Decoder(self.no_of_instances).to(device)
+            self._encoder = ENet_Encoder(in_ch)
+            self._decoder_binary = ENet_Decoder(2)
+            self._decoder_instance = ENet_Decoder(self.no_of_instances)
         elif self._arch == 'DeepLabv3+':
             self._encoder = Deeplabv3plus_Encoder()
 
