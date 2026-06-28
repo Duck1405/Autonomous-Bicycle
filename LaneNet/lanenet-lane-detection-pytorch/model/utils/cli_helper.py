@@ -12,7 +12,7 @@ def parse_args():
     parser.add_argument("--bs", required=False, type=int, help="Batch size", default=8)
     parser.add_argument("--num_workers", required=False, type=int, help="DataLoader workers per process", default=8)
     parser.add_argument("--val", required=False, type=bool, help="Use validation", default=False)
-    parser.add_argument("--lr", required=False, type=float, help="Learning rate", default=0.0005)
+    parser.add_argument("--lr", required=False, type=float, help="Learning rate", default=0.0001)
     parser.add_argument("--pretrained", required=False, default=None, help="pretrained model path")
     parser.add_argument("--image", default="./output", help="output image folder")
     parser.add_argument("--net", help="backbone network")

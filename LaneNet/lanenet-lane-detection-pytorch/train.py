@@ -1,5 +1,8 @@
+import json
 import os
 import random
+import socket
+from datetime import datetime
 
 import torch
 import torch.distributed as dist
@@ -21,6 +24,37 @@ except ImportError:
 from model.utils.cli_helper import parse_args
 import numpy as np
 import pandas as pd
+
+
+def save_run_log(args, save_path, log_path="training_runs.json"):
+    entry = {
+        "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        "host": socket.gethostname(),
+        "run_dir": save_path,
+        "dataset": args.dataset,
+        "model_type": args.model_type,
+        "loss_type": args.loss_type,
+        "epochs": args.epochs,
+        "batch_size": args.bs,
+        "learning_rate": args.lr,
+        "width": args.width,
+        "height": args.height,
+        "num_workers": args.num_workers,
+        "pretrained": args.pretrained or "none",
+    }
+
+    runs = []
+    if os.path.exists(log_path):
+        with open(log_path, "r") as f:
+            try:
+                runs = json.load(f)
+            except json.JSONDecodeError:
+                runs = []
+
+    runs.append(entry)
+    with open(log_path, "w") as f:
+        json.dump(runs, f, indent=2)
+    print("Run logged to: {}".format(log_path))
 
 
 def get_next_train_dir(save_root):
@@ -228,6 +262,8 @@ def train():
 
     save_root = args.save
     save_path = get_shared_train_dir(save_root)
+    if is_main_process():
+        save_run_log(args, save_path)
     rank0_print("Starting LaneNet training")
     rank0_print("Distributed: {} rank={}/{} local_rank={}".format(distributed, rank, world_size, local_rank))
     rank0_print("Device: {}".format(device))
@@ -361,6 +397,7 @@ def train():
         model_save_filename = os.path.join(save_path, 'best_model.pth')
         torch.save(unwrap_model(model).state_dict(), model_save_filename)
         print("model is saved: {}".format(model_save_filename))
+        save_run_log(args, save_path)
 
     if is_dist_initialized():
         dist.barrier()

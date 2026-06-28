@@ -48,7 +48,8 @@ HybridNets_Jetson/numpy_output
 
 HybridNets_Jetson/numpy_concat
 HybridNets_Jetson/numpy_videos_concat
-
+CuLane
+TUSimple
 
 
 # ROS2 workspace files

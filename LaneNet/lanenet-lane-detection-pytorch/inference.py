@@ -1,276 +1,315 @@
 import argparse
+import json
 import math
+import os
+from datetime import datetime
 
 import albumentations as A
 import cv2
 import numpy as np
 import torch
 from albumentations.pytorch import ToTensorV2
-from scipy.ndimage import binary_dilation
 
 from model.lanenet.LaneNet import LaneNet
+from model.lanenet.backbone.H_Net import H_Net, build_H
+from lane_utils import (
+    cluster_lane_embeddings,
+    fit_lane_polynomials,
+    draw_lane_clusters,
+    draw_all_lane_curves,
+)
 
+from pathlib import Path
 
-LANE_COLORS_BGR = np.array([
-    [0, 0, 255],      # red
-    [0, 255, 0],      # green
-    [255, 128, 0],    # blue/orange-ish
-    [0, 255, 255],    # yellow
-    [255, 0, 255],    # magenta
-    [255, 255, 0],    # cyan
-    [128, 255, 0],
-    [128, 128, 0],
-    [255, 255, 128],
-    [128, 128, 128],
-], dtype=np.uint8)
+def save_run_log(args, log_path="inference_runs.json"):
+    entry = {
+        "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        "output_file": args.output_file,
+        "lanenet_model": args.model,
+        "lanenet_arch": args.model_type,
+        "hnet_model": args.hnet_model or "none",
+        "video_file": args.video_file,
+        "width": args.width,
+        "height": args.height,
+        "embedding_activation": args.embedding_activation,
+        "hnet_poly_order": args.hnet_poly_order,
+        "hnet_curve_thickness": args.hnet_curve_thickness,
+        "delta_v": args.delta_v,
+        "min_cluster_size": args.min_cluster_size,
+        "max_lanes": args.max_lanes,
+        "max_frames": args.max_frames,
+    }
+
+    runs = []
+    if os.path.exists(log_path):
+        with open(log_path, "r") as f:
+            try:
+                runs = json.load(f)
+            except json.JSONDecodeError:
+                runs = []
+
+    runs.append(entry)
+    with open(log_path, "w") as f:
+        json.dump(runs, f, indent=2)
+    print("Run logged to: {}".format(log_path))
 
 
 def get_args():
-    parser = argparse.ArgumentParser()
-    parser.add_argument(
-        "--model",
-        help="Model weights",
-        default="/Users/amannindra/Projects/Autonomous-Bicycle/LaneNet/lanenet-lane-detection-pytorch/trained_models/best_model.pth",
-    )
-    parser.add_argument("--model_type", default="ENet")
-    parser.add_argument("--video_file", default="")
-    parser.add_argument("--output_file")
-    parser.add_argument("--width", type=int, default=512)
-    parser.add_argument("--height", type=int, default=256)
-    parser.add_argument("--delta_v", type=float, default=0.5)
-    parser.add_argument("--cluster_radius", type=float, default=None)
-    parser.add_argument("--mean_shift_bandwidth", type=float, default=None)
-    parser.add_argument("--mean_shift_iters", type=int, default=10)
-    parser.add_argument("--min_cluster_size", type=int, default=50)
-    parser.add_argument("--max_lanes", type=int, default=10)
-    parser.add_argument("--dilation_iters", type=int, default=2)
-    parser.add_argument("--max_frames", type=int, default=0)
-    parser.add_argument("--debug_every", type=int, default=0)
-    parser.add_argument(
-        "--embedding_activation",
-        choices=["raw", "sigmoid"],
-        default="raw",
-        help="Use sigmoid for old checkpoints trained with sigmoid(instance); use raw for paper-style embeddings.",
-    )
-    return parser.parse_args()
+    p = argparse.ArgumentParser()
+    p.add_argument("--model", default=None)
+    p.add_argument("--model_type", default="ENet")
+    p.add_argument("--hnet_model", default=None,
+                   help="H-Net weights. When supplied, polynomial curves are drawn.")
+    p.add_argument("--hnet_poly_order", type=int, default=3)
+    p.add_argument("--hnet_width",  type=int, default=128)
+    p.add_argument("--hnet_height", type=int, default=64)
+    p.add_argument("--hnet_curve_thickness", type=int, default=4)
+    p.add_argument("--video_file", default=None)
+    p.add_argument("--output_file")
+    p.add_argument("--width",  type=int, default=512)
+    p.add_argument("--height", type=int, default=256)
+    p.add_argument("--delta_v", type=float, default=0.5)
+    p.add_argument("--cluster_radius", type=float, default=None)
+    p.add_argument("--mean_shift_bandwidth", type=float, default=None)
+    p.add_argument("--mean_shift_iters", type=int, default=10)
+    p.add_argument("--min_cluster_size", type=int, default=50)
+    p.add_argument("--max_lanes", type=int, default=10)
+    p.add_argument("--dilation_iters", type=int, default=2)
+    p.add_argument("--max_frames", type=int, default=0)
+    p.add_argument("--debug_every", type=int, default=0)
+    p.add_argument("--debug", action="store_true",
+                   help="Write a 2x2 debug video: ENet binary, ENet clusters, "
+                        "H-Net curves, and a per-frame info panel.")
+    p.add_argument("--embedding_activation", choices=["raw", "sigmoid"], default="raw")
+    p.add_argument("--binary_threshold", type=float, default=None,
+                   help="If set, build the lane mask from softmax(lane_prob) > threshold "
+                        "instead of argmax (0.5). Lower values (e.g. 0.3) capture more "
+                        "lane pixels — no retraining needed.")
+    return p.parse_args()
 
 
-def load_weights(model, model_path, device):
+def _load_weights(model, path, device):
+    print("_load_weights:")
+    print(model)
+    print(path)
+    print(device)
+    print("-------")
+    
     try:
-        weights = torch.load(model_path, map_location=device, weights_only=True)
+        w = torch.load(path, map_location=device, weights_only=True)
     except TypeError:
-        weights = torch.load(model_path, map_location=device)
-    model.load_state_dict(weights)
+        w = torch.load(path, map_location=device)
+    model.load_state_dict(w)
 
 
-def extract_instance_embedding(outputs, embedding_activation="raw"):
-    embedding = outputs.get("instance_embedding")
-    if embedding is None:
-        embedding = outputs["instance_seg_logits"]
-
-    if embedding_activation == "sigmoid":
-        embedding = torch.sigmoid(embedding)
-
-    return embedding.detach().to("cpu")[0].numpy().astype(np.float32)
-
-
-def mean_shift_center(embeddings, center, bandwidth, max_iters):
-    center = center.astype(np.float32, copy=True)
-
-    for _ in range(max_iters):
-        distances = np.linalg.norm(embeddings - center, axis=1)
-        neighbors = embeddings[distances <= bandwidth]
-        if len(neighbors) == 0:
-            break
-
-        next_center = np.mean(neighbors, axis=0)
-        if np.linalg.norm(next_center - center) < 1e-3:
-            center = next_center
-            break
-        center = next_center
-
-    return center
+def _extract_embedding(outputs, activation):
+    # Cluster on the RAW instance embedding — that is the space the
+    # discriminative loss was trained in. 'instance_seg_logits' is already
+    # sigmoid(instance); clustering on it (or applying sigmoid here) squashes
+    # every embedding into a tiny range and collapses all lanes into 1 cluster.
+    emb = outputs.get("instance_embedding")
+    if emb is None:
+        emb = outputs["instance_seg_logits"]
+    if activation == "sigmoid":
+        emb = torch.sigmoid(emb)
+    return emb.detach().cpu()[0].numpy().astype(np.float32)
 
 
-def cluster_lane_embeddings(binary_pred, instance_embedding, delta_v=0.5,
-                            cluster_radius=None, mean_shift_bandwidth=None,
-                            mean_shift_iters=10, min_cluster_size=50,
-                            max_lanes=10):
-    lane_mask = binary_pred == 1
-    cluster_labels = np.zeros(binary_pred.shape, dtype=np.int32)
-    if not np.any(lane_mask):
-        return cluster_labels
-
-    if instance_embedding.shape[1:] != binary_pred.shape:
-        raise ValueError(
-            "Instance embedding shape {} does not match binary mask shape {}".format(
-                instance_embedding.shape,
-                binary_pred.shape,
-            )
-        )
-
-    radius = 2.0 * delta_v if cluster_radius is None else cluster_radius
-    bandwidth = radius if mean_shift_bandwidth is None else mean_shift_bandwidth
-
-    lane_ys, lane_xs = np.where(lane_mask)
-    lane_embeddings = instance_embedding[:, lane_ys, lane_xs].T
-    remaining = np.ones(lane_embeddings.shape[0], dtype=bool)
-
-    rng = np.random.default_rng(0)
-    cluster_id = 1
-
-    while np.any(remaining) and cluster_id <= max_lanes:
-        remaining_indices = np.flatnonzero(remaining)
-        seed_index = rng.choice(remaining_indices)
-
-        center = mean_shift_center(
-            lane_embeddings[remaining],
-            lane_embeddings[seed_index],
-            bandwidth,
-            mean_shift_iters,
-        )
-
-        distances = np.linalg.norm(lane_embeddings - center, axis=1)
-        cluster = (distances <= radius) & remaining
-        cluster_size = np.count_nonzero(cluster)
-
-        if cluster_size < min_cluster_size:
-            if cluster_size > 0:
-                remaining[cluster] = False
-            else:
-                remaining[seed_index] = False
-            continue
-
-        cluster_labels[lane_ys[cluster], lane_xs[cluster]] = cluster_id
-        remaining[cluster] = False
-        cluster_id += 1
-
-    return sort_lane_clusters_left_to_right(cluster_labels)
+def _panel(img, label, size):
+    """Resize an image to `size` (w, h), ensure 3 channels, draw a label."""
+    p = cv2.resize(img, size, interpolation=cv2.INTER_NEAREST)
+    if p.ndim == 2:
+        p = cv2.cvtColor(p, cv2.COLOR_GRAY2BGR)
+    cv2.rectangle(p, (0, 0), (size[0] - 1, 26), (0, 0, 0), -1)
+    cv2.putText(p, label, (6, 19), cv2.FONT_HERSHEY_SIMPLEX, 0.55,
+                (0, 255, 255), 2, cv2.LINE_AA)
+    return p
 
 
-def sort_lane_clusters_left_to_right(cluster_labels):
-    sorted_labels = np.zeros_like(cluster_labels)
-    lane_ids = [lane_id for lane_id in np.unique(cluster_labels) if lane_id != 0]
-
-    lane_positions = []
-    for lane_id in lane_ids:
-        ys, xs = np.where(cluster_labels == lane_id)
-        if len(xs) == 0:
-            continue
-        lower_half = ys >= np.percentile(ys, 50)
-        x_position = np.mean(xs[lower_half]) if np.any(lower_half) else np.mean(xs)
-        lane_positions.append((x_position, lane_id))
-
-    for new_id, (_, old_id) in enumerate(sorted(lane_positions), start=1):
-        sorted_labels[cluster_labels == old_id] = new_id
-
-    return sorted_labels
+def warp_to_bev(frame_bgr, H_norm):
+    """Warp the frame with the normalized-space homography H_norm (3x3) so you
+    can SEE the transform H-Net learned. Near-identity H -> looks almost
+    unchanged; a degenerate H -> heavily distorted or mostly black."""
+    h, w = frame_bgr.shape[:2]
+    D     = np.array([[1.0 / w, 0, 0], [0, 1.0 / h, 0], [0, 0, 1]], dtype=np.float64)
+    D_inv = np.array([[w, 0, 0], [0, h, 0], [0, 0, 1]], dtype=np.float64)
+    H_px = D_inv @ H_norm.astype(np.float64) @ D
+    try:
+        return cv2.warpPerspective(frame_bgr, H_px, (w, h))
+    except cv2.error:
+        return np.zeros_like(frame_bgr)
 
 
-def draw_lane_clusters(frame_bgr, cluster_labels, dilation_iters=2):
-    orig_h, orig_w = frame_bgr.shape[:2]
-    cluster_labels_orig = cv2.resize(
-        cluster_labels.astype(np.int32),
-        (orig_w, orig_h),
-        interpolation=cv2.INTER_NEAREST,
-    )
+def make_debug_composite(frame_bgr, binary_pred, cluster_labels, curves_frame,
+                         info_lines, bev_frame=None):
+    """2x2 grid. Returns a frame the same size as the input so the VideoWriter
+    dimensions don't change.
 
-    overlay = frame_bgr.copy()
-    lane_ids = [lane_id for lane_id in np.unique(cluster_labels_orig) if lane_id != 0]
+        ENet instance clusters | ENet binary seg
+        H-Net curves           | H-Net BEV warp (+ info text overlaid)
 
-    for lane_index, lane_id in enumerate(lane_ids[:len(LANE_COLORS_BGR)]):
-        lane_mask = cluster_labels_orig == lane_id
-        if dilation_iters > 0:
-            lane_mask = binary_dilation(lane_mask, iterations=dilation_iters)
-        overlay[lane_mask] = LANE_COLORS_BGR[lane_index]
+    When H-Net is off, the bottom-right is a plain info panel.
+    """
+    h, w = frame_bgr.shape[:2]
+    size = (w // 2, h // 2)
 
-    return cv2.addWeighted(frame_bgr, 0.7, overlay, 0.3, 0)
+    clusters = draw_lane_clusters(frame_bgr, cluster_labels, dilation_iters=2)
+    binary_vis = (binary_pred.astype(np.uint8) * 255)
+
+    if bev_frame is not None:
+        br = _panel(bev_frame, "H-Net BEV warp", size)
+    else:
+        br = _panel(np.zeros((h, w, 3), np.uint8), "info", size)
+
+    # Overlay the info text on the bottom-right panel (green for readability).
+    yy = 48
+    for line in info_lines:
+        cv2.putText(br, line, (8, yy), cv2.FONT_HERSHEY_SIMPLEX, 0.5,
+                    (0, 255, 0), 1, cv2.LINE_AA)
+        yy += 22
+
+    top = np.hstack([_panel(clusters, "ENet instance clusters", size),
+                     _panel(binary_vis, "ENet binary seg", size)])
+    bot = np.hstack([_panel(curves_frame, "H-Net curves", size), br])
+    composite = np.vstack([top, bot])
+    return cv2.resize(composite, (w, h))   # guard against odd-dimension rounding
 
 
-def frame(model, input_tensor, frame_bgr, device, args):
-    input_tensor = torch.unsqueeze(input_tensor, dim=0).to(device)
+def process_frame(lanenet, hnet, input_tensor, hnet_tensor, frame_bgr, device, args):
+    # LaneNet forward
     with torch.no_grad():
-        outputs = model(input_tensor)
+        outputs = lanenet(torch.unsqueeze(input_tensor, 0).to(device))
 
-    binary_pred = outputs["binary_seg_pred"][0, 0].detach().to("cpu").numpy().astype(np.uint8)
-    instance_embedding = extract_instance_embedding(
-        outputs,
-        embedding_activation=args.embedding_activation,
-    )
+    if args.binary_threshold is not None:
+        lane_prob = torch.softmax(outputs["binary_seg_logits"], dim=1)[0, 1]
+        binary_pred = (lane_prob > args.binary_threshold).detach().cpu().numpy().astype(np.uint8)
+    else:
+        binary_pred = outputs["binary_seg_pred"][0, 0].detach().cpu().numpy().astype(np.uint8)
+    embedding   = _extract_embedding(outputs, args.embedding_activation)
+
     cluster_labels = cluster_lane_embeddings(
-        binary_pred,
-        instance_embedding,
-        delta_v=args.delta_v,
-        cluster_radius=args.cluster_radius,
+        binary_pred, embedding,
+        delta_v=args.delta_v, cluster_radius=args.cluster_radius,
         mean_shift_bandwidth=args.mean_shift_bandwidth,
         mean_shift_iters=args.mean_shift_iters,
-        min_cluster_size=args.min_cluster_size,
-        max_lanes=args.max_lanes,
+        min_cluster_size=args.min_cluster_size, max_lanes=args.max_lanes,
     )
 
-    return draw_lane_clusters(
-        frame_bgr,
-        cluster_labels,
-        dilation_iters=args.dilation_iters,
-    ), cluster_labels
+    n_clusters = len([l for l in np.unique(cluster_labels) if l != 0])
+
+    H = None
+    if hnet is not None:
+        with torch.no_grad():
+            params = hnet(torch.unsqueeze(hnet_tensor, 0).to(device))
+        H = build_H(params)[0]
+
+    polys, curves_norm = {}, {}
+    if hnet is not None or args.debug:
+        polys, _, curves_norm = fit_lane_polynomials(
+            cluster_labels, H, args.width, args.height, args.hnet_poly_order)
+
+    if hnet is None:
+        out = draw_lane_clusters(frame_bgr, cluster_labels, args.dilation_iters)
+    else:
+        out = draw_all_lane_curves(frame_bgr, curves_norm, args.hnet_curve_thickness)
+
+    if args.debug:
+        info_lines = [
+            "lane px:        {}".format(int(np.count_nonzero(binary_pred))),
+            "clusters found: {}".format(n_clusters),
+            "polys fit:      {}".format(len(polys)),
+            "dropped:        {}".format(n_clusters - len(polys)),
+        ]
+        bev = None
+        if H is not None:
+            Hn = H.detach().cpu().numpy()
+            bev = warp_to_bev(frame_bgr, Hn)
+            info_lines += ["H = [{:+.2f} {:+.2f} {:+.2f}]".format(*Hn[0]),
+                           "    [{:+.2f} {:+.2f} {:+.2f}]".format(*Hn[1]),
+                           "    [{:+.2f} {:+.2f} {:+.2f}]".format(*Hn[2]),
+                           "(identity = 1,0,0 / 0,1,0 / 0,0,1)"]
+        else:
+            info_lines.append("H-Net: off")
+        out = make_debug_composite(frame_bgr, binary_pred, cluster_labels,
+                                   out, info_lines, bev_frame=bev)
+
+    return out, cluster_labels
 
 
 def main(args):
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-    print("Device: {}".format(device))
+    print("Device:", device)
 
-    model = LaneNet(arch=args.model_type)
-    load_weights(model, args.model, device)
-    model.eval()
-    model.to(device)
+    lanenet = LaneNet(arch=args.model_type)
+    _load_weights(lanenet, args.model, device)
+    lanenet.eval().to(device)
 
-    transform = A.Compose([
-        A.Resize(height=args.height, width=args.width),
-        A.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+    hnet = None
+    if args.hnet_model:
+        hnet = H_Net()
+        _load_weights(hnet, args.hnet_model, device)
+        hnet.eval().to(device)
+        print("H-Net:", args.hnet_model)
+
+    lane_tf = A.Compose([
+        A.Resize(args.height, args.width),
+        A.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225]),
         ToTensorV2(),
     ])
+    hnet_tf = A.Compose([
+        A.Resize(args.hnet_height, args.hnet_width),
+        ToTensorV2(),
+    ]) if hnet else None
 
-    video_cap = cv2.VideoCapture(args.video_file)
-    fps = video_cap.get(cv2.CAP_PROP_FPS)
-    width = int(video_cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-    height = int(video_cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-    total_frames = int(video_cap.get(cv2.CAP_PROP_FRAME_COUNT))
+    cap    = cv2.VideoCapture(args.video_file)
+    fps    = cap.get(cv2.CAP_PROP_FPS)
+    w      = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+    h      = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+    total  = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+    print("FPS: {}  Size: {}x{}  Frames: {}".format(fps, w, h, total))
 
-    print("FPS: {}".format(fps))
-    print("Width: {}".format(width))
-    print("Height: {}".format(height))
+    file_output = Path(args.output_file)
+    num = 1
+    while os.path.isfile(file_output):
+        file_name = file_output.stem
+        parent = file_output.parent
+        print(f"While Loop: file_output: {file_name}")
+        file_name = file_name + "_" + str(num) + file_output.suffix
+        file_output = parent / file_name
+        num += 1
+        
+    
+    print(f"Confirmed Output File: {file_output}")
 
-    fourcc = cv2.VideoWriter_fourcc(*"mp4v")
-    video_writer = cv2.VideoWriter(args.output_file, fourcc, fps, (width, height))
-
-    count = 0
-    progress_interval = max(math.floor(total_frames / 25), 1)
+    writer = cv2.VideoWriter(file_output, cv2.VideoWriter_fourcc(*"mp4v"), fps, (w, h))
+    count  = 0
+    prog   = max(math.floor(total / 25), 1)
 
     while True:
-        success, image_bgr = video_cap.read()
-        if not success:
+        ok, bgr = cap.read()
+        if not ok:
             break
 
-        image_rgb = cv2.cvtColor(image_bgr, cv2.COLOR_BGR2RGB)
-        input_tensor = transform(image=image_rgb)["image"]
-        output_frame, cluster_labels = frame(model, input_tensor, image_bgr, device, args)
+        rgb = cv2.cvtColor(bgr, cv2.COLOR_BGR2RGB)
+        lt  = lane_tf(image=rgb)["image"]
+        ht  = hnet_tf(image=rgb)["image"] if hnet_tf else None
 
+        out, labels = process_frame(lanenet, hnet, lt, ht, rgb, device, args)
+        writer.write(out)
         count += 1
-        video_writer.write(output_frame)
 
         if args.debug_every > 0 and count % args.debug_every == 0:
-            lane_pixels = int(np.count_nonzero(cluster_labels))
-            lane_count = len([lane_id for lane_id in np.unique(cluster_labels) if lane_id != 0])
-            print("Frame {}: {} clustered lane pixels, {} lanes".format(count, lane_pixels, lane_count))
-
+            n = len([l for l in np.unique(labels) if l != 0])
+            print("Frame {}: {} lanes, {} px".format(count, n, np.count_nonzero(labels)))
         if args.max_frames > 0 and count >= args.max_frames:
             break
-        if count % progress_interval == 0:
-            print("Count: {}/{}".format(count, total_frames))
+        if count % prog == 0:
+            print("{}/{}".format(count, total))
 
-    video_cap.release()
-    video_writer.release()
-    print("Video successfully generated!")
+    cap.release()
+    writer.release()
+    print("Done ->", file_output)
+    save_run_log(args)
 
 
 if __name__ == "__main__":

@@ -17,8 +17,11 @@ torchrun --standalone --nproc_per_node=2 \
     --dataset /home/anindra/data/TUSimple/train_set/training \
     --epochs 25 \
     --bs 12 \
-    --num_workers 8 \
+    --num_workers 16 \
+    --lr 0.0001
     --save ./log
 
 
+python train_hnet.py   --tusimple_root /home/anindra/data/TUSimple/train_set   --epochs 50 --bs 32 --lr 5e-5 --num_workers 32 --poly_order 3 --save .
+/log_hnet
 

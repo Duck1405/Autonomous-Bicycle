@@ -15,7 +15,10 @@ Example:
 
 import argparse
 import glob
+import json
 import os
+import socket
+from datetime import datetime
 
 import pandas as pd
 import torch
@@ -40,10 +43,41 @@ def parse_args():
     p.add_argument("--poly_order", type=int, default=3)
     p.add_argument("--width", type=int, default=128)
     p.add_argument("--height", type=int, default=64)
-    p.add_argument("--num_workers", type=int, default=8)
+    p.add_argument("--num_workers", type=int, default=32)
     p.add_argument("--val_split", type=float, default=0.1,
                    help="Fraction of data held out for validation (default 0.1)")
     return p.parse_args()
+
+
+def save_run_log(args, log_path="training_hnet_runs.json"):
+    entry = {
+        "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        "host": socket.gethostname(),
+        "save_dir": args.save,
+        "tusimple_root": args.tusimple_root,
+        "label_glob": args.label_glob,
+        "epochs": args.epochs,
+        "batch_size": args.bs,
+        "learning_rate": args.lr,
+        "poly_order": args.poly_order,
+        "width": args.width,
+        "height": args.height,
+        "val_split": args.val_split,
+        "num_workers": args.num_workers,
+    }
+
+    runs = []
+    if os.path.exists(log_path):
+        with open(log_path, "r") as f:
+            try:
+                runs = json.load(f)
+            except json.JSONDecodeError:
+                runs = []
+
+    runs.append(entry)
+    with open(log_path, "w") as f:
+        json.dump(runs, f, indent=2)
+    print("Run logged to: {}".format(log_path))
 
 
 def find_label_files(root, label_glob):
@@ -84,6 +118,8 @@ def main():
     args = parse_args()
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     os.makedirs(args.save, exist_ok=True)
+
+    save_run_log(args)
 
     label_files = find_label_files(args.tusimple_root, args.label_glob)
     print("Device:", device)
@@ -171,6 +207,7 @@ def main():
     pd.DataFrame(log).to_csv(
         os.path.join(args.save, "hnet_training_log.csv"), index=False)
     print("Best val loss: {:.6f}".format(best_val))
+    save_run_log(args)
     print("Saved checkpoints and log to:", args.save)
 
 

@@ -52,8 +52,8 @@ class LaneNet(nn.Module):
             instance = self._decoder_instance(c1, c2, c3, c4, c5)
         elif self._arch == 'ENet':
             c = self._encoder(input_tensor)
-            binary = self._decoder_binary(self._stage3_binary(c))
-            instance = self._decoder_instance(self._stage3_instance(c))
+            binary = self._decoder_binary(c)
+            instance = self._decoder_instance(c)
         elif self._arch == 'DeepLabv3+':
             c1, c2 = self._encoder(input_tensor)
             binary = self._decoder_binary(c1, c2)
@@ -63,12 +63,12 @@ class LaneNet(nn.Module):
 
         binary_seg_ret = torch.argmax(F.softmax(binary, dim=1), dim=1, keepdim=True)
 
-        # pix_embedding = self.sigmoid(instance)
-        pix_embedding = instance
+        pix_embedding = self.sigmoid(instance)
+        # pix_embedding = instance
 
         return {
             'instance_seg_logits': pix_embedding,
-            'instance_embedding': pix_embedding,
+            'instance_embedding': instance,
             'binary_seg_pred': binary_seg_ret,
             'binary_seg_logits': binary
         }
