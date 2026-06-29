@@ -1,0 +1,2 @@
+[2026-06-29 15:45:31,065] [lib.experiment] [DEBUG] CLI Args:
+ Namespace(mode='train', exp_name='example', cfg='example.yml', resume=False, epoch=None, cpu=False, save_predictions=False, view=None, deterministic=False)

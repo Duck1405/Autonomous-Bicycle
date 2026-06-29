@@ -4,7 +4,7 @@ import argparse
 from tqdm.autonotebook import tqdm
 import os
 
-from utils import smp_metrics
+from TuSimpleModel.utils.utils import smp_metrics
 from utils.utils import ConfusionMatrix, postprocess, scale_coords, process_batch, ap_per_class, fitness, \
     save_checkpoint, DataLoaderX, BBoxTransform, ClipBoxes, boolean_string, Params
 from backbone import HybridNetsBackbone

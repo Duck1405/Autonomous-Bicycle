@@ -6,7 +6,7 @@ import torch.distributed as dist
 import torch.nn.functional as F
 from tqdm.autonotebook import tqdm
 
-from utils import smp_metrics
+from TuSimpleModel.utils.utils import smp_metrics
 from utils.constants import BINARY_MODE, MULTICLASS_MODE
 from utils.metrics_logging import append_jsonl, standardize_metric_record
 from utils.utils import (

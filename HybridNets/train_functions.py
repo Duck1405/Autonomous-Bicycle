@@ -16,7 +16,7 @@ from torch import nn
 from torchvision import transforms
 from tqdm.autonotebook import tqdm
 
-from utils import smp_metrics
+from TuSimpleModel.utils.utils import smp_metrics
 from val_ddp import val
 from backbone import HybridNetsBackbone
 from hybridnets.loss import FocalLoss

@@ -1,0 +1,335 @@
+[2026-06-29 16:19:09,465] [lib.experiment] [DEBUG] CLI Args:
+ Namespace(mode='train', exp_name='laptop_smoke', cfg='cfgs/laneatt_culane_resnet18_laptop.yml', resume=False, epoch=None, cpu=False, save_predictions=False, view=None, deterministic=False)
+[2026-06-29 16:19:09,472] [lib.experiment] [DEBUG] Beginning training session. CFG used:
+# Laptop / CPU smoke-test config: trains LaneATT end-to-end on a tiny 20-image subset
+# so the full pipeline (data -> aug -> forward -> loss -> backward -> checkpoint) can be
+# verified locally before sending the code to a GPU server. Runs on CPU (auto-selected
+# when CUDA is unavailable) or GPU unchanged.
+# Model settings
+val_every: 1000          # large => no validation during the short run
+model_checkpoint_interval: 1
+seed: 0
+num_workers: 0           # 0 workers: simplest/most reliable for a small CPU run
+model:
+  name: LaneATT
+  parameters:
+    backbone: resnet18
+    S: &S 72
+    topk_anchors: 100    # fewer anchors => much cheaper NMS on CPU
+    anchors_freq_path: 'data/culane_anchors_freq.pt'
+    img_h: &img_h 360
+    img_w: &img_w 640
+batch_size: 4
+epochs: 20
+loss_parameters: {}
+train_parameters:
+  conf_threshold:
+  nms_thres: 15.
+  nms_topk: 3000
+test_parameters:
+  conf_threshold: 0.5
+  nms_thres: 50.
+  nms_topk: &max_lanes 4
+optimizer:
+  name: Adam
+  parameters:
+    lr: 0.0003
+lr_scheduler:
+  name: CosineAnnealingLR
+  parameters:
+    T_max: 100           # ~= epochs(20) * iters_per_epoch(ceil(20/4)=5)
+
+# Dataset settings
+datasets:
+  train:
+    type: LaneDataset
+    parameters:
+      S: *S
+      dataset: culane
+      split: train
+      img_size: [*img_h, *img_w]
+      max_lanes: *max_lanes
+      max_samples: 20    # only the first 20 training images
+      normalize: false
+      aug_chance: 1.0
+      augmentations:
+        - name: Affine
+          parameters:
+            translate_px:
+             x: !!python/tuple [-25, 25]
+             y: !!python/tuple [-10, 10]
+            rotate: !!python/tuple [-6, 6]
+            scale: !!python/tuple [0.85, 1.15]
+
+      root: "/Users/amannindra/Projects/Auto/CuLaneDataset"
+
+  test:
+    type: LaneDataset
+    parameters:
+      S: *S
+      dataset: culane
+      split: test
+      img_size: [*img_h, *img_w]
+      max_lanes: *max_lanes
+      max_samples: 20
+      normalize: false
+      aug_chance: 0
+      augmentations:
+      root: "/Users/amannindra/Projects/Auto/CuLaneDataset"
+
+  val:
+    type: LaneDataset
+    parameters:
+      S: *S
+      dataset: culane
+      split: val
+      img_size: [288, 512]
+      max_lanes: *max_lanes
+      max_samples: 20
+      normalize: false
+      aug_chance: 0
+      augmentations:
+      root: "/Users/amannindra/Projects/Auto/CuLaneDataset"
+
+[2026-06-29 16:19:09,731] [lib.datasets.culane] [INFO] Indexing CULane train annotations (lazy loading)...
+[2026-06-29 16:19:09,784] [lib.datasets.culane] [INFO] 88880 annotations indexed.
+[2026-06-29 16:19:09,791] [lib.datasets.lane_dataset] [INFO] Limiting dataset to 20 samples (max_samples).
+[2026-06-29 16:19:09,810] [lib.experiment] [DEBUG] Epoch [1/20] starting.
+[2026-06-29 16:19:11,365] [lib.experiment] [DEBUG] Epoch [1/20] - Iter [0/5] - Loss: 7.92366 - cls_loss: 0.29791 - reg_loss: 4.94456 - batch_positives: 60.00000 - lr: 0.00030
+[2026-06-29 16:19:12,246] [lib.experiment] [DEBUG] Epoch [1/20] - Iter [1/5] - Loss: 6.83877 - cls_loss: 0.18302 - reg_loss: 5.00859 - batch_positives: 80.00000 - lr: 0.00030
+[2026-06-29 16:19:13,125] [lib.experiment] [DEBUG] Epoch [1/20] - Iter [2/5] - Loss: 6.44848 - cls_loss: 0.18632 - reg_loss: 4.58529 - batch_positives: 66.00000 - lr: 0.00030
+[2026-06-29 16:19:13,768] [lib.experiment] [DEBUG] Epoch [1/20] - Iter [3/5] - Loss: 6.22439 - cls_loss: 0.21442 - reg_loss: 4.08016 - batch_positives: 59.00000 - lr: 0.00030
+[2026-06-29 16:19:14,413] [lib.experiment] [DEBUG] Epoch [1/20] - Iter [4/5] - Loss: 6.60548 - cls_loss: 0.18007 - reg_loss: 4.80474 - batch_positives: 66.00000 - lr: 0.00030
+[2026-06-29 16:19:14,414] [lib.experiment] [DEBUG] Epoch [1/20] finished.
+[2026-06-29 16:19:14,574] [lib.experiment] [DEBUG] Epoch [2/20] starting.
+[2026-06-29 16:19:15,176] [lib.experiment] [DEBUG] Epoch [2/20] - Iter [0/5] - Loss: 6.39441 - cls_loss: 0.17604 - reg_loss: 4.63404 - batch_positives: 57.00000 - lr: 0.00030
+[2026-06-29 16:19:15,786] [lib.experiment] [DEBUG] Epoch [2/20] - Iter [1/5] - Loss: 6.18046 - cls_loss: 0.17029 - reg_loss: 4.47753 - batch_positives: 60.00000 - lr: 0.00030
+[2026-06-29 16:19:16,355] [lib.experiment] [DEBUG] Epoch [2/20] - Iter [2/5] - Loss: 5.89054 - cls_loss: 0.15796 - reg_loss: 4.31097 - batch_positives: 59.00000 - lr: 0.00030
+[2026-06-29 16:19:16,927] [lib.experiment] [DEBUG] Epoch [2/20] - Iter [3/5] - Loss: 5.65070 - cls_loss: 0.13919 - reg_loss: 4.25879 - batch_positives: 62.00000 - lr: 0.00029
+[2026-06-29 16:19:17,469] [lib.experiment] [DEBUG] Epoch [2/20] - Iter [4/5] - Loss: 5.88662 - cls_loss: 0.13189 - reg_loss: 4.56774 - batch_positives: 63.00000 - lr: 0.00029
+[2026-06-29 16:19:17,469] [lib.experiment] [DEBUG] Epoch [2/20] finished.
+[2026-06-29 16:19:17,626] [lib.experiment] [DEBUG] Epoch [3/20] starting.
+[2026-06-29 16:19:18,204] [lib.experiment] [DEBUG] Epoch [3/20] - Iter [0/5] - Loss: 6.21005 - cls_loss: 0.12515 - reg_loss: 4.95852 - batch_positives: 53.00000 - lr: 0.00029
+[2026-06-29 16:19:18,867] [lib.experiment] [DEBUG] Epoch [3/20] - Iter [1/5] - Loss: 5.95495 - cls_loss: 0.11781 - reg_loss: 4.77687 - batch_positives: 74.00000 - lr: 0.00029
+[2026-06-29 16:19:19,540] [lib.experiment] [DEBUG] Epoch [3/20] - Iter [2/5] - Loss: 6.20979 - cls_loss: 0.12215 - reg_loss: 4.98833 - batch_positives: 61.00000 - lr: 0.00029
+[2026-06-29 16:19:20,172] [lib.experiment] [DEBUG] Epoch [3/20] - Iter [3/5] - Loss: 5.98878 - cls_loss: 0.16821 - reg_loss: 4.30667 - batch_positives: 51.00000 - lr: 0.00029
+[2026-06-29 16:19:20,797] [lib.experiment] [DEBUG] Epoch [3/20] - Iter [4/5] - Loss: 5.45635 - cls_loss: 0.11467 - reg_loss: 4.30966 - batch_positives: 55.00000 - lr: 0.00028
+[2026-06-29 16:19:20,798] [lib.experiment] [DEBUG] Epoch [3/20] finished.
+[2026-06-29 16:19:20,947] [lib.experiment] [DEBUG] Epoch [4/20] starting.
+[2026-06-29 16:19:21,593] [lib.experiment] [DEBUG] Epoch [4/20] - Iter [0/5] - Loss: 5.34420 - cls_loss: 0.11578 - reg_loss: 4.18635 - batch_positives: 44.00000 - lr: 0.00028
+[2026-06-29 16:19:22,247] [lib.experiment] [DEBUG] Epoch [4/20] - Iter [1/5] - Loss: 5.27319 - cls_loss: 0.10674 - reg_loss: 4.20579 - batch_positives: 21.00000 - lr: 0.00028
+[2026-06-29 16:19:22,889] [lib.experiment] [DEBUG] Epoch [4/20] - Iter [2/5] - Loss: 5.50335 - cls_loss: 0.10340 - reg_loss: 4.46938 - batch_positives: 15.00000 - lr: 0.00028
+[2026-06-29 16:19:23,511] [lib.experiment] [DEBUG] Epoch [4/20] - Iter [3/5] - Loss: 5.65069 - cls_loss: 0.10127 - reg_loss: 4.63803 - batch_positives: 19.00000 - lr: 0.00027
+[2026-06-29 16:19:24,255] [lib.experiment] [DEBUG] Epoch [4/20] - Iter [4/5] - Loss: 5.58061 - cls_loss: 0.10152 - reg_loss: 4.56539 - batch_positives: 18.00000 - lr: 0.00027
+[2026-06-29 16:19:24,256] [lib.experiment] [DEBUG] Epoch [4/20] finished.
+[2026-06-29 16:19:24,426] [lib.experiment] [DEBUG] Epoch [5/20] starting.
+[2026-06-29 16:19:25,057] [lib.experiment] [DEBUG] Epoch [5/20] - Iter [0/5] - Loss: 4.32887 - cls_loss: 0.08125 - reg_loss: 3.51640 - batch_positives: 14.00000 - lr: 0.00027
+[2026-06-29 16:19:25,679] [lib.experiment] [DEBUG] Epoch [5/20] - Iter [1/5] - Loss: 5.45824 - cls_loss: 0.09813 - reg_loss: 4.47695 - batch_positives: 17.00000 - lr: 0.00027
+[2026-06-29 16:19:26,309] [lib.experiment] [DEBUG] Epoch [5/20] - Iter [2/5] - Loss: 5.08679 - cls_loss: 0.07493 - reg_loss: 4.33751 - batch_positives: 20.00000 - lr: 0.00026
+[2026-06-29 16:19:26,926] [lib.experiment] [DEBUG] Epoch [5/20] - Iter [3/5] - Loss: 5.95787 - cls_loss: 0.07008 - reg_loss: 5.25712 - batch_positives: 19.00000 - lr: 0.00026
+[2026-06-29 16:19:27,514] [lib.experiment] [DEBUG] Epoch [5/20] - Iter [4/5] - Loss: 5.10134 - cls_loss: 0.06351 - reg_loss: 4.46627 - batch_positives: 19.00000 - lr: 0.00026
+[2026-06-29 16:19:27,514] [lib.experiment] [DEBUG] Epoch [5/20] finished.
+[2026-06-29 16:19:27,675] [lib.experiment] [DEBUG] Epoch [6/20] starting.
+[2026-06-29 16:19:28,304] [lib.experiment] [DEBUG] Epoch [6/20] - Iter [0/5] - Loss: 5.16697 - cls_loss: 0.04698 - reg_loss: 4.69716 - batch_positives: 23.00000 - lr: 0.00025
+[2026-06-29 16:19:28,958] [lib.experiment] [DEBUG] Epoch [6/20] - Iter [1/5] - Loss: 5.32042 - cls_loss: 0.07203 - reg_loss: 4.60010 - batch_positives: 20.00000 - lr: 0.00025
+[2026-06-29 16:19:29,629] [lib.experiment] [DEBUG] Epoch [6/20] - Iter [2/5] - Loss: 4.69929 - cls_loss: 0.04307 - reg_loss: 4.26858 - batch_positives: 16.00000 - lr: 0.00025
+[2026-06-29 16:19:30,232] [lib.experiment] [DEBUG] Epoch [6/20] - Iter [3/5] - Loss: 5.88650 - cls_loss: 0.04569 - reg_loss: 5.42961 - batch_positives: 23.00000 - lr: 0.00024
+[2026-06-29 16:19:30,849] [lib.experiment] [DEBUG] Epoch [6/20] - Iter [4/5] - Loss: 5.56912 - cls_loss: 0.13606 - reg_loss: 4.20847 - batch_positives: 14.00000 - lr: 0.00024
+[2026-06-29 16:19:30,850] [lib.experiment] [DEBUG] Epoch [6/20] finished.
+[2026-06-29 16:19:31,002] [lib.experiment] [DEBUG] Epoch [7/20] starting.
+[2026-06-29 16:19:31,752] [lib.experiment] [DEBUG] Epoch [7/20] - Iter [0/5] - Loss: 5.06046 - cls_loss: 0.04686 - reg_loss: 4.59184 - batch_positives: 18.00000 - lr: 0.00023
+[2026-06-29 16:19:32,399] [lib.experiment] [DEBUG] Epoch [7/20] - Iter [1/5] - Loss: 5.27307 - cls_loss: 0.03851 - reg_loss: 4.88801 - batch_positives: 18.00000 - lr: 0.00023
+[2026-06-29 16:19:33,064] [lib.experiment] [DEBUG] Epoch [7/20] - Iter [2/5] - Loss: 6.10059 - cls_loss: 0.07478 - reg_loss: 5.35283 - batch_positives: 16.00000 - lr: 0.00023
+[2026-06-29 16:19:33,670] [lib.experiment] [DEBUG] Epoch [7/20] - Iter [3/5] - Loss: 5.90369 - cls_loss: 0.03909 - reg_loss: 5.51282 - batch_positives: 19.00000 - lr: 0.00022
+[2026-06-29 16:19:34,285] [lib.experiment] [DEBUG] Epoch [7/20] - Iter [4/5] - Loss: 5.49412 - cls_loss: 0.03144 - reg_loss: 5.17970 - batch_positives: 18.00000 - lr: 0.00022
+[2026-06-29 16:19:34,286] [lib.experiment] [DEBUG] Epoch [7/20] finished.
+[2026-06-29 16:19:34,445] [lib.experiment] [DEBUG] Epoch [8/20] starting.
+[2026-06-29 16:19:35,096] [lib.experiment] [DEBUG] Epoch [8/20] - Iter [0/5] - Loss: 4.73986 - cls_loss: 0.06011 - reg_loss: 4.13880 - batch_positives: 14.00000 - lr: 0.00021
+[2026-06-29 16:19:35,739] [lib.experiment] [DEBUG] Epoch [8/20] - Iter [1/5] - Loss: 5.09908 - cls_loss: 0.03487 - reg_loss: 4.75042 - batch_positives: 15.00000 - lr: 0.00021
+[2026-06-29 16:19:36,375] [lib.experiment] [DEBUG] Epoch [8/20] - Iter [2/5] - Loss: 5.03871 - cls_loss: 0.04169 - reg_loss: 4.62183 - batch_positives: 14.00000 - lr: 0.00021
+[2026-06-29 16:19:36,966] [lib.experiment] [DEBUG] Epoch [8/20] - Iter [3/5] - Loss: 4.61133 - cls_loss: 0.02515 - reg_loss: 4.35983 - batch_positives: 14.00000 - lr: 0.00020
+[2026-06-29 16:19:37,735] [lib.experiment] [DEBUG] Epoch [8/20] - Iter [4/5] - Loss: 4.97078 - cls_loss: 0.04835 - reg_loss: 4.48732 - batch_positives: 15.00000 - lr: 0.00020
+[2026-06-29 16:19:37,736] [lib.experiment] [DEBUG] Epoch [8/20] finished.
+[2026-06-29 16:19:37,896] [lib.experiment] [DEBUG] Epoch [9/20] starting.
+[2026-06-29 16:19:38,582] [lib.experiment] [DEBUG] Epoch [9/20] - Iter [0/5] - Loss: 4.93275 - cls_loss: 0.03836 - reg_loss: 4.54910 - batch_positives: 18.00000 - lr: 0.00019
+[2026-06-29 16:19:39,233] [lib.experiment] [DEBUG] Epoch [9/20] - Iter [1/5] - Loss: 5.28352 - cls_loss: 0.05457 - reg_loss: 4.73782 - batch_positives: 20.00000 - lr: 0.00019
+[2026-06-29 16:19:39,930] [lib.experiment] [DEBUG] Epoch [9/20] - Iter [2/5] - Loss: 4.90751 - cls_loss: 0.03575 - reg_loss: 4.55004 - batch_positives: 19.00000 - lr: 0.00018
+[2026-06-29 16:19:40,609] [lib.experiment] [DEBUG] Epoch [9/20] - Iter [3/5] - Loss: 4.56156 - cls_loss: 0.03664 - reg_loss: 4.19518 - batch_positives: 16.00000 - lr: 0.00018
+[2026-06-29 16:19:41,275] [lib.experiment] [DEBUG] Epoch [9/20] - Iter [4/5] - Loss: 4.99625 - cls_loss: 0.03159 - reg_loss: 4.68037 - batch_positives: 15.00000 - lr: 0.00017
+[2026-06-29 16:19:41,275] [lib.experiment] [DEBUG] Epoch [9/20] finished.
+[2026-06-29 16:19:41,435] [lib.experiment] [DEBUG] Epoch [10/20] starting.
+[2026-06-29 16:19:42,095] [lib.experiment] [DEBUG] Epoch [10/20] - Iter [0/5] - Loss: 5.17480 - cls_loss: 0.01798 - reg_loss: 4.99504 - batch_positives: 19.00000 - lr: 0.00017
+[2026-06-29 16:19:42,843] [lib.experiment] [DEBUG] Epoch [10/20] - Iter [1/5] - Loss: 4.47546 - cls_loss: 0.07771 - reg_loss: 3.69841 - batch_positives: 12.00000 - lr: 0.00016
+[2026-06-29 16:19:43,529] [lib.experiment] [DEBUG] Epoch [10/20] - Iter [2/5] - Loss: 4.03296 - cls_loss: 0.04517 - reg_loss: 3.58126 - batch_positives: 12.00000 - lr: 0.00016
+[2026-06-29 16:19:44,234] [lib.experiment] [DEBUG] Epoch [10/20] - Iter [3/5] - Loss: 4.59622 - cls_loss: 0.02675 - reg_loss: 4.32869 - batch_positives: 14.00000 - lr: 0.00015
+[2026-06-29 16:19:44,888] [lib.experiment] [DEBUG] Epoch [10/20] - Iter [4/5] - Loss: 4.44936 - cls_loss: 0.02156 - reg_loss: 4.23378 - batch_positives: 14.00000 - lr: 0.00015
+[2026-06-29 16:19:44,888] [lib.experiment] [DEBUG] Epoch [10/20] finished.
+[2026-06-29 16:19:45,054] [lib.experiment] [DEBUG] Epoch [11/20] starting.
+[2026-06-29 16:19:45,764] [lib.experiment] [DEBUG] Epoch [11/20] - Iter [0/5] - Loss: 3.42846 - cls_loss: 0.02418 - reg_loss: 3.18664 - batch_positives: 13.00000 - lr: 0.00015
+[2026-06-29 16:19:46,457] [lib.experiment] [DEBUG] Epoch [11/20] - Iter [1/5] - Loss: 4.94773 - cls_loss: 0.03054 - reg_loss: 4.64229 - batch_positives: 17.00000 - lr: 0.00014
+[2026-06-29 16:19:47,131] [lib.experiment] [DEBUG] Epoch [11/20] - Iter [2/5] - Loss: 4.81363 - cls_loss: 0.06322 - reg_loss: 4.18142 - batch_positives: 17.00000 - lr: 0.00014
+[2026-06-29 16:19:48,049] [lib.experiment] [DEBUG] Epoch [11/20] - Iter [3/5] - Loss: 3.38370 - cls_loss: 0.00686 - reg_loss: 3.31507 - batch_positives: 15.00000 - lr: 0.00013
+[2026-06-29 16:19:48,794] [lib.experiment] [DEBUG] Epoch [11/20] - Iter [4/5] - Loss: 5.41351 - cls_loss: 0.05233 - reg_loss: 4.89025 - batch_positives: 16.00000 - lr: 0.00013
+[2026-06-29 16:19:48,794] [lib.experiment] [DEBUG] Epoch [11/20] finished.
+[2026-06-29 16:19:48,957] [lib.experiment] [DEBUG] Epoch [12/20] starting.
+[2026-06-29 16:19:49,596] [lib.experiment] [DEBUG] Epoch [12/20] - Iter [0/5] - Loss: 4.48737 - cls_loss: 0.05774 - reg_loss: 3.90999 - batch_positives: 12.00000 - lr: 0.00012
+[2026-06-29 16:19:50,256] [lib.experiment] [DEBUG] Epoch [12/20] - Iter [1/5] - Loss: 3.81750 - cls_loss: 0.02809 - reg_loss: 3.53663 - batch_positives: 12.00000 - lr: 0.00012
+[2026-06-29 16:19:50,926] [lib.experiment] [DEBUG] Epoch [12/20] - Iter [2/5] - Loss: 3.90226 - cls_loss: 0.04149 - reg_loss: 3.48736 - batch_positives: 14.00000 - lr: 0.00011
+[2026-06-29 16:19:51,552] [lib.experiment] [DEBUG] Epoch [12/20] - Iter [3/5] - Loss: 4.20182 - cls_loss: 0.01404 - reg_loss: 4.06139 - batch_positives: 14.00000 - lr: 0.00011
+[2026-06-29 16:19:52,236] [lib.experiment] [DEBUG] Epoch [12/20] - Iter [4/5] - Loss: 4.76022 - cls_loss: 0.02033 - reg_loss: 4.55695 - batch_positives: 17.00000 - lr: 0.00010
+[2026-06-29 16:19:52,237] [lib.experiment] [DEBUG] Epoch [12/20] finished.
+[2026-06-29 16:19:52,471] [lib.experiment] [DEBUG] Epoch [13/20] starting.
+[2026-06-29 16:19:53,186] [lib.experiment] [DEBUG] Epoch [13/20] - Iter [0/5] - Loss: 3.36513 - cls_loss: 0.01622 - reg_loss: 3.20291 - batch_positives: 15.00000 - lr: 0.00010
+[2026-06-29 16:19:54,098] [lib.experiment] [DEBUG] Epoch [13/20] - Iter [1/5] - Loss: 4.21190 - cls_loss: 0.04502 - reg_loss: 3.76167 - batch_positives: 15.00000 - lr: 0.00009
+[2026-06-29 16:19:54,923] [lib.experiment] [DEBUG] Epoch [13/20] - Iter [2/5] - Loss: 4.71975 - cls_loss: 0.05172 - reg_loss: 4.20256 - batch_positives: 15.00000 - lr: 0.00009
+[2026-06-29 16:19:55,586] [lib.experiment] [DEBUG] Epoch [13/20] - Iter [3/5] - Loss: 4.26185 - cls_loss: 0.04743 - reg_loss: 3.78752 - batch_positives: 16.00000 - lr: 0.00009
+[2026-06-29 16:19:56,207] [lib.experiment] [DEBUG] Epoch [13/20] - Iter [4/5] - Loss: 4.31999 - cls_loss: 0.02492 - reg_loss: 4.07083 - batch_positives: 16.00000 - lr: 0.00008
+[2026-06-29 16:19:56,208] [lib.experiment] [DEBUG] Epoch [13/20] finished.
+[2026-06-29 16:19:56,370] [lib.experiment] [DEBUG] Epoch [14/20] starting.
+[2026-06-29 16:19:56,988] [lib.experiment] [DEBUG] Epoch [14/20] - Iter [0/5] - Loss: 4.95020 - cls_loss: 0.05103 - reg_loss: 4.43987 - batch_positives: 14.00000 - lr: 0.00008
+[2026-06-29 16:19:57,704] [lib.experiment] [DEBUG] Epoch [14/20] - Iter [1/5] - Loss: 3.67002 - cls_loss: 0.01766 - reg_loss: 3.49340 - batch_positives: 17.00000 - lr: 0.00007
+[2026-06-29 16:19:58,415] [lib.experiment] [DEBUG] Epoch [14/20] - Iter [2/5] - Loss: 4.78671 - cls_loss: 0.02911 - reg_loss: 4.49564 - batch_positives: 22.00000 - lr: 0.00007
+[2026-06-29 16:19:59,181] [lib.experiment] [DEBUG] Epoch [14/20] - Iter [3/5] - Loss: 4.73588 - cls_loss: 0.04500 - reg_loss: 4.28587 - batch_positives: 16.00000 - lr: 0.00007
+[2026-06-29 16:19:59,860] [lib.experiment] [DEBUG] Epoch [14/20] - Iter [4/5] - Loss: 4.74205 - cls_loss: 0.04414 - reg_loss: 4.30064 - batch_positives: 21.00000 - lr: 0.00006
+[2026-06-29 16:19:59,861] [lib.experiment] [DEBUG] Epoch [14/20] finished.
+[2026-06-29 16:20:00,033] [lib.experiment] [DEBUG] Epoch [15/20] starting.
+[2026-06-29 16:20:00,787] [lib.experiment] [DEBUG] Epoch [15/20] - Iter [0/5] - Loss: 4.40425 - cls_loss: 0.02364 - reg_loss: 4.16784 - batch_positives: 17.00000 - lr: 0.00006
+[2026-06-29 16:20:01,565] [lib.experiment] [DEBUG] Epoch [15/20] - Iter [1/5] - Loss: 3.36245 - cls_loss: 0.04543 - reg_loss: 2.90814 - batch_positives: 12.00000 - lr: 0.00005
+[2026-06-29 16:20:02,298] [lib.experiment] [DEBUG] Epoch [15/20] - Iter [2/5] - Loss: 4.55441 - cls_loss: 0.04290 - reg_loss: 4.12537 - batch_positives: 18.00000 - lr: 0.00005
+[2026-06-29 16:20:02,990] [lib.experiment] [DEBUG] Epoch [15/20] - Iter [3/5] - Loss: 5.07996 - cls_loss: 0.03377 - reg_loss: 4.74226 - batch_positives: 21.00000 - lr: 0.00005
+[2026-06-29 16:20:03,626] [lib.experiment] [DEBUG] Epoch [15/20] - Iter [4/5] - Loss: 4.46871 - cls_loss: 0.02351 - reg_loss: 4.23359 - batch_positives: 17.00000 - lr: 0.00004
+[2026-06-29 16:20:03,627] [lib.experiment] [DEBUG] Epoch [15/20] finished.
+[2026-06-29 16:20:03,791] [lib.experiment] [DEBUG] Epoch [16/20] starting.
+[2026-06-29 16:20:04,463] [lib.experiment] [DEBUG] Epoch [16/20] - Iter [0/5] - Loss: 3.74081 - cls_loss: 0.01299 - reg_loss: 3.61086 - batch_positives: 16.00000 - lr: 0.00004
+[2026-06-29 16:20:05,337] [lib.experiment] [DEBUG] Epoch [16/20] - Iter [1/5] - Loss: 4.02595 - cls_loss: 0.03633 - reg_loss: 3.66260 - batch_positives: 16.00000 - lr: 0.00004
+[2026-06-29 16:20:05,970] [lib.experiment] [DEBUG] Epoch [16/20] - Iter [2/5] - Loss: 3.66894 - cls_loss: 0.01270 - reg_loss: 3.54197 - batch_positives: 12.00000 - lr: 0.00003
+[2026-06-29 16:20:06,618] [lib.experiment] [DEBUG] Epoch [16/20] - Iter [3/5] - Loss: 4.12431 - cls_loss: 0.01935 - reg_loss: 3.93077 - batch_positives: 12.00000 - lr: 0.00003
+[2026-06-29 16:20:07,220] [lib.experiment] [DEBUG] Epoch [16/20] - Iter [4/5] - Loss: 3.99685 - cls_loss: 0.02630 - reg_loss: 3.73389 - batch_positives: 13.00000 - lr: 0.00003
+[2026-06-29 16:20:07,220] [lib.experiment] [DEBUG] Epoch [16/20] finished.
+[2026-06-29 16:20:07,402] [lib.experiment] [DEBUG] Epoch [17/20] starting.
+[2026-06-29 16:20:08,310] [lib.experiment] [DEBUG] Epoch [17/20] - Iter [0/5] - Loss: 4.45017 - cls_loss: 0.03300 - reg_loss: 4.12016 - batch_positives: 16.00000 - lr: 0.00003
+[2026-06-29 16:20:09,121] [lib.experiment] [DEBUG] Epoch [17/20] - Iter [1/5] - Loss: 4.49149 - cls_loss: 0.06245 - reg_loss: 3.86694 - batch_positives: 15.00000 - lr: 0.00002
+[2026-06-29 16:20:10,051] [lib.experiment] [DEBUG] Epoch [17/20] - Iter [2/5] - Loss: 3.83500 - cls_loss: 0.02088 - reg_loss: 3.62624 - batch_positives: 14.00000 - lr: 0.00002
+[2026-06-29 16:20:10,903] [lib.experiment] [DEBUG] Epoch [17/20] - Iter [3/5] - Loss: 3.61361 - cls_loss: 0.02054 - reg_loss: 3.40819 - batch_positives: 14.00000 - lr: 0.00002
+[2026-06-29 16:20:11,650] [lib.experiment] [DEBUG] Epoch [17/20] - Iter [4/5] - Loss: 4.51000 - cls_loss: 0.02341 - reg_loss: 4.27589 - batch_positives: 14.00000 - lr: 0.00002
+[2026-06-29 16:20:11,651] [lib.experiment] [DEBUG] Epoch [17/20] finished.
+[2026-06-29 16:20:11,813] [lib.experiment] [DEBUG] Epoch [18/20] starting.
+[2026-06-29 16:20:12,490] [lib.experiment] [DEBUG] Epoch [18/20] - Iter [0/5] - Loss: 4.74999 - cls_loss: 0.01535 - reg_loss: 4.59649 - batch_positives: 20.00000 - lr: 0.00001
+[2026-06-29 16:20:13,175] [lib.experiment] [DEBUG] Epoch [18/20] - Iter [1/5] - Loss: 5.18890 - cls_loss: 0.03262 - reg_loss: 4.86268 - batch_positives: 24.00000 - lr: 0.00001
+[2026-06-29 16:20:13,830] [lib.experiment] [DEBUG] Epoch [18/20] - Iter [2/5] - Loss: 4.40322 - cls_loss: 0.04971 - reg_loss: 3.90615 - batch_positives: 14.00000 - lr: 0.00001
+[2026-06-29 16:20:14,540] [lib.experiment] [DEBUG] Epoch [18/20] - Iter [3/5] - Loss: 4.66898 - cls_loss: 0.01585 - reg_loss: 4.51047 - batch_positives: 15.00000 - lr: 0.00001
+[2026-06-29 16:20:15,192] [lib.experiment] [DEBUG] Epoch [18/20] - Iter [4/5] - Loss: 4.00748 - cls_loss: 0.03065 - reg_loss: 3.70098 - batch_positives: 15.00000 - lr: 0.00001
+[2026-06-29 16:20:15,192] [lib.experiment] [DEBUG] Epoch [18/20] finished.
+[2026-06-29 16:20:15,353] [lib.experiment] [DEBUG] Epoch [19/20] starting.
+[2026-06-29 16:20:15,997] [lib.experiment] [DEBUG] Epoch [19/20] - Iter [0/5] - Loss: 3.87476 - cls_loss: 0.02999 - reg_loss: 3.57490 - batch_positives: 13.00000 - lr: 0.00001
+[2026-06-29 16:20:16,632] [lib.experiment] [DEBUG] Epoch [19/20] - Iter [1/5] - Loss: 4.43114 - cls_loss: 0.02283 - reg_loss: 4.20283 - batch_positives: 14.00000 - lr: 0.00000
+[2026-06-29 16:20:17,276] [lib.experiment] [DEBUG] Epoch [19/20] - Iter [2/5] - Loss: 3.75105 - cls_loss: 0.02747 - reg_loss: 3.47631 - batch_positives: 15.00000 - lr: 0.00000
+[2026-06-29 16:20:17,885] [lib.experiment] [DEBUG] Epoch [19/20] - Iter [3/5] - Loss: 4.37176 - cls_loss: 0.02416 - reg_loss: 4.13020 - batch_positives: 15.00000 - lr: 0.00000
+[2026-06-29 16:20:18,476] [lib.experiment] [DEBUG] Epoch [19/20] - Iter [4/5] - Loss: 3.76173 - cls_loss: 0.02326 - reg_loss: 3.52910 - batch_positives: 16.00000 - lr: 0.00000
+[2026-06-29 16:20:18,476] [lib.experiment] [DEBUG] Epoch [19/20] finished.
+[2026-06-29 16:20:18,643] [lib.experiment] [DEBUG] Epoch [20/20] starting.
+[2026-06-29 16:20:19,252] [lib.experiment] [DEBUG] Epoch [20/20] - Iter [0/5] - Loss: 4.56360 - cls_loss: 0.02080 - reg_loss: 4.35559 - batch_positives: 19.00000 - lr: 0.00000
+[2026-06-29 16:20:19,880] [lib.experiment] [DEBUG] Epoch [20/20] - Iter [1/5] - Loss: 4.44669 - cls_loss: 0.03631 - reg_loss: 4.08359 - batch_positives: 19.00000 - lr: 0.00000
+[2026-06-29 16:20:20,525] [lib.experiment] [DEBUG] Epoch [20/20] - Iter [2/5] - Loss: 4.55960 - cls_loss: 0.01987 - reg_loss: 4.36092 - batch_positives: 17.00000 - lr: 0.00000
+[2026-06-29 16:20:21,166] [lib.experiment] [DEBUG] Epoch [20/20] - Iter [3/5] - Loss: 3.97603 - cls_loss: 0.04473 - reg_loss: 3.52875 - batch_positives: 14.00000 - lr: 0.00000
+[2026-06-29 16:20:21,771] [lib.experiment] [DEBUG] Epoch [20/20] - Iter [4/5] - Loss: 4.51892 - cls_loss: 0.01634 - reg_loss: 4.35549 - batch_positives: 17.00000 - lr: 0.00000
+[2026-06-29 16:20:21,771] [lib.experiment] [DEBUG] Epoch [20/20] finished.
+[2026-06-29 16:20:21,936] [lib.experiment] [DEBUG] Training session finished.
+[2026-06-29 16:20:22,161] [lib.runner] [INFO] Loading model experiments/laptop_smoke/models/model_0020.pt
+[2026-06-29 16:20:22,187] [lib.datasets.culane] [INFO] Indexing CULane test annotations (lazy loading)...
+[2026-06-29 16:20:22,210] [lib.datasets.culane] [INFO] 34680 annotations indexed.
+[2026-06-29 16:20:22,212] [lib.datasets.lane_dataset] [INFO] Limiting dataset to 20 samples (max_samples).
+[2026-06-29 16:20:22,213] [lib.experiment] [DEBUG] Beginning testing session. CFG used:
+# Laptop / CPU smoke-test config: trains LaneATT end-to-end on a tiny 20-image subset
+# so the full pipeline (data -> aug -> forward -> loss -> backward -> checkpoint) can be
+# verified locally before sending the code to a GPU server. Runs on CPU (auto-selected
+# when CUDA is unavailable) or GPU unchanged.
+# Model settings
+val_every: 1000          # large => no validation during the short run
+model_checkpoint_interval: 1
+seed: 0
+num_workers: 0           # 0 workers: simplest/most reliable for a small CPU run
+model:
+  name: LaneATT
+  parameters:
+    backbone: resnet18
+    S: &S 72
+    topk_anchors: 100    # fewer anchors => much cheaper NMS on CPU
+    anchors_freq_path: 'data/culane_anchors_freq.pt'
+    img_h: &img_h 360
+    img_w: &img_w 640
+batch_size: 4
+epochs: 20
+loss_parameters: {}
+train_parameters:
+  conf_threshold:
+  nms_thres: 15.
+  nms_topk: 3000
+test_parameters:
+  conf_threshold: 0.5
+  nms_thres: 50.
+  nms_topk: &max_lanes 4
+optimizer:
+  name: Adam
+  parameters:
+    lr: 0.0003
+lr_scheduler:
+  name: CosineAnnealingLR
+  parameters:
+    T_max: 100           # ~= epochs(20) * iters_per_epoch(ceil(20/4)=5)
+
+# Dataset settings
+datasets:
+  train:
+    type: LaneDataset
+    parameters:
+      S: *S
+      dataset: culane
+      split: train
+      img_size: [*img_h, *img_w]
+      max_lanes: *max_lanes
+      max_samples: 20    # only the first 20 training images
+      normalize: false
+      aug_chance: 1.0
+      augmentations:
+        - name: Affine
+          parameters:
+            translate_px:
+             x: !!python/tuple [-25, 25]
+             y: !!python/tuple [-10, 10]
+            rotate: !!python/tuple [-6, 6]
+            scale: !!python/tuple [0.85, 1.15]
+
+      root: "/Users/amannindra/Projects/Auto/CuLaneDataset"
+
+  test:
+    type: LaneDataset
+    parameters:
+      S: *S
+      dataset: culane
+      split: test
+      img_size: [*img_h, *img_w]
+      max_lanes: *max_lanes
+      max_samples: 20
+      normalize: false
+      aug_chance: 0
+      augmentations:
+      root: "/Users/amannindra/Projects/Auto/CuLaneDataset"
+
+  val:
+    type: LaneDataset
+    parameters:
+      S: *S
+      dataset: culane
+      split: val
+      img_size: [288, 512]
+      max_lanes: *max_lanes
+      max_samples: 20
+      normalize: false
+      aug_chance: 0
+      augmentations:
+      root: "/Users/amannindra/Projects/Auto/CuLaneDataset"
+
+[2026-06-29 16:20:23,524] [lib.experiment] [DEBUG] Testing session finished on model after epoch 20.
+[2026-06-29 16:20:23,524] [lib.experiment] [INFO] Results:
+ {'TP': 0, 'FP': 1, 'FN': 0, 'Precision': 0, 'Recall': 0, 'F1': 0}

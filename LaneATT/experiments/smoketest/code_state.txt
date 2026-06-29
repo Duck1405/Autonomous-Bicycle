@@ -1,0 +1,171 @@
+Git hash: 2f8583ba14eccba05e6779668bc3a38bc751984a
+
+*************
+Git diff:
+*************
+diff --git a/cfgs/laneatt_culane_resnet18.yml b/cfgs/laneatt_culane_resnet18.yml
+index e1455fc..636a201 100644
+--- a/cfgs/laneatt_culane_resnet18.yml
++++ b/cfgs/laneatt_culane_resnet18.yml
+@@ -51,11 +51,9 @@ datasets:
+              y: !!python/tuple [-10, 10]
+             rotate: !!python/tuple [-6, 6]
+             scale: !!python/tuple [0.85, 1.15]
+-        - name: HorizontalFlip
+-          parameters:
+-            p: 0.5
++        
+ 
+-      root: "datasets/culane"
++      root: "/Users/amannindra/Projects/Auto/CuLaneDataset"
+ 
+   test:
+     type: LaneDataset
+@@ -68,7 +66,7 @@ datasets:
+       normalize: false
+       aug_chance: 0
+       augmentations:
+-      root: "datasets/culane"
++      root: "/Users/amannindra/Projects/Auto/CuLaneDataset"
+ 
+   val:
+     type: LaneDataset
+@@ -81,4 +79,4 @@ datasets:
+       normalize: false
+       aug_chance: 0
+       augmentations:
+-      root: "datasets/culane"
++      root: "/Users/amannindra/Projects/Auto/CuLaneDataset"
+diff --git a/lib/datasets/lane_dataset.py b/lib/datasets/lane_dataset.py
+index d7b2ba7..2b309b0 100644
+--- a/lib/datasets/lane_dataset.py
++++ b/lib/datasets/lane_dataset.py
+@@ -2,12 +2,10 @@ import logging
+ 
+ import cv2
+ import numpy as np
+-import imgaug.augmenters as iaa
+-from imgaug.augmenters import Resize
++import albumentations as A
+ from torchvision.transforms import ToTensor
+ from torch.utils.data.dataset import Dataset
+ from scipy.interpolate import InterpolatedUnivariateSpline
+-from imgaug.augmentables.lines import LineString, LineStringsOnImage
+ 
+ from lib.lane import Lane
+ 
+@@ -55,17 +53,30 @@ class LaneDataset(Dataset):
+         self.transform_annotations()
+ 
+         if augmentations is not None:
+-            # add augmentations
+-            augmentations = [getattr(iaa, aug['name'])(**aug['parameters'])
+-                             for aug in augmentations]  # add augmentation
++            # build augmentations from config (imgaug-style: name + parameters)
++            augmentations = [self.build_augmentation(aug) for aug in augmentations]
+         else:
+             augmentations = []
+ 
+-        transformations = iaa.Sequential([Resize({'height': self.img_h, 'width': self.img_w})])
+         self.to_tensor = ToTensor()
+-        self.transform = iaa.Sequential([iaa.Sometimes(then_list=augmentations, p=aug_chance), transformations])
++        # Apply the augmentation block with probability `aug_chance` (like imgaug's
++        # Sometimes), then always resize to the model's input size. Lanes ride along
++        # as keypoints tagged with their lane index so they can be regrouped afterwards.
++        self.transform = A.Compose(
++            [A.Sequential(augmentations, p=aug_chance), A.Resize(height=self.img_h, width=self.img_w)],
++            keypoint_params=A.KeypointParams(format='xy', label_fields=['lane_ids'], remove_invisible=True),
++        )
+         self.max_lanes = self.dataset.max_lanes
+ 
++    @staticmethod
++    def build_augmentation(aug):
++        # Map an imgaug-style config entry to the matching albumentations transform.
++        # imgaug applies each augmenter with prob 1 by default, so default `p` to 1.0
++        # unless the config sets it explicitly (e.g. HorizontalFlip's p=0.5).
++        params = dict(aug['parameters'])
++        params.setdefault('p', 1.0)
++        return getattr(A, aug['name'])(**params)
++
+     @property
+     def annotations(self):
+         return self.dataset.annotations
+@@ -253,29 +264,43 @@ class LaneDataset(Dataset):
+                 #                 color=(255, 0, 255))
+         return img, fp, fn
+ 
+-    def lane_to_linestrings(self, lanes):
+-        lines = []
+-        for lane in lanes:
+-            lines.append(LineString(lane))
+-
+-        return lines
+-
+-    def linestrings_to_lanes(self, lines):
+-        lanes = []
+-        for line in lines:
+-            lanes.append(line.coords)
+-
+-        return lanes
++    def lanes_to_keypoints(self, lanes, img_shape):
++        # Flatten lanes into a single keypoint list, tagging each point with its lane
++        # index so albumentations can transform them and we can regroup afterwards.
++        # albumentations 2.x rejects keypoints outside [0, size), but raw annotations
++        # (e.g. CULane) include points on/just past the border, so clamp them into
++        # range here -- imgaug instead clipped after transforming.
++        img_h, img_w = img_shape[:2]
++        keypoints = []
++        lane_ids = []
++        for lane_idx, lane in enumerate(lanes):
++            for point in lane:
++                x = min(max(float(point[0]), 0.0), img_w - 1e-3)
++                y = min(max(float(point[1]), 0.0), img_h - 1e-3)
++                keypoints.append((x, y))
++                lane_ids.append(lane_idx)
++
++        return keypoints, lane_ids
++
++    def keypoints_to_lanes(self, keypoints, lane_ids, n_lanes):
++        # Regroup transformed keypoints back into per-lane point lists. Points that fell
++        # outside the image were dropped by albumentations, so a lane may shrink/vanish.
++        lanes = [[] for _ in range(n_lanes)]
++        for (x, y), lane_idx in zip(keypoints, lane_ids):
++            lanes[int(lane_idx)].append((x, y))
++
++        return [np.array(lane) for lane in lanes if len(lane) > 0]
+ 
+     def __getitem__(self, idx):
+         item = self.dataset[idx]
+         img_org = cv2.imread(item['path'])
+-        line_strings_org = self.lane_to_linestrings(item['old_anno']['lanes'])
+-        line_strings_org = LineStringsOnImage(line_strings_org, shape=img_org.shape)
++        org_lanes = item['old_anno']['lanes']
++        keypoints_org, lane_ids_org = self.lanes_to_keypoints(org_lanes, img_org.shape)
+         for i in range(30):
+-            img, line_strings = self.transform(image=img_org.copy(), line_strings=line_strings_org)
+-            line_strings.clip_out_of_image_()
+-            new_anno = {'path': item['path'], 'lanes': self.linestrings_to_lanes(line_strings)}
++            transformed = self.transform(image=img_org.copy(), keypoints=keypoints_org, lane_ids=lane_ids_org)
++            img = transformed['image']
++            lanes = self.keypoints_to_lanes(transformed['keypoints'], transformed['lane_ids'], len(org_lanes))
++            new_anno = {'path': item['path'], 'lanes': lanes}
+             try:
+                 label = self.transform_annotation(new_anno, img_wh=(self.img_w, self.img_h))['label']
+                 break
+diff --git a/lib/models/laneatt.py b/lib/models/laneatt.py
+index ad45029..642d21e 100644
+--- a/lib/models/laneatt.py
++++ b/lib/models/laneatt.py
+@@ -6,7 +6,11 @@ import numpy as np
+ import torch.nn as nn
+ from torchvision.models import resnet18, resnet34
+ 
+-from nms import nms
++try:
++    from nms import nms
++except ImportError:
++    # CUDA extension (lib/nms) unavailable (e.g. no NVIDIA GPU); use pure-PyTorch fallback.
++    from lib.nms_pytorch import nms
+ from lib.lane import Lane
+ from lib.focal_loss import FocalLoss
+ 
