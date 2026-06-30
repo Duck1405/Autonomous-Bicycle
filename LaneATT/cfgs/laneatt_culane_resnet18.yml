@@ -54,7 +54,7 @@ datasets:
             scale: !!python/tuple [0.85, 1.15]
         
 
-      root: "/Users/amannindra/Projects/Auto/CuLaneDataset"
+      root: "/home/anindra/data/CULane"
 
   test:
     type: LaneDataset
@@ -67,7 +67,7 @@ datasets:
       normalize: false
       aug_chance: 0
       augmentations:
-      root: "/Users/amannindra/Projects/Auto/CuLaneDataset"
+      root: "/home/anindra/data/CULane"
 
   val:
     type: LaneDataset
@@ -80,4 +80,4 @@ datasets:
       normalize: false
       aug_chance: 0
       augmentations:
-      root: "/Users/amannindra/Projects/Auto/CuLaneDataset"
+      root: "/home/anindra/data/CULanet"
