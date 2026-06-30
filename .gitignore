@@ -22,10 +22,10 @@ __pycache__/
 *.trt
 *.mp4
 *.mov
-data/
-.data/
-/home/aman/Projects/Auto/Autonomous-Bicycle/HybridNets/data
-/home/aman/Projects/Auto/Autonomous-Bicycle/HybridNets/data/
+
+LaneNet/lanenet-lane-detection-pytorch/data
+HybridNets/data
+HybridNets/data/
 LaneNet/archive
 LaneNet/lanenet-lane-detection-pytorch/TuSimple.tar.gz
 LaneNet/archive.zip
