@@ -34,6 +34,10 @@ def parse_args():
     return args
 
 
+'''
+
+python main.py train --exp_name Testing --cfg /Users/amannindra/Projects/Auto/Autonomous-Bicycle/LaneATT/cfgs/laneatt_culane_resnet18_laptop.yml
+'''
 def main():
     args = parse_args()
     exp = Experiment(args.exp_name, args, mode=args.mode)
@@ -41,6 +45,7 @@ def main():
         cfg_path = exp.cfg_path
     else:
         cfg_path = args.cfg
+        
     cfg = Config(cfg_path)
     exp.set_cfg(cfg, override=False)
     device = torch.device('cpu') if not torch.cuda.is_available() or args.cpu else torch.device('cuda')

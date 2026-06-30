@@ -92,23 +92,33 @@ class Runner:
         predictions = []
         self.exp.eval_start_callback(self.cfg)
         with torch.no_grad():
+            i = 0
             for idx, (images, _, _) in enumerate(tqdm(dataloader)):
                 images = images.to(self.device)
                 output = model(images, **test_parameters)
+                print(output)
                 prediction = model.decode(output, as_lanes=True)
+                print(f"predictions: {predictions}")
                 predictions.extend(prediction)
+                
                 if self.view:
+    
                     img = (images[0].cpu().permute(1, 2, 0).numpy() * 255).astype(np.uint8)
                     img, fp, fn = dataloader.dataset.draw_annotation(idx, img=img, pred=prediction[0])
                     if self.view == 'mistakes' and fp == 0 and fn == 0:
                         continue
                     cv2.imshow('pred', img)
                     cv2.waitKey(0)
+                    print(f"i: {i}")
+                    if (i > 5):
+                        cv2.destroyAllWindows()
+                        break
+                    i += 1
 
-        if save_predictions:
-            with open('predictions.pkl', 'wb') as handle:
-                pickle.dump(predictions, handle, protocol=pickle.HIGHEST_PROTOCOL)
-        self.exp.eval_end_callback(dataloader.dataset.dataset, predictions, epoch)
+        # if save_predictions:
+        #     with open('predictions.pkl', 'wb') as handle:
+        #         pickle.dump(predictions, handle, protocol=pickle.HIGHEST_PROTOCOL)
+        # self.exp.eval_end_callback(dataloader.dataset.dataset, predictions, epoch)
 
     def get_train_dataloader(self):
         train_dataset = self.cfg.get_dataset('train')
