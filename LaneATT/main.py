@@ -56,7 +56,10 @@ def main():
     # else:
     #     print("Device is not set to CPU")
         
-    
+    if device != torch.device("cuda"):
+        print(f"device: {device}")
+        sys.exit()
+        
     
 
     runner = Runner(cfg, exp, device, view=args.view, resume=args.resume, deterministic=args.deterministic)
