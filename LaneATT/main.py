@@ -60,8 +60,6 @@ def main():
         print(f"device: {device}")
         sys.exit()
         
-    
-
     runner = Runner(cfg, exp, device, view=args.view, resume=args.resume, deterministic=args.deterministic)
     if args.mode == 'train':
         try:
