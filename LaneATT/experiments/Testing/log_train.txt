@@ -1001,3 +1001,5 @@ datasets:
 [2026-06-29 16:59:12,459] [lib.experiment] [DEBUG] Testing session finished on model after epoch 20.
 [2026-06-29 16:59:12,459] [lib.experiment] [INFO] Results:
  {'TP': 0, 'FP': 0, 'FN': 0, 'Precision': 0, 'Recall': 0, 'F1': 0}
+[2026-06-29 21:22:12,914] [lib.experiment] [DEBUG] CLI Args:
+ Namespace(mode='train', exp_name='Testing', cfg='/Users/amannindra/Projects/Auto/Autonomous-Bicycle/LaneATT/cfgs/laneatt_culane_resnet18.yml', resume=False, epoch=None, cpu=False, save_predictions=False, view=None, deterministic=False)
