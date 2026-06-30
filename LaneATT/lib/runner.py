@@ -101,19 +101,19 @@ class Runner:
                 print(f"predictions: {predictions}")
                 predictions.extend(prediction)
                 
-                if self.view:
+                # if self.view:
     
-                    img = (images[0].cpu().permute(1, 2, 0).numpy() * 255).astype(np.uint8)
-                    img, fp, fn = dataloader.dataset.draw_annotation(idx, img=img, pred=prediction[0])
-                    if self.view == 'mistakes' and fp == 0 and fn == 0:
-                        continue
-                    cv2.imshow('pred', img)
-                    cv2.waitKey(0)
-                    print(f"i: {i}")
-                    if (i > 5):
-                        cv2.destroyAllWindows()
-                        break
-                    i += 1
+                #     img = (images[0].cpu().permute(1, 2, 0).numpy() * 255).astype(np.uint8)
+                #     img, fp, fn = dataloader.dataset.draw_annotation(idx, img=img, pred=prediction[0])
+                #     if self.view == 'mistakes' and fp == 0 and fn == 0:
+                #         continue
+                #     cv2.imshow('pred', img)
+                #     cv2.waitKey(0)
+                #     print(f"i: {i}")
+                #     if (i > 5):
+                #         cv2.destroyAllWindows()
+                #         break
+                #     i += 1
 
         # if save_predictions:
         #     with open('predictions.pkl', 'wb') as handle:

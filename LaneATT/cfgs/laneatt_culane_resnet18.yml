@@ -1,5 +1,5 @@
 # Model settings
-val_every: 1000
+val_every: 1
 model_checkpoint_interval: 1
 seed: 0
 num_workers: 28

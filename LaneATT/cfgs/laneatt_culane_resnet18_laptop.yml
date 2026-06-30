@@ -3,7 +3,7 @@
 # verified locally before sending the code to a GPU server. Runs on CPU (auto-selected
 # when CUDA is unavailable) or GPU unchanged.
 # Model settings
-val_every: 1000          # large => no validation during the short run
+val_every: 1          # large => no validation during the short run
 model_checkpoint_interval: 1
 seed: 0
 num_workers: 0           # 0 workers: simplest/most reliable for a small CPU run
