@@ -79,7 +79,11 @@ class Runner:
         model = self.cfg.get_model()
         model_path = self.exp.get_checkpoint_path(epoch)
         self.logger.info('Loading model %s', model_path)
-        model.load_state_dict(self.exp.get_epoch_model(epoch))
+        
+        # Load model on CPU:
+        state_dict = self.exp.get_epoch_model(epoch)
+        model.load_state_dict(state_dict)
+        # model.load_state_dict(self.exp.get_epoch_model(epoch), map_location=torch.device('cpu'))
         model = model.to(self.device)
         model.eval()
         if on_val:

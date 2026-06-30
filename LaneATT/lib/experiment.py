@@ -77,7 +77,7 @@ class Experiment:
         return os.path.join(self.models_dirpath, 'model_{:04d}.pt'.format(epoch))
 
     def get_epoch_model(self, epoch):
-        return torch.load(self.get_checkpoint_path(epoch))['model']
+        return torch.load(self.get_checkpoint_path(epoch), map_location=torch.device('cpu'))['model']
 
     def load_last_train_state(self, model, optimizer, scheduler):
         epoch = self.get_last_checkpoint_epoch()

@@ -81,3 +81,15 @@ datasets:
       aug_chance: 0
       augmentations:
       root: "/home/anindra/data/CULanet"
+  test2:
+    type: LaneDataset
+    parameters:
+      S: *S
+      dataset: culane
+      split: test2
+      img_size: [288, 512]
+      max_lanes: *max_lanes
+      normalize: false
+      aug_chance: 0
+      augmentations:
+      root: "/home/anindra/data/CULanet"

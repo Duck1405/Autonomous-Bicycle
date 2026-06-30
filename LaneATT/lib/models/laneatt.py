@@ -6,7 +6,11 @@ import numpy as np
 import torch.nn as nn
 from torchvision.models import resnet18, resnet34
 
-from nms import nms  # compiled CUDA extension (lib/nms); build it with `cd lib/nms && python setup.py install`
+
+try: 
+    from nms import nms # compiled CUDA extension (lib/nms); build it with `cd lib/nms && python setup.py install`
+except:
+    from ..nms_pytorch import nms
 from lib.lane import Lane
 from lib.focal_loss import FocalLoss
 
