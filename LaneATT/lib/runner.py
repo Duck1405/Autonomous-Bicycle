@@ -83,8 +83,10 @@ class Runner:
         model = model.to(self.device)
         model.eval()
         if on_val:
+            print("On Validation")
             dataloader = self.get_val_dataloader()
         else:
+            print("On Test loader")
             dataloader = self.get_test_dataloader()
         test_parameters = self.cfg.get_test_parameters()
         predictions = []

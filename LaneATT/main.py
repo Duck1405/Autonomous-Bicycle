@@ -6,7 +6,7 @@ import torch
 from lib.config import Config
 from lib.runner import Runner
 from lib.experiment import Experiment
-
+import sys
 
 def parse_args():
     parser = argparse.ArgumentParser(description="Train lane detector")
@@ -44,6 +44,15 @@ def main():
     cfg = Config(cfg_path)
     exp.set_cfg(cfg, override=False)
     device = torch.device('cpu') if not torch.cuda.is_available() or args.cpu else torch.device('cuda')
+
+    # print(f"device: {device} <--------------------------------")
+    # if device == torch.device("cpu"):
+    #     sys.exit()
+    # else:
+    #     print("Device is not set to CPU")
+        
+    
+    
 
     runner = Runner(cfg, exp, device, view=args.view, resume=args.resume, deterministic=args.deterministic)
     if args.mode == 'train':

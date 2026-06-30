@@ -46,7 +46,7 @@ datasets:
       split: train
       img_size: [*img_h, *img_w]
       max_lanes: *max_lanes
-      max_samples: 5    # only the first 20 training images
+      max_samples: 20    # only the first 20 training images
       normalize: false
       aug_chance: 1.0
       augmentations:
