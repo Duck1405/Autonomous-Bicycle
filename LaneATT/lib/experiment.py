@@ -19,6 +19,9 @@ class Experiment:
         self.log_path = os.path.join(self.exp_dirpath, 'log_{}.txt'.format(mode))
         self.tensorboard_writer = SummaryWriter(os.path.join(tensorboard_dir, exp_name))
         self.cfg = None
+        # Best-F1 tracking across validation runs (used in eval_end_callback).
+        self.best_f1 = -1.0
+        self.best_epoch = -1
         self.setup_exp_dir()
         self.setup_logging()
 

@@ -51,6 +51,7 @@ class VideoInference():
         if self.video_path == None:
             self.logger.exception("Video Path is not defined")
         cap = cv2.VideoCapture(self.video_path)
+        out_stream = None
         if (self.output_folder != None):
             folder = Path(self.output_folder)
             folder_count = sum(1 for item in folder.iterdir() if item.is_dir())
