@@ -81,3 +81,15 @@ datasets:
       aug_chance: 0
       augmentations:
       root: "/Users/amannindra/Projects/Auto/CuLaneDataset"
+  test2:
+    type: LaneDataset
+    parameters:
+      S: *S
+      dataset: culane
+      split: test2
+      img_size: [360, 640]
+      max_lanes: *max_lanes
+      normalize: false
+      aug_chance: 0
+      augmentations:
+      root: "/Users/amannindra/Projects/Auto/CuLaneDataset"

@@ -9,6 +9,7 @@ from torchvision.models import resnet18, resnet34
 
 try: 
     from nms import nms # compiled CUDA extension (lib/nms); build it with `cd lib/nms && python setup.py install`
+    print("WE ARE USING NMS CUDA")
 except:
     from ..nms_pytorch import nms
 from lib.lane import Lane

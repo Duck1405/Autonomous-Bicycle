@@ -13,6 +13,7 @@ SPLIT_FILES = {
     'train': "list/train.txt",
     'val': 'list/val.txt',
     'test': "list/test.txt",
+    "test2": "list/test2.txt",
     'normal': 'list/test_split/test0_normal.txt',
     'crowd': 'list/test_split/test1_crowd.txt',
     'hlight': 'list/test_split/test2_hlight.txt',

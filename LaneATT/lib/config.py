@@ -19,6 +19,7 @@ class Config:
         return self.config_str
 
     def get_dataset(self, split):
+        print("self.config['datasets'][split]['type']", self.config['datasets'][split]['type'])
         return getattr(datasets,
                        self.config['datasets'][split]['type'])(**self.config['datasets'][split]['parameters'])
 

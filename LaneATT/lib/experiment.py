@@ -129,6 +129,15 @@ class Experiment:
     def eval_end_callback(self, dataset, predictions, epoch_evaluated):
         metrics = self.save_epoch_results(dataset, predictions, epoch_evaluated)
         self.logger.debug('Testing session finished on model after epoch %d.', epoch_evaluated)
+        self.logger.info('[Epoch %d] %s  F1: %.4f | P: %.4f | R: %.4f | TP: %d FP: %d FN: %d',
+                     epoch_evaluated, dataset.split,
+                     metrics['F1'], metrics['Precision'], metrics['Recall'],
+                        metrics['TP'], metrics['FP'], metrics['FN'])
+        if metrics['F1'] > self.best_f1:
+            self.best_f1, self.best_epoch = metrics['F1'], epoch_evaluated
+            self.logger.info('*** New best F1: %.4f (epoch %d) ***', self.best_f1, self.best_epoch)
+        else:
+            self.logger.info('Best F1 so far: %.4f (epoch %d)', self.best_f1, self.best_epoch)
         self.logger.info('Results:\n %s', str(metrics))
 
     def save_epoch_results(self, dataset, predictions, epoch):

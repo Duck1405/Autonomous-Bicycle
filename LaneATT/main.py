@@ -7,6 +7,9 @@ from lib.config import Config
 from lib.runner import Runner
 from lib.experiment import Experiment
 import sys
+from pathlib import Path
+
+
 
 def parse_args():
     parser = argparse.ArgumentParser(description="Train lane detector")
@@ -50,11 +53,6 @@ def main():
     exp.set_cfg(cfg, override=False)
     device = torch.device('cpu') if not torch.cuda.is_available() or args.cpu else torch.device('cuda')
 
-    # print(f"device: {device} <--------------------------------")
-    # if device == torch.device("cpu"):
-    #     sys.exit()
-    # else:
-    #     print("Device is not set to CPU")
         
     if device != torch.device("cuda"):
         print(f"device: {device}")
@@ -67,6 +65,21 @@ def main():
         except KeyboardInterrupt:
             logging.info('Training interrupted.')
     runner.eval(epoch=args.epoch or exp.get_last_checkpoint_epoch(), save_predictions=args.save_predictions)
+    
+    conf_threshold = 0.5
+    nms_thres = 50
+    nms_topk = 4
+    
+    PROJECT_ROOT = Path(__file__).resolve().parent   # main.py lives at LaneATT/
+    VIDEO_DIR = PROJECT_ROOT / "video_input"          # folder; runner picks 1/2/3.mp4
+    OUTPUT_DIR = PROJECT_ROOT / "video_output"
+    
+    Path(OUTPUT_DIR).mkdir(parents=True, exist_ok=True)
+    
+    path_video = VIDEO_DIR
+    output_folder = OUTPUT_DIR
+    runner.get_video_inference(conf_threshold = conf_threshold,  nms_thres = nms_thres, nms_topk = nms_topk, path_video = path_video, output_folder = output_folder)
+    
 
 
 if __name__ == '__main__':

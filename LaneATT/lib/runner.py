@@ -6,6 +6,8 @@ import cv2
 import torch
 import numpy as np
 from tqdm import tqdm, trange
+import time
+from lib.video import VideoInference
 
 
 class Runner:
@@ -46,6 +48,8 @@ class Runner:
             self.exp.epoch_start_callback(epoch, max_epochs)
             model.train()
             pbar = tqdm(train_loader)
+            epoch_start = time.time()
+            running, n_iters = {}, 0
             for i, (images, labels, _) in enumerate(pbar):
                 images = images.to(self.device)
                 labels = labels.to(self.device)
@@ -61,6 +65,11 @@ class Runner:
 
                 # Scheduler step (iteration based)
                 scheduler.step()
+                
+                for k, v in loss_dict_i.items():
+                    running[k] = running.get(k, 0.0) + float(v)
+                n_iters += 1
+                
 
                 # Log
                 postfix_dict = {key: float(value) for key, value in loss_dict_i.items()}
@@ -68,6 +77,17 @@ class Runner:
                 self.exp.iter_end_callback(epoch, max_epochs, i, len(train_loader), loss.item(), postfix_dict)
                 postfix_dict['loss'] = loss.item()
                 pbar.set_postfix(ordered_dict=postfix_dict)
+                
+                
+            epoch_time = time.time() - epoch_start
+            means = {k: running[k] / max(n_iters, 1) for k in running}
+            it_per_s = n_iters / epoch_time if epoch_time > 0 else 0.0
+            eta_min = (max_epochs - epoch) * epoch_time / 60
+            summary = ' | '.join('{}: {:.4f}'.format(k, means[k]) for k in means)
+            self.logger.info('Epoch [%d/%d] %.1fs (%.2f it/s) | %s | lr: %.2e | ETA: %.1f min',
+                            epoch, max_epochs, epoch_time, it_per_s, summary,
+                            optimizer.param_groups[0]['lr'], eta_min)
+            
             self.exp.epoch_end_callback(epoch, max_epochs, model, optimizer, scheduler)
 
             # Validate
@@ -80,11 +100,11 @@ class Runner:
         model_path = self.exp.get_checkpoint_path(epoch)
         self.logger.info('Loading model %s', model_path)
         
-        # Load model on CPU:
         state_dict = self.exp.get_epoch_model(epoch)
         model.load_state_dict(state_dict)
-        # model.load_state_dict(self.exp.get_epoch_model(epoch), map_location=torch.device('cpu'))
         model = model.to(self.device)
+        
+        
         model.eval()
         if on_val:
             print("On Validation")
@@ -92,6 +112,9 @@ class Runner:
         else:
             print("On Test loader")
             dataloader = self.get_test_dataloader()
+            
+            
+        
         test_parameters = self.cfg.get_test_parameters()
         predictions = []
         self.exp.eval_start_callback(self.cfg)
@@ -100,29 +123,49 @@ class Runner:
             for idx, (images, _, _) in enumerate(tqdm(dataloader)):
                 images = images.to(self.device)
                 output = model(images, **test_parameters)
-                print(output)
                 prediction = model.decode(output, as_lanes=True)
-                print(f"predictions: {predictions}")
                 predictions.extend(prediction)
-                
-                # if self.view:
-    
-                #     img = (images[0].cpu().permute(1, 2, 0).numpy() * 255).astype(np.uint8)
-                #     img, fp, fn = dataloader.dataset.draw_annotation(idx, img=img, pred=prediction[0])
-                #     if self.view == 'mistakes' and fp == 0 and fn == 0:
-                #         continue
-                #     cv2.imshow('pred', img)
-                #     cv2.waitKey(0)
-                #     print(f"i: {i}")
-                #     if (i > 5):
-                #         cv2.destroyAllWindows()
-                #         break
-                #     i += 1
 
-        # if save_predictions:
-        #     with open('predictions.pkl', 'wb') as handle:
-        #         pickle.dump(predictions, handle, protocol=pickle.HIGHEST_PROTOCOL)
-        # self.exp.eval_end_callback(dataloader.dataset.dataset, predictions, epoch)
+                if self.view:
+                    img = (images[0].cpu().permute(1, 2, 0).numpy() * 255).astype(np.uint8)
+                    img, fp, fn = dataloader.dataset.draw_annotation(idx, img=img, pred=prediction[0])
+                    if self.view == 'mistakes' and fp == 0 and fn == 0:
+                        continue
+                    cv2.imshow('pred', img)
+                    cv2.waitKey(0)
+                    print(f"i: {i}")
+                    if (i > 5):
+                        cv2.destroyAllWindows()
+                        break
+                    i += 1
+
+        if save_predictions:
+            with open('predictions.pkl', 'wb') as handle:
+                pickle.dump(predictions, handle, protocol=pickle.HIGHEST_PROTOCOL)
+        self.exp.eval_end_callback(dataloader.dataset.dataset, predictions, epoch)
+        
+        
+        
+    def get_model(self,epoch):
+        model = self.cfg.get_model()
+        print("obtained Model:", model)
+        model_path = self.exp.get_checkpoint_path(epoch)
+        print("obtained Model path", model_path)
+        self.logger.info('Loading model %s', model_path)
+        
+        # Load model on CPU:
+        state_dict = self.exp.get_epoch_model(epoch)
+        model.load_state_dict(state_dict)
+        # model.load_state_dict(self.exp.get_epoch_model(epoch), map_location=torch.device('cpu'))
+        model = model.to(self.device)
+        model.eval()
+        # if on_val:
+        #     print("On Validation")
+        #     dataloader = self.get_val_dataloader()
+        # else:
+        #     print("On Test loader")
+        #     dataloader = self.get_test_dataloader()
+        return model
 
     def get_train_dataloader(self):
         train_dataset = self.cfg.get_dataset('train')
@@ -150,6 +193,17 @@ class Runner:
                                                  num_workers=self.num_workers,
                                                  worker_init_fn=self._worker_init_fn_)
         return val_loader
+    
+    def get_video_inference(self,conf_threshold,nms_thres, nms_topk, path_video, output_folder):
+        num = self.exp.get_last_checkpoint_epoch()
+        wieghts = self.get_model(num)
+        video = VideoInference(model_wieghts=wieghts, frame_limit = 99999, video_path = str(path_video / "1.mp4"), view = True, output_folder = output_folder, device = self.device, conf_threshold = conf_threshold, nms_thres = nms_thres, nms_topk = nms_topk)
+        video.video_eval()
+        video.set_video_path(str(path_video / "2.mp4"))
+        video.video_eval()
+        video.set_video_path(str(path_video / "3.mp4"))
+        video.video_eval()
+        
 
     @staticmethod
     def _worker_init_fn_(_):

@@ -71,7 +71,7 @@ class LaneDataset(Dataset):
         # Apply the augmentation block with probability `aug_chance` (like imgaug's
         # Sometimes), then always resize to the model's input size. Lanes ride along
         # as keypoints tagged with their lane index so they can be regrouped afterwards.
-        self.transform = A.Compose(
+        self.transform= A.Compose(
             [A.Sequential(augmentations, p=aug_chance), A.Resize(height=self.img_h, width=self.img_w)],
             keypoint_params=A.KeypointParams(format='xy', label_fields=['lane_ids'], remove_invisible=True),
         )
