@@ -109,11 +109,24 @@ buffer.seek(0)
 
 from lib.video import VideoInference
 
-video_test = "video_input/1.mp4"
+p = Path(r'video_input').glob('**/*')
 
-video = VideoInference(model_wieghts=buffer, frame_limit = 99999, video_path = video_test, view = True, output_folder = "video_output", device = device)
 
-video.image_eval()
+files = [x for x in p if x.is_file() and x.name != ".DS_Store"]
+print(files)
+
+video = VideoInference(model_wieghts=buffer, frame_limit = 99999, video_path = str(files[0]), view = True, output_folder = "video_output", device = device)
+for i in files: 
+    video_test = str(i)
+    video.set_video_path(video_test)
+    video.video_eval()
+# video_test = "video_input/1.mp4"
+
+# video = VideoInference(model_wieghts=buffer, frame_limit = 99999, video_path = video_test, view = True, output_folder = "video_output", device = device)
+
+# video.video_eval()
+
+# video_test = ""
 # model = LaneATT(backbone = "resnet18", topk_anchors = 1000, anchors_freq_path = "data/culane_anchors_freq.pt" )
 # state_dict = torch.load("experiments/Testing_Pinnacle/models/model_0007.pt", map_location='cpu')['model']
 # model.load_state_dict(state_dict)
