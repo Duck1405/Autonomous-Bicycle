@@ -19,6 +19,9 @@ class VideoInference():
         self.model = LaneATT(backbone = "resnet18", topk_anchors = 1000, anchors_freq_path = "data/culane_anchors_freq.pt" )
         self.device = device
         self.to_tensor = ToTensor()
+        self.view = view
+
+        
         self.load_model(model_wieghts)
         self.logger = logging.getLogger("VideoInference")
         self.logger.setLevel(logging.DEBUG)
@@ -31,9 +34,10 @@ class VideoInference():
     def load_model(self, wieghts):
         # `wieghts` is an already-built + weight-loaded nn.Module handed over by the
         # Runner (see Runner.get_model), so adopt it directly instead of loading a path.
-        self.model = wieghts
+        self.model = torch.load(wieghts)
         self.model = self.model.to(self.device)
         self.model.eval()
+    
         
     def update_paramaters(self, conf_threshold, nms_thres, nms_topk):
         self.conf_threshold = conf_threshold
@@ -46,10 +50,65 @@ class VideoInference():
     def set_frame(self, frame):
         self.frame = frame
         
+    def frame_eval(self,frame):
+        frame = cv2.resize(frame, (640, 360))
+        frame = self.to_tensor(frame)
+        frame = frame.unsqueeze(0).to(self.device)
+        output = self.model(frame, conf_threshold=self.conf_threshold, nms_thres=self.nms_thres, nms_topk=self.nms_topk)
+        lanes = self.model.decode(output, as_lanes=True)[0]
+        return lanes 
+    
+    def lanes_to_px(self, lanes, w, h):
+        out = []
+        for lane in lanes:
+            pts = lane.points.copy().astype(float)
+            pts[:, 0] *= w          # Lane.points are normalized (x, y) in [0, 1]
+            pts[:, 1] *= h
+            out.append(pts.round().astype(int))
+        return out    
+    def mid_line(self, lanes_list):
+             
+    
+        return
+
+    def image_eval(self):
+        if self.video_path == None or Path(self.video_path).exists():
+            self.logger.exception("Video Path is not defined")
+        else: 
+            print("No problem with Video Path")
+        print(self.video_path)
+        cap = cv2.VideoCapture(self.video_path)
+        while True:
+            ret, frame = cap.read()
+            if not ret:
+                break
+            # frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+            evaluation = self.frame_eval(frame)
+            out = self.lanes_to_px(evaluation, frame.shape[1], frame.shape[0])
+            print(out)
+            print(type(out))
+            
+            
+            # for pts in self.lanes_to_px(evaluation, frame.shape[1], frame.shape[0]):
+            #     print(f"pts:{pts}")               
+            #     for p0, p1 in zip(pts[:], pts[:]):
+            #         print(f"p0: {p0.shape}, p0: {p0}")
+            #         print(f"p1: {p1.shape}, {p1}")
+                    
+                    
+            #         cv2.line(frame, tuple(p0), tuple(p1), (0, 255, 0), 3)
+            
+            
+            break
+        
+        
         
     def video_eval(self):
-        if self.video_path == None:
+        if self.video_path == None or Path(self.video_path).exists():
             self.logger.exception("Video Path is not defined")
+        else: 
+            print("No problem with Video Path")
+        print(self.video_path)
         cap = cv2.VideoCapture(self.video_path)
         out_stream = None
         if (self.output_folder != None):
@@ -76,6 +135,7 @@ class VideoInference():
                 datefmt='%Y-%m-%d %H:%M:%S'))
             self.logger.addHandler(fh)
             fourcc = cv2.VideoWriter_fourcc(*'mp4v')
+            print(f"Output Located: {final_video_path}")
             out_stream = cv2.VideoWriter(str(final_video_path), fourcc, 30.0, (int(cap.get(cv2.CAP_PROP_FRAME_WIDTH)), int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))))
         i = 0
         
@@ -97,9 +157,10 @@ class VideoInference():
                 break
             # frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
             evaluation = self.frame_eval(frame)
-            for pts in self.lanes_to_px(evaluation, frame.shape[1], frame.shape[0]):
-                for p0, p1 in zip(pts[:-1], pts[1:]):
-                    cv2.line(frame, tuple(p0), tuple(p1), (0, 255, 0), 3)
+            if self.view:
+                for pts in self.lanes_to_px(evaluation, frame.shape[1], frame.shape[0]):
+                    for p0, p1 in zip(pts[:-1], pts[1:]):
+                        cv2.line(frame, tuple(p0), tuple(p1), (0, 255, 0), 3)
             if (self.output_folder != None):
                 out_stream.write(frame)
             
@@ -112,48 +173,6 @@ class VideoInference():
         self.logger.info("second: {}".format(t2-t1))
 
         
-    def frame_eval(self,frame):
-        frame = cv2.resize(frame, (640, 360))
-        frame = self.to_tensor(frame)
-        frame = frame.unsqueeze(0).to(self.device)
-        output = self.model(frame, conf_threshold=self.conf_threshold, nms_thres=self.nms_thres, nms_topk=self.nms_topk)
-        lanes = self.model.decode(output, as_lanes=True)[0]
-        return lanes 
     
-    def lanes_to_px(self, lanes, w, h):
-        out = []
-        for lane in lanes:
-            pts = lane.points.copy().astype(float)
-            pts[:, 0] *= w          # Lane.points are normalized (x, y) in [0, 1]
-            pts[:, 1] *= h
-            out.append(pts.round().astype(int))
-        return out
-    
-    def lanes_to_keypoints(self, lanes, img_shape):
-        # Flatten lanes into a single keypoint list, tagging each point with its lane
-        # index so albumentations can transform them and we can regroup afterwards.
-        # albumentations 2.x rejects keypoints outside [0, size), but raw annotations
-        # (e.g. CULane) include points on/just past the border, so clamp them into
-        # range here -- imgaug instead clipped after transforming.
-        img_h, img_w = img_shape[:2]
-        keypoints = []
-        lane_ids = []
-        for lane_idx, lane in enumerate(lanes):
-            for point in lane:
-                x = min(max(float(point[0]), 0.0), img_w - 1e-3)
-                y = min(max(float(point[1]), 0.0), img_h - 1e-3)
-                keypoints.append((x, y))
-                lane_ids.append(lane_idx)
-
-        return keypoints, lane_ids
-    def keypoints_to_lanes(self, keypoints, lane_ids, n_lanes):
-        # Regroup transformed keypoints back into per-lane point lists. Points that fell
-        # outside the image were dropped by albumentations, so a lane may shrink/vanish.
-        lanes = [[] for _ in range(n_lanes)]
-        for (x, y), lane_idx in zip(keypoints, lane_ids):
-            lanes[int(lane_idx)].append((x, y))
-
-        return [np.array(lane) for lane in lanes if len(lane) > 0]
-            
 
     

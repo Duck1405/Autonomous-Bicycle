@@ -1,19 +1,11 @@
 
 
-
-
-
-
-
-
-
-
 Used to allocate a slurm job 
 salloc   --partition=cenvalarc.gpu  --nodes=1   --ntasks-per-node=2   --cpus-per-task=32   --mem=96G   --gres=gpu:l40s:1   --time=24:00:00
-
-
-
 
 GET GPUS and their node
 
 sinfo -N -O "nodehost:18,statecompact:8,gres:24,gresused:24" | grep -i gpu
+
+Check if any GPUs in my server: 
+squeue -u anindra

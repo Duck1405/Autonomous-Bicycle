@@ -82,15 +82,38 @@ def lanes_to_px(lanes, w, h):
 infer_params = {'conf_threshold': 0, 'nms_thres': 50.0, 'nms_topk': 4}
 # print(type(model))
 
-model = torch.load("/Users/amannindra/Projects/Auto/Autonomous-Bicycle/LaneATT/experiments/Testing_Pinnacle/models/model_0007.pt", map_location='cpu')['model']
-# print(torch.equal(model.reg_layer.weight.detach().cpu(), ckpt['reg_layer.weight']))  # -> True
+import io
+
 device = torch.device("cpu")
 
-from video import VideoInference
+# VideoInference.load_model (lib/video.py) does `torch.load(wieghts)`, which requires
+# either a path or a seekable file-like object -- it can't accept a live nn.Module
+# (torch.load needs .seek()/.read()). So rebuild the model the same way
+# Runner.get_model does (architecture from config + state_dict from the checkpoint's
+# 'model' key), then re-serialize it into an in-memory buffer that torch.load() can
+# actually consume, without touching video.py.
+config_path = "/Users/amannindra/Projects/Auto/Autonomous-Bicycle/LaneATT/experiments/Testing_Pinnacle/config.yaml"
+cfg = Config(config_path)
+model = cfg.get_model()
+state_dict = torch.load(
+    "/Users/amannindra/Projects/Auto/Autonomous-Bicycle/LaneATT/experiments/Testing_Pinnacle/models/model_0007.pt",
+    map_location='cpu'
+)['model']
+model.load_state_dict(state_dict)
+model = model.to(device)
+model.eval()
 
-video = VideoInference(model_wieghts="experiments/Testing_Pinnacle/models/model_0007.pt", frame_limit = 99999, video_path = "/Users/amannindra/Projects/Auto/Autonomous-Bicycle/video_input/1.mp4", view = True, output_folder = "/Users/amannindra/Projects/Auto/Autonomous-Bicycle/LaneATT/video", device = device)
+buffer = io.BytesIO()
+torch.save(model, buffer)
+buffer.seek(0)
 
-video.video_eval()
+from lib.video import VideoInference
+
+video_test = "video_input/1.mp4"
+
+video = VideoInference(model_wieghts=buffer, frame_limit = 99999, video_path = video_test, view = True, output_folder = "video_output", device = device)
+
+video.image_eval()
 # model = LaneATT(backbone = "resnet18", topk_anchors = 1000, anchors_freq_path = "data/culane_anchors_freq.pt" )
 # state_dict = torch.load("experiments/Testing_Pinnacle/models/model_0007.pt", map_location='cpu')['model']
 # model.load_state_dict(state_dict)
