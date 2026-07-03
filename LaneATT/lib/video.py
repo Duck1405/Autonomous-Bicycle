@@ -48,6 +48,8 @@ class VideoInference():
     
     def set_video_path(self, video_path):
         self.video_path = video_path 
+    def set_output_folder(self, output_path):
+        self.output_folder = output_path
     def set_frame(self, frame):
         self.frame = frame
         

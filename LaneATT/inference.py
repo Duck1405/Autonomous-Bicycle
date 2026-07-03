@@ -120,6 +120,7 @@ for i in files:
     video_test = str(i)
     video.set_video_path(video_test)
     video.video_eval()
+    
 # video_test = "video_input/1.mp4"
 
 # video = VideoInference(model_wieghts=buffer, frame_limit = 99999, video_path = video_test, view = True, output_folder = "video_output", device = device)
