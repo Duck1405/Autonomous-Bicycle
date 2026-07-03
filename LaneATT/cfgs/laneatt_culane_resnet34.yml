@@ -1,7 +1,8 @@
 # Model settings
-val_every: 1000
+val_every: 2
 model_checkpoint_interval: 1
 seed: 0
+num_workers: 28
 model:
   name: LaneATT
   parameters:
@@ -11,8 +12,8 @@ model:
     anchors_freq_path: 'data/culane_anchors_freq.pt'
     img_h: &img_h 360
     img_w: &img_w 640
-batch_size: 8
-epochs: 15
+batch_size: 32
+epochs: 20
 loss_parameters: {}
 train_parameters:
   conf_threshold:
@@ -29,7 +30,7 @@ optimizer:
 lr_scheduler:
   name: CosineAnnealingLR
   parameters:
-    T_max: 166650 # 15 * 11110 iterations
+    T_max: 55550 #  20*(88880/32)
 
 # Dataset settings
 datasets:
@@ -44,18 +45,36 @@ datasets:
       normalize: false
       aug_chance: 1.0
       augmentations:
-        - name: Affine
-          parameters:
-            translate_px:
-             x: !!python/tuple [-25, 25]
-             y: !!python/tuple [-10, 10]
-            rotate: !!python/tuple [-6, 6]
-            scale: !!python/tuple [0.85, 1.15]
-        - name: HorizontalFlip
-          parameters:
-            p: 0.5
-
-      root: "datasets/culane"
+      - name: Affine                      # geometric — moves keypoints; keep mild
+        parameters:
+          translate_px:
+            x: !!python/tuple [-25, 25]
+            y: !!python/tuple [-10, 10]
+          rotate: !!python/tuple [-6, 6]
+          scale: !!python/tuple [0.85, 1.15]
+          p: 0.5
+      - name: Perspective                 # optional, simulates road grade / cam pitch
+        parameters:
+          scale: !!python/tuple [0.02, 0.05]
+          p: 0.2
+      - name: HorizontalFlip
+        parameters: {p: 0.5}
+      - name: RandomBrightnessContrast
+        parameters: { brightness_limit: 0.3,  contrast_limit: 0.3, p: 0.5 }
+      - name: HueSaturationValue
+        parameters: { hue_shift_limit: 10, sat_shift_limit: 30, val_shift_limit: 20, p: 0.4 }
+      - name: RandomGamma
+        parameters: { gamma_limit: !!python/tuple [80, 120], p: 0.3 }
+      - name: RandomShadow
+        parameters: { p: 0.3 }
+      - name: MotionBlur
+        parameters: { blur_limit: 5, p: 0.2 }
+      - name: GaussNoise
+        parameters: { p: 0.2 }
+      - name: ImageCompression
+        parameters: { p: 0.2 }
+  
+      root: "/home/anindra/data/CULane"
 
   test:
     type: LaneDataset
@@ -68,7 +87,7 @@ datasets:
       normalize: false
       aug_chance: 0
       augmentations:
-      root: "datasets/culane"
+      root: "/home/anindra/data/CULane"
 
   val:
     type: LaneDataset
@@ -76,9 +95,21 @@ datasets:
       S: *S
       dataset: culane
       split: val
-      img_size: [*img_h, *img_w]
+      img_size: [360, 640]
       max_lanes: *max_lanes
       normalize: false
       aug_chance: 0
       augmentations:
-      root: "datasets/culane"
+      root: "/home/anindra/data/CULane"
+  test2:
+    type: LaneDataset
+    parameters:
+      S: *S
+      dataset: culane
+      split: test2
+      img_size: [360, 640]
+      max_lanes: *max_lanes
+      normalize: false
+      aug_chance: 0
+      augmentations:
+      root: "/home/anindra/data/CULane"
