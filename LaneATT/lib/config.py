@@ -28,6 +28,13 @@ class Config:
         parameters = self.config['model']['parameters']
         return getattr(models, name)(**parameters, **kwargs)
 
+    def get_model_name(self):
+        # `model.name` must stay a real class in lib/models (used by get_model's
+        # getattr lookup). `model_id` is a separate, human-readable identifier for
+        # this config variant (e.g. "LaneATTresnet18"), used for naming things like
+        # per-run output folders. Falls back to model.name if model_id isn't set.
+        return self.config['model'].get('model_id', self.config['model']['name'])
+
     def get_optimizer(self, model_parameters):
         return getattr(torch.optim, self.config['optimizer']['name'])(model_parameters,
                                                                       **self.config['optimizer']['parameters'])

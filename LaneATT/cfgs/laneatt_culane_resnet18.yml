@@ -5,6 +5,7 @@ seed: 0
 num_workers: 28
 model:
   name: LaneATT
+  model_id: LaneATTresnet18
   parameters:
     backbone: resnet18
     S: &S 72
