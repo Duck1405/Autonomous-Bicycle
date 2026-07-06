@@ -31,7 +31,7 @@ optimizer:
 lr_scheduler:
   name: CosineAnnealingLR
   parameters:
-    T_max: 55550 #  20*(88880/32)
+    T_max: 41000 #  30*(88880/64)
 
 # Dataset settings
 datasets:
