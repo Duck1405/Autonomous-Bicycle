@@ -197,9 +197,12 @@ class Runner:
     def get_video_inference(self,conf_threshold,nms_thres, nms_topk, path_video, output_folder):
         num = self.exp.get_last_checkpoint_epoch()
         wieghts = self.get_model(num)
-        files = [x for x in path_video if path_video.is_file() and x.name != ".DS_Store"]
-        
-        video = VideoInference(model_wieghts=wieghts, frame_limit = 99999, video_path = str(path_video / "1.mp4"), view = True, output_folder = output_folder, device = self.device, conf_threshold = conf_threshold, nms_thres = nms_thres, nms_topk = nms_topk)
+        if not path_video.is_dir():
+            self.logger.warning('Video input folder %s not found — skipping video inference', path_video)
+            return
+        files = [x for x in sorted(path_video.iterdir()) if x.is_file() and x.name != ".DS_Store"]
+
+        video = VideoInference(model_wieghts=wieghts, frame_limit = 99999, video_path = None, view = True, output_folder = output_folder, device = self.device, conf_threshold = conf_threshold, nms_thres = nms_thres, nms_topk = nms_topk)
         for i in files: 
             video_test = str(i)
             video.set_video_path(video_test)

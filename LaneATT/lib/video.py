@@ -1,5 +1,4 @@
 import math
-from lib.models.laneatt import LaneATT
 import torch
 import cv2
 import time as time
@@ -17,7 +16,6 @@ class VideoInference():
         self.video_path = video_path
         self.output_folder = output_folder
         self.frame_limit = frame_limit
-        self.model = LaneATT(backbone = "resnet18", topk_anchors = 1000, anchors_freq_path = "data/culane_anchors_freq.pt" )
         self.device = device
         self.to_tensor = ToTensor()
         self.view = view
@@ -35,8 +33,7 @@ class VideoInference():
     def load_model(self, wieghts):
         # `wieghts` is an already-built + weight-loaded nn.Module handed over by the
         # Runner (see Runner.get_model), so adopt it directly instead of loading a path.
-        self.model = torch.load(wieghts)
-        self.model = self.model.to(self.device)
+        self.model = wieghts.to(self.device)
         self.model.eval()
     
         
@@ -148,10 +145,8 @@ class VideoInference():
         return left_points, right_points, mid_points
 
     def image_eval(self):
-        if self.video_path == None or Path(self.video_path).exists():
-            self.logger.exception("Video Path is not defined")
-        else: 
-            print("No problem with Video Path")
+        if self.video_path is None or not Path(self.video_path).exists():
+            raise FileNotFoundError(f"Video path does not exist: {self.video_path}")
         print(self.video_path)
         cap = cv2.VideoCapture(self.video_path)
         i = 0
@@ -181,10 +176,8 @@ class VideoInference():
         
         
     def video_eval(self):
-        if self.video_path == None or Path(self.video_path).exists():
-            self.logger.exception("Video Path is not defined")
-        else: 
-            print("No problem with Video Path")
+        if self.video_path is None or not Path(self.video_path).exists():
+            raise FileNotFoundError(f"Video path does not exist: {self.video_path}")
         print(f"Video Selected: {self.video_path}")
         cap = cv2.VideoCapture(self.video_path)
         out_stream = None

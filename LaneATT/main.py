@@ -54,11 +54,20 @@ def main():
     device = torch.device('cpu') if not torch.cuda.is_available() or args.cpu else torch.device('cuda')
 
         
-    if device != torch.device("cuda"):
-        print(f"device: {device}")
-        sys.exit()
+    if device.type != "cuda" and not args.cpu:
+        # Exit non-zero so SLURM reports FAILED — a bare sys.exit() exits 0 and the
+        # scheduler marks a job that never trained as COMPLETED.
+        sys.exit(f"ERROR: no usable GPU (torch.cuda.is_available() is False), device would be '{device}'. "
+                 "Check nvidia-smi / the node's MPS daemon, or pass --cpu to run on CPU deliberately.")
+    
         
     runner = Runner(cfg, exp, device, view=args.view, resume=args.resume, deterministic=args.deterministic)
+    
+    
+    if args.mode == "test":
+        return
+    
+    
     if args.mode == 'train':
         try:
             runner.train()
