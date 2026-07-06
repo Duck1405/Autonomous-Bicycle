@@ -195,14 +195,23 @@ class Runner:
         return val_loader
     
     def get_video_inference(self,conf_threshold,nms_thres, nms_topk, path_video, output_folder):
-        num = self.exp.get_last_checkpoint_epoch()
-        wieghts = self.get_model(num)
+        # Prefer the best-F1 checkpoint from this training session's validations;
+        # fall back to the last checkpoint (e.g. training ran with no val passes).
+        if self.exp.best_epoch > 0:
+            num = self.exp.best_epoch
+            self.logger.info('Video inference with best model: epoch %d (F1 %.4f)', num, self.exp.best_f1)
+        else:
+            num = self.exp.get_last_checkpoint_epoch()
+            self.logger.info('Video inference with last checkpoint: epoch %d (no best-F1 recorded)', num)
         if not path_video.is_dir():
             self.logger.warning('Video input folder %s not found — skipping video inference', path_video)
             return
         files = [x for x in sorted(path_video.iterdir()) if x.is_file() and x.name != ".DS_Store"]
 
-        video = VideoInference(model_wieghts=wieghts, frame_limit = 99999, video_path = None, view = True, output_folder = output_folder, device = self.device, conf_threshold = conf_threshold, nms_thres = nms_thres, nms_topk = nms_topk)
+        # video_output/<exp_name>/model_<NNNN>/ — same layout inference.py uses;
+        # VideoInference adds <video>/run<K>/ per video.
+        output_folder = output_folder / self.exp.name / f"model_{num:04d}"
+        video = VideoInference(model_archiecture=self.cfg.get_model(), model_path=self.exp.get_checkpoint_path(num), frame_limit = 99999, video_path = None, view = True, output_folder = output_folder, device = self.device, conf_threshold = conf_threshold, nms_thres = nms_thres, nms_topk = nms_topk)
         for i in files: 
             video_test = str(i)
             video.set_video_path(video_test)

@@ -79,7 +79,7 @@ def main():
     
     PROJECT_ROOT = Path(__file__).resolve().parent   # main.py lives at LaneATT/
     VIDEO_DIR = PROJECT_ROOT / "video_input"          # folder; runner picks 1/2/3.mp4
-    OUTPUT_DIR = PROJECT_ROOT / f"video_output_{cfg.get_model_name()}"
+    OUTPUT_DIR = PROJECT_ROOT / "video_output"   # runner nests <model_arch>/epoch_<N>/<video>/run<K>/ inside
     
     Path(OUTPUT_DIR).mkdir(parents=True, exist_ok=True)
     

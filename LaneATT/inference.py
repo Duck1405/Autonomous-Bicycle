@@ -79,43 +79,44 @@ def lanes_to_px(lanes, w, h):
 # model = runner.eval(epoch = 7)
 
 
-infer_params = {'conf_threshold': 0, 'nms_thres': 50.0, 'nms_topk': 4}
 # print(type(model))
 
 import io
 
 device = torch.device("cpu")
 
-# VideoInference.load_model (lib/video.py) does `torch.load(wieghts)`, which requires
-# either a path or a seekable file-like object -- it can't accept a live nn.Module
-# (torch.load needs .seek()/.read()). So rebuild the model the same way
-# Runner.get_model does (architecture from config + state_dict from the checkpoint's
-# 'model' key), then re-serialize it into an in-memory buffer that torch.load() can
-# actually consume, without touching video.py.
-config_path = "/Users/amannindra/Projects/Auto/Autonomous-Bicycle/LaneATT/experiments/Testing_Pinnacle/config.yaml"
+config_path = "/Users/amannindra/Projects/Auto/Autonomous-Bicycle/LaneATT/experiments/LaneATTresnet34Aug2/config.yaml"
 cfg = Config(config_path)
 model = cfg.get_model()
-state_dict = torch.load(
-    "/Users/amannindra/Projects/Auto/Autonomous-Bicycle/LaneATT/experiments/Testing_Pinnacle/models/model_0007.pt",
-    map_location='cpu'
-)['model']
-model.load_state_dict(state_dict)
-model = model.to(device)
-model.eval()
+# state_dict = torch.load(
+#     "experiments/LaneATTresnet34Aug2/models/model_0020.pt",
+#     map_location='cpu'
+# )['model']
+# model.load_state_dict(state_dict)
+# model = model.to(device)
+# model.eval()
 
-buffer = io.BytesIO()
-torch.save(model, buffer)
-buffer.seek(0)
+# buffer = io.BytesIO()
+# torch.save(model, buffer)
+# buffer.seek(0)
 
 from lib.video import VideoInference
 
 p = Path(r'video_input').glob('**/*')
-
-
 files = [x for x in p if x.is_file() and x.name != ".DS_Store"]
-print(files)
+print(f"files: {files}")
+path_model = "experiments/LaneATTresnet34Aug2/models/model_0013.pt"
+name = Path(path_model).stem
+model_name = Path(path_model).parent.parent.name
 
-video = VideoInference(model_wieghts=buffer, frame_limit = 99999, video_path = str(files[0]), view = True, output_folder = "video_output", device = device)
+print(f"name: {name}")
+print(f"model_name: {model_name}")
+
+
+output_folder = Path("video_output") / Path(model_name) / name
+print(f"output_folder: {output_folder}")
+
+video = VideoInference(model_archiecture = cfg.get_model(), model_path=path_model, frame_limit = 1500, video_path = str(files[0]), view = True, output_folder =output_folder, device = device)
 for i in files: 
     video_test = str(i)
     video.set_video_path(video_test)

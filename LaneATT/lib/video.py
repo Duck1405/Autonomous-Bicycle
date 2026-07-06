@@ -1,4 +1,5 @@
 import math
+import re
 import torch
 import cv2
 import time as time
@@ -11,17 +12,23 @@ import logging
 import matplotlib.pyplot as plt
 
 class VideoInference():
-    def __init__(self, model_wieghts, video_path = None, output_folder = None, view = True, frame_limit = 10000000000, device = torch.device("cuda:0"), conf_threshold = 0.5,  nms_thres = 50, nms_topk = 2):
+    def __init__(self,model_archiecture, model_path, video_path = None, output_folder = None, view = True, frame_limit = 10000000000, device = torch.device("cuda:0"), conf_threshold = 0.5,  nms_thres = 50, nms_topk = 2):
         
         self.video_path = video_path
+        
+        
+        if output_folder != None:
+            output_path = Path(output_folder)
+            output_path.mkdir(parents=True, exist_ok=True)
         self.output_folder = output_folder
         self.frame_limit = frame_limit
         self.device = device
         self.to_tensor = ToTensor()
         self.view = view
+        self.model_archiecture = model_archiecture
 
         
-        self.load_model(model_wieghts)
+        self.load_model(model_path)
         self.logger = logging.getLogger("VideoInference")
         self.logger.setLevel(logging.DEBUG)
         self.logger.addHandler(logging.StreamHandler())
@@ -31,17 +38,22 @@ class VideoInference():
 
     
     def load_model(self, wieghts):
-        # `wieghts` is an already-built + weight-loaded nn.Module handed over by the
-        # Runner (see Runner.get_model), so adopt it directly instead of loading a path.
-        self.model = wieghts.to(self.device)
-        self.model.eval()
+        # `wieghts` is a checkpoint path; the bare architecture comes in separately
+        # via model_archiecture and gets the checkpoint's state_dict loaded into it.
+        self.model_path = wieghts
+        state_dict = torch.load(
+            wieghts,
+            map_location='cpu'
+        )['model']
+        self.model_archiecture.load_state_dict(state_dict)
+        self.model_archiecture.to(self.device)
+        self.model_archiecture.eval()
     
         
     def update_paramaters(self, conf_threshold, nms_thres, nms_topk):
         self.conf_threshold = conf_threshold
         self.nms_thres = nms_thres
         self.nms_topk = nms_topk
-        
     
     def set_video_path(self, video_path):
         self.video_path = video_path 
@@ -54,8 +66,8 @@ class VideoInference():
         frame = cv2.resize(frame, (640, 360))
         frame = self.to_tensor(frame)
         frame = frame.unsqueeze(0).to(self.device)
-        output = self.model(frame, conf_threshold=self.conf_threshold, nms_thres=self.nms_thres, nms_topk=self.nms_topk)
-        lanes = self.model.decode(output, as_lanes=True)[0]
+        output = self.model_archiecture(frame, conf_threshold=self.conf_threshold, nms_thres=self.nms_thres, nms_topk=self.nms_topk)
+        lanes = self.model_archiecture.decode(output, as_lanes=True)[0]
         return lanes 
     
     def lanes_to_px(self, lanes, w, h):
@@ -84,13 +96,7 @@ class VideoInference():
         return [smallest, second_smallest]
 
     def get_ego_lanes(self, img_w, predictions):
-        """Classify detected lanes into the ego pair and compute the midpoints
-        between them. Shared by show_frame (single image) and video_eval (per
-        frame) so the classification logic only lives in one place.
 
-        Returns (left_points, right_points, mid_points), or (None, None, None)
-        if lanes weren't found on both sides of center this frame.
-        """
         mid_point_x = img_w / 2
 
         # Classify each lane as a whole using ONE reference x per lane: its x at
@@ -144,34 +150,34 @@ class VideoInference():
        
         return left_points, right_points, mid_points
 
-    def image_eval(self):
-        if self.video_path is None or not Path(self.video_path).exists():
-            raise FileNotFoundError(f"Video path does not exist: {self.video_path}")
-        print(self.video_path)
-        cap = cv2.VideoCapture(self.video_path)
-        i = 0
-        while i < 1:
-            ret, frame = cap.read()
-            if not ret:
-                break
-            # frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-            evaluation = self.frame_eval(frame)
-            out = self.lanes_to_px(evaluation, frame.shape[1], frame.shape[0])
+    # def image_eval(self):
+    #     if self.video_path is None or not Path(self.video_path).exists():
+    #         raise FileNotFoundError(f"Video path does not exist: {self.video_path}")
+    #     print(self.video_path)
+    #     cap = cv2.VideoCapture(self.video_path)
+    #     i = 0
+    #     while i < 1:
+    #         ret, frame = cap.read()
+    #         if not ret:
+    #             break
+    #         # frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+    #         evaluation = self.frame_eval(frame)
+    #         out = self.lanes_to_px(evaluation, frame.shape[1], frame.shape[0])
 
-            left, right, mid = self.show_frame(frame, out)
+    #         left, right, mid = self.show_frame(frame, out)
             
 
-            # for pts in self.lanes_to_px(evaluation, frame.shape[1], frame.shape[0]):
-            #     print(f"pts:{pts}")               
-            #     for p0, p1 in zip(pts[:], pts[:]):
-            #         print(f"p0: {p0.shape}, p0: {p0}")
-            #         print(f"p1: {p1.shape}, {p1}")
+    #         # for pts in self.lanes_to_px(evaluation, frame.shape[1], frame.shape[0]):
+    #         #     print(f"pts:{pts}")               
+    #         #     for p0, p1 in zip(pts[:], pts[:]):
+    #         #         print(f"p0: {p0.shape}, p0: {p0}")
+    #         #         print(f"p1: {p1.shape}, {p1}")
                     
                     
-            #         cv2.line(frame, tuple(p0), tuple(p1), (0, 255, 0), 3)
+    #         #         cv2.line(frame, tuple(p0), tuple(p1), (0, 255, 0), 3)
             
             
-            i += 1
+    #         i += 1
         
         
         
@@ -182,17 +188,15 @@ class VideoInference():
         cap = cv2.VideoCapture(self.video_path)
         out_stream = None
         if (self.output_folder != None):
-            folder = Path(self.output_folder)
-            folder_count = sum(1 for item in folder.iterdir() if item.is_dir())
-            
-            name = Path(self.video_path).stem
-
-            new_folder_name = Path(f"video_{name}_{folder_count}")
-
-            folder_path = folder / new_folder_name
+            # <output_folder>/<video_stem>/run<K>/ where K = 1 + highest existing run
+            # number for THIS video (a global folder count collided across videos).
+            video_folder = Path(self.output_folder) / Path(self.video_path).stem
+            video_folder.mkdir(parents=True, exist_ok=True)
+            existing_runs = [int(m.group(1)) for d in video_folder.iterdir()
+                             if d.is_dir() and (m := re.fullmatch(r'run(\d+)', d.name))]
+            folder_path = video_folder / f"run{max(existing_runs, default=0) + 1}"
             folder_path.mkdir(parents=True, exist_ok=True)
-            video_name = Path("output.mp4")
-            final_video_path = folder_path / video_name
+            final_video_path = folder_path / "output.mp4"
             log_path = folder_path / "run.log"
             # Drop the FileHandler from a prior video_eval() call so each video's log
             # lines don't get duplicated into the next run's log.
@@ -204,6 +208,11 @@ class VideoInference():
                 '%(asctime)s,%(msecs)03d %(name)s %(levelname)s %(message)s',
                 datefmt='%Y-%m-%d %H:%M:%S'))
             self.logger.addHandler(fh)
+            self.logger.info(f"video: {self.video_path}")
+            self.logger.info(f"model checkpoint: {self.model_path}")
+            self.logger.info(f"params: conf_threshold={self.conf_threshold}, "
+                             f"nms_thres={self.nms_thres}, nms_topk={self.nms_topk}, "
+                             f"frame_limit={self.frame_limit}")
             fourcc = cv2.VideoWriter_fourcc(*'mp4v')
             print(f"Output Located: {final_video_path}")
             out_stream = cv2.VideoWriter(str(final_video_path), fourcc, 30.0, (int(cap.get(cv2.CAP_PROP_FRAME_WIDTH)), int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))))

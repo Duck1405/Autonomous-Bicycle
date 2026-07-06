@@ -13,6 +13,5 @@ squeue -u anindra
 
 Check who has used this node and what exactly they are using
 
-
 squeue -w gnode015 -o "%.10i %.9P %.20j %.8u %.2t %.10M %.20b"
 

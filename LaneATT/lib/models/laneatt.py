@@ -4,7 +4,7 @@ import cv2
 import torch
 import numpy as np
 import torch.nn as nn
-from torchvision.models import resnet18, resnet34
+from torchvision.models import resnet18, resnet34, resnet50, resnet101, resnet152
 
 
 try: 
@@ -394,6 +394,18 @@ def get_backbone(backbone, pretrained=False):
     elif backbone == 'resnet18':
         backbone = torch.nn.Sequential(*list(resnet18(pretrained=pretrained).children())[:-2])
         fmap_c = 512
+        stride = 32
+    elif backbone == 'resnet50':
+        backbone = torch.nn.Sequential(*list(resnet50(pretrained=pretrained).children())[:-2])
+        fmap_c = 2048
+        stride = 32
+    elif backbone == 'resnet101':
+        backbone = torch.nn.Sequential(*list(resnet101(pretrained=pretrained).children())[:-2])
+        fmap_c = 2048
+        stride = 32
+    elif backbone == 'resnet152':
+        backbone = torch.nn.Sequential(*list(resnet152(pretrained=pretrained).children())[:-2])
+        fmap_c = 2048
         stride = 32
     else:
         raise NotImplementedError('Backbone not implemented: `{}`'.format(backbone))

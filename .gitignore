@@ -76,3 +76,7 @@ ros2_ws/log
 /LaneATT/cache
 
 LaneATT/experiments
+
+LaneATT/logs
+
+LaneATT/video_output

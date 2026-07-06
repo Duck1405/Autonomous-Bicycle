@@ -1,0 +1,131 @@
+# Model settings
+val_every: 2
+model_checkpoint_interval: 1
+seed: 0
+num_workers: 28
+model:
+  name: LaneATT
+  model_id: LaneATTresnet152
+  parameters:
+    backbone: resnet152
+    S: &S 72
+    topk_anchors: 1000
+    anchors_freq_path: 'data/culane_anchors_freq.pt'
+    img_h: &img_h 360
+    img_w: &img_w 640
+batch_size: 64
+epochs: 30
+loss_parameters: {}
+train_parameters:
+  conf_threshold:
+  nms_thres: 15.
+  nms_topk: 3000
+test_parameters:
+  conf_threshold: 0.5
+  nms_thres: 50.
+  nms_topk: &max_lanes 4
+optimizer:
+  name: Adam
+  parameters:
+    lr: 0.0003
+lr_scheduler:
+  name: CosineAnnealingLR
+  parameters:
+    T_max: 55550 #  20*(88880/32)
+
+# Dataset settings
+datasets:
+  train:
+    type: LaneDataset
+    parameters:
+      S: *S
+      dataset: culane
+      split: train
+      img_size: [*img_h, *img_w]
+      max_lanes: *max_lanes
+      normalize: false
+      aug_chance: 1.0
+      augmentations:
+      - name: Affine                      # geometric — moves keypoints; keep mild
+        parameters:
+          translate_px:
+            x: !!python/tuple [-25, 25]
+            y: !!python/tuple [-10, 10]
+          rotate: !!python/tuple [-6, 6]
+          scale: !!python/tuple [0.85, 1.15]
+          p: 0.5
+      - name: Perspective                 # optional, simulates road grade / cam pitch
+        parameters:
+          scale: !!python/tuple [0.02, 0.05]
+          p: 0.2
+      - name: HorizontalFlip
+        parameters: {p: 0.5}
+      - name: RandomBrightnessContrast    # dedicated darkening pass, biased negative
+        parameters:
+          brightness_limit: !!python/tuple [-0.6, -0.15]
+          contrast_limit: !!python/tuple [-0.2, 0.1]
+          p: 0.2
+      - name: HueSaturationValue
+        parameters: { hue_shift_limit: 10, sat_shift_limit: 30, val_shift_limit: 20, p: 0.4 }
+      - name: RandomGamma
+        parameters: { gamma_limit: !!python/tuple [80, 120], p: 0.3 }
+      - name: RandomShadow
+        parameters: { p: 0.3 }
+      - name: RandomSunFlare          # direct lens flare, matches real glare footage
+        parameters:
+          flare_roi: !!python/tuple [0.0, 0.0, 1.0, 0.6]   # upper 60% — sun near horizon in dashcam framing
+          src_radius: 250
+          p: 0.15
+      - name: MotionBlur
+        parameters: { blur_limit: 5, p: 0.2 }
+      - name: GaussNoise
+        parameters: { p: 0.2 }
+      - name: ImageCompression
+        parameters: { p: 0.2 }
+      - name: CoarseDropout
+        parameters:
+          num_holes_range: !!python/tuple [1, 3]
+          hole_height_range: !!python/tuple [0.03, 0.08]   # fraction of image height
+          hole_width_range: !!python/tuple [0.03, 0.08]    # fraction of image width
+          fill: 0
+          p: 0.15
+  
+      root: "/home/anindra/data/CULane"
+
+  test:
+    type: LaneDataset
+    parameters:
+      S: *S
+      dataset: culane
+      split: test
+      img_size: [*img_h, *img_w]
+      max_lanes: *max_lanes
+      normalize: false
+      aug_chance: 0
+      augmentations:
+      root: "/home/anindra/data/CULane"
+
+  val:
+    type: LaneDataset
+    parameters:
+      S: *S
+      dataset: culane
+      split: val
+      img_size: [360, 640]
+      max_lanes: *max_lanes
+      normalize: false
+      aug_chance: 0
+      augmentations:
+      root: "/home/anindra/data/CULane"
+  test2:
+    type: LaneDataset
+    parameters:
+      S: *S
+      dataset: culane
+      split: test2
+      img_size: [360, 640]
+      max_lanes: *max_lanes
+      normalize: false
+      aug_chance: 0
+      augmentations:
+      root: "/home/anindra/data/CULane"
