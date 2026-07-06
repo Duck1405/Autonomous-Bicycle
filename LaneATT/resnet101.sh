@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH --job-name=LaneATTresnet50
+#SBATCH --job-name=LaneATTresnet101
 #SBATCH --partition=cenvalarc.gpu
 #SBATCH --gres=gpu:l40s:1
 #SBATCH --cpus-per-task=32
