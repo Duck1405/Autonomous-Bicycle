@@ -25,14 +25,14 @@ def parse_args():
                         action="store_true",
                         help="set cudnn.deterministic = True and cudnn.benchmark = False")
     args = parser.parse_args()
-    if args.cfg is None and args.mode == "train":
-        raise Exception("If you are training, you have to set a config file using --cfg /path/to/your/config.yaml")
-    if args.resume and args.mode == "test":
-        raise Exception("args.resume is set on `test` mode: can't resume testing")
-    if args.epoch is not None and args.mode == 'train':
-        raise Exception("The `epoch` parameter should not be set when training")
-    if args.view is not None and args.mode != "test":
-        raise Exception('Visualization is only available during evaluation')
+    # if args.cfg is None and args.mode == "train":
+    #     raise Exception("If you are training, you have to set a config file using --cfg /path/to/your/config.yaml")
+    # if args.resume and args.mode == "test":
+    #     raise Exception("args.resume is set on `test` mode: can't resume testing")
+    # if args.epoch is not None and args.mode == 'train':
+    #     raise Exception("The `epoch` parameter should not be set when training")
+    # if args.view is not None and args.mode != "test":
+    #     raise Exception('Visualization is only available during evaluation')
 
     return args
 
@@ -63,9 +63,7 @@ def main():
         
     runner = Runner(cfg, exp, device, view=args.view, resume=args.resume, deterministic=args.deterministic)
     
-    
-    if args.mode == "test":
-        return
+
     
     
     if args.mode == 'train':
