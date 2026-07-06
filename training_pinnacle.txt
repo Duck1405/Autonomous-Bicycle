@@ -5,7 +5,14 @@ salloc   --partition=cenvalarc.gpu  --nodes=1   --ntasks-per-node=2   --cpus-per
 
 GET GPUS and their node
 
-sinfo -N -O "nodehost:18,statecompact:8,gres:24,gresused:24" | grep -i gpu
+sinfo -N -O "nodehost:18,statecompact:8,gres:24,gresused:24" | grep -i gpu | grep -i idle
+sinfo -N -O "nodehost:18,partition:20,statecompact:8,gres:24,gresused:24" | grep -i gpu | grep -i idle
 
 Check if any GPUs in my server: 
 squeue -u anindra
+
+Check who has used this node and what exactly they are using
+
+
+squeue -w gnode015 -o "%.10i %.9P %.20j %.8u %.2t %.10M %.20b"
+
