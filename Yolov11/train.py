@@ -13,11 +13,11 @@ from ultralytics import YOLO
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--size", choices=["n", "s", "m"], default="n", help="YOLOv11 model size")
-    parser.add_argument("--data", default=str(Path(__file__).parent / "dataset/coco4/data.yaml"))
+    parser.add_argument("--data", default=str(Path(__file__).parent / "dataset/Original/data.yaml"))
     parser.add_argument("--epochs", type=int, default=250)
     parser.add_argument("--batch", type=int, default=64)
     parser.add_argument("--imgsz", type=int, default=640)
-    parser.add_argument("--workers", type=int, default=16)
+    parser.add_argument("--workers", type=int, default=24)
     parser.add_argument("--device", default="0", help='"0" for first GPU, "cpu", or "mps"')
     parser.add_argument("--fraction", type=float, default=1.0, help="Fraction of the dataset to use (smoke tests)")
     args = parser.parse_args()
