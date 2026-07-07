@@ -31,4 +31,4 @@ nvidia-smi || exit 1
 python -c "import torch; assert torch.cuda.is_available(), 'torch cannot initialize CUDA'; print('CUDA OK:', torch.cuda.get_device_name(0))" || exit 1
 
 # --device 0,1 -> ultralytics DDP across the two requested L40S GPUs
-python train.py --size m --data "$SERVER_YAML" --device "0" --workers 14 --epoche 150
+python train.py --size m --data "$SERVER_YAML" --device "0" --workers 14 --epochs 250
