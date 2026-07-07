@@ -116,11 +116,12 @@ print(f"model_name: {model_name}")
 output_folder = Path("video_output") / Path(model_name) / name
 print(f"output_folder: {output_folder}")
 
-video = VideoInference(model_archiecture = cfg.get_model(), model_path=path_model, frame_limit = 1500, video_path = str(files[0]), view = True, output_folder =output_folder, device = device)
-for i in files: 
-    video_test = str(i)
-    video.set_video_path(video_test)
-    video.video_eval()
+video = VideoInference(model_archiecture = cfg.get_model(), model_path=path_model, frame_limit = 1500, video_path = str(files[0]), view = True, output_folder = output_folder, device = device)
+video.video_eval()
+# for i in files: 
+#     video_test = str(i)
+#     video.set_video_path(video_test)
+#     video.video_eval()
     
 # video_test = "video_input/1.mp4"
 
