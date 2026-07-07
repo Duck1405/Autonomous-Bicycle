@@ -15,8 +15,9 @@ source activate yolo
 export PYTHONUNBUFFERED=1
 
 # 4-class COCO from prepare_dataset.py (run it once on the cluster first).
+# Do NOT train on yolo11Dataset/data.yaml — that's the Roboflow 80-class yaml
+# whose train split has zero label files (killed jobs 174789-174791).
 DATA_YAML=/home/anindra/data/ObjectDetection/yolo11Dataset/coco4/data.yaml
-SERVER_YAML=/home/anindra/data/ObjectDetection/yolo11Dataset/data.yaml
 
 # GPU preflight: fail fast (job -> FAILED) if this node can't give us CUDA,
 # e.g. the broken MPS daemon (CUDA error 805) that killed jobs 170777/170778.
@@ -25,4 +26,4 @@ echo "=== GPU preflight on $(hostname) ==="
 nvidia-smi || exit 1
 python -c "import torch; assert torch.cuda.is_available(), 'torch cannot initialize CUDA'; print('CUDA OK:', torch.cuda.get_device_name(0))" || exit 1
 
-python train.py --size n --data "$SERVER_YAML" --device "0" --workers 14 --epochs 150
+python train.py --size n --data "$DATA_YAML" --device "0" --workers 14 --epochs 150

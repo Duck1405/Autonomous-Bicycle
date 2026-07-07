@@ -4,11 +4,11 @@
 #SBATCH --gres=gpu:l40s:1
 #SBATCH --cpus-per-task=16
 #SBATCH --mem=64G
-#SBATCH --time=2-00:00:00
+#SBATCH --time=3-00:00:00
 #SBATCH --output=logs/%x-%j.out
 #SBATCH --error=logs/%x-%j.err
 
-# 150 epochs of yolo11s ≈ 25-30 h on one L40S. If the job ever dies at the
+# 250 epochs of yolo11s ≈ 42-50 h on one L40S. If the job dies at the
 # walltime anyway, resubmit continuing from the checkpoint:
 #   python train.py --size s --data "$DATA_YAML" --resume runs/yolo11s_coco4/weights/last.pt
 
@@ -19,8 +19,9 @@ source activate yolo
 export PYTHONUNBUFFERED=1
 
 # 4-class COCO from prepare_dataset.py (run it once on the cluster first).
+# Do NOT train on yolo11Dataset/data.yaml — that's the Roboflow 80-class yaml
+# whose train split has zero label files (killed jobs 174789-174791).
 DATA_YAML=/home/anindra/data/ObjectDetection/yolo11Dataset/coco4/data.yaml
-SERVER_YAML=/home/anindra/data/ObjectDetection/yolo11Dataset/data.yaml
 
 
 # GPU preflight: fail fast (job -> FAILED) if this node can't give us CUDA,
@@ -30,4 +31,4 @@ echo "=== GPU preflight on $(hostname) ==="
 nvidia-smi || exit 1
 python -c "import torch; assert torch.cuda.is_available(), 'torch cannot initialize CUDA'; print('CUDA OK:', torch.cuda.get_device_name(0))" || exit 1
 
-python train.py --size s --data "$SERVER_YAML" --device "0" --workers 14 --epochs 250
+python train.py --size s --data "$DATA_YAML" --device "0" --workers 14 --epochs 250

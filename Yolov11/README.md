@@ -9,7 +9,7 @@ Fine-tuned from pretrained YOLOv11 weights on official COCO 2017 remapped to 4 c
 |---|---|
 | `prepare_dataset.py` | COCO 2017 JSONs → 4-class YOLO dataset (symlinked images, box labels) |
 | `train.py` | train + val, then saves deliverables into `models/` |
-| `yolo11n.sh` / `yolo11s.sh` | SLURM jobs (2× L40S, DDP) |
+| `yolo11n.sh` / `yolo11s.sh` / `yolo11m.sh` | SLURM jobs (1× L40S each) |
 | `jetson_infer_onnx.py` | run the exported ONNX with onnxruntime (Jetson-ready) |
 
 `train.py` leaves three artifacts in `models/yolo11<size>_coco4/run<K>/` — a fresh
@@ -23,8 +23,8 @@ Fine-tuned from pretrained YOLOv11 weights on official COCO 2017 remapped to 4 c
 
 ```bash
 # one-time env (login node — compute nodes may have no internet)
-conda create -n yolo11 python=3.10 -y
-conda activate yolo11
+conda create -n yolo python=3.10 -y
+conda activate yolo
 pip install ultralytics onnx onnxslim onnxruntime
 
 # one-time: pre-download pretrained weights + fonts while online

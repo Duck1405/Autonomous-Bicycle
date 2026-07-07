@@ -50,6 +50,7 @@ from matplotlib.patches import Rectangle
 import random
 import json
 from PIL import Image
+import io
 
 from lib.config import Config
 
@@ -81,9 +82,8 @@ def lanes_to_px(lanes, w, h):
 
 # print(type(model))
 
-import io
 
-device = torch.device("cpu")
+device =  torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 
 config_path = "/Users/amannindra/Projects/Auto/Autonomous-Bicycle/LaneATT/experiments/LaneATTresnet34Aug2/config.yaml"
 cfg = Config(config_path)
@@ -116,12 +116,21 @@ print(f"model_name: {model_name}")
 output_folder = Path("video_output") / Path(model_name) / name
 print(f"output_folder: {output_folder}")
 
-video = VideoInference(model_archiecture = cfg.get_model(), model_path=path_model, frame_limit = 1500, video_path = str(files[0]), view = True, output_folder = output_folder, device = device)
+s = "video_input/IMG_6892.MOV"
+d = "video_input/IMG_6893.MOV"
+
+video = VideoInference(model_archiecture = cfg.get_model(), model_path=path_model, frame_limit = 1500, video_path = str(files[0]), view = True, output_folder = output_folder, device = device, yolo_path = "lib/yolo/models/yolo11s.pt", yolo_conf = 0.6)
+# video.video_eval()
+video.set_video_path(s)
 video.video_eval()
-# for i in files: 
-#     video_test = str(i)
-#     video.set_video_path(video_test)
-#     video.video_eval()
+video.set_video_path(d)
+video.video_eval()
+
+for i in files: 
+    print(i)
+    # video_test = str(i)
+    # video.set_video_path(video_test)
+    # video.video_eval()
     
 # video_test = "video_input/1.mp4"
 
