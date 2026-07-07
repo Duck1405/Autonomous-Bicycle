@@ -14,7 +14,7 @@ model:
     img_h: &img_h 360
     img_w: &img_w 640
 batch_size: 32
-epochs: 30
+epochs: 20
 loss_parameters: {}
 train_parameters:
   conf_threshold:
@@ -31,7 +31,7 @@ optimizer:
 lr_scheduler:
   name: CosineAnnealingLR
   parameters:
-    T_max: 41000 #  30*(88880/64)
+    T_max: 55550 #  20*(88880/32)
 
 # Dataset settings
 datasets:

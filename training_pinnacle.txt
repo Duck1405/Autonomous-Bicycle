@@ -15,3 +15,23 @@ Check who has used this node and what exactly they are using
 
 squeue -w gnode015 -o "%.10i %.9P %.20j %.8u %.2t %.10M %.20b"
 
+
+Found the queue table on that page. Here's what it says:
+
+| Queue | Max Wall Time | Default Time | Max Nodes/Job | Max jobs |
+|---|---|---|---|---|
+| **test** | **1 hour** | 5 min | 2 nodes | 1 |
+| bigmem | 3 days | 1 hr | 2 nodes | 2 |
+| gpu | 3 days | 1 hr | 2 nodes | 4 |
+| short | 6 hours | 1 hr | 4 nodes | 12 |
+| medium | 1 day | 6 hrs | 4 nodes | 6 |
+| long | 3 days | 1 day | 4 nodes | 3 |
+| cenvalarc.compute | 3 days | 1 day | 4 nodes | 3 |
+| cenvalarc.bigmem | 3 days | 1 day | 2 nodes | 2 |
+| **cenvalarc.gpu** | **3 days** | 1 day | 2 nodes | 4 |
+
+So to directly answer your question:
+- **`test`**: max wall time is **1 hour** — matches what you saw earlier ("Job has exceeded its time limit" after your `salloc` was on `test`).
+- **`cenvalarc.gpu`**: max wall time is **3 days**, with a default of 1 day if you don't specify `-t`.
+
+One nuance: the doc notes `test` "has access to all node types" via `--constraint`, so you can use it to quickly check hardware on any node type (like you were doing with `gnode022`), but you're capped at 1 hour — fine for testing/debugging, not for actual training runs. For real training jobs on L40S nodes, you'd want `cenvalarc.gpu` (up to 3 days) and specify `-t` explicitly if you want less than the 1-day default, or up to `-t 3-00:00:00` for the max.
