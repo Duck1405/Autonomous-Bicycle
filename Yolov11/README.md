@@ -12,7 +12,8 @@ Fine-tuned from pretrained YOLOv11 weights on official COCO 2017 remapped to 4 c
 | `yolo11n.sh` / `yolo11s.sh` | SLURM jobs (2× L40S, DDP) |
 | `jetson_infer_onnx.py` | run the exported ONNX with onnxruntime (Jetson-ready) |
 
-`train.py` leaves three artifacts in `models/`:
+`train.py` leaves three artifacts in `models/yolo11<size>_coco4/run<K>/` — a fresh
+`run<K>` folder per training (LaneATT-style numbering), so nothing gets overwritten:
 
 - `yolo11<size>_coco4.pt` — best checkpoint (ultralytics format)
 - `yolo11<size>_coco4.onnx` — raw head `(1, 8, 8400)`, for `trtexec` engine builds or custom decode
@@ -53,17 +54,18 @@ TensorRT engines are device-specific — always build them **on the Jetson**, fr
 pip3 install onnxruntime-gpu --index-url https://pypi.jetson-ai-lab.dev/jp6/cu126
 
 # easiest path: onnxruntime with the TensorRT provider (FP16 + engine cache)
-python3 jetson_infer_onnx.py --model models/yolo11n_coco4_nms.onnx --source 0 --show
+python3 jetson_infer_onnx.py --model models/yolo11n_coco4/run1/yolo11n_coco4_nms.onnx \
+    --source 0 --show
 # first run builds the engine (minutes); it's cached in trt_cache/ afterwards
 ```
 
 Max-performance alternative (pure TensorRT, no python overhead in the engine):
 
 ```bash
-/usr/src/tensorrt/bin/trtexec --onnx=models/yolo11n_coco4.onnx --fp16 \
-    --saveEngine=yolo11n_coco4_fp16.engine
+/usr/src/tensorrt/bin/trtexec --onnx=models/yolo11n_coco4/run1/yolo11n_coco4.onnx \
+    --fp16 --saveEngine=yolo11n_coco4_fp16.engine
 # then decode (1,8,8400) + NMS yourself, or use ultralytics on the Jetson:
-# yolo export model=models/yolo11n_coco4.pt format=engine half=True
+# yolo export model=models/yolo11n_coco4/run1/yolo11n_coco4.pt format=engine half=True
 ```
 
 Expected on the Orin Nano Super at 640×640 FP16: yolo11n ~80-100+ FPS, yolo11s ~50-60 FPS
@@ -74,6 +76,6 @@ Expected on the Orin Nano Super at 640×640 FP16: yolo11n ~80-100+ FPS, yolo11s 
 ```bash
 python prepare_dataset.py --coco-root dataset --dst dataset/coco4
 python train.py --size n --epochs 1 --batch 8 --device mps --fraction 0.002 --workers 4
-python jetson_infer_onnx.py --model models/yolo11n_coco4_nms.onnx \
+python jetson_infer_onnx.py --model models/yolo11n_coco4/run1/yolo11n_coco4_nms.onnx \
     --source ../LaneATT/video_input/IMG_5106.MOV --out /tmp/yolo_check.mp4 --frames 60
 ```
