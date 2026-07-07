@@ -34,7 +34,7 @@ def main():
     parser.add_argument("--epochs", type=int, default=150)
     parser.add_argument("--batch", type=int, default=64)
     parser.add_argument("--imgsz", type=int, default=640)
-    parser.add_argument("--workers", type=int, default=28)
+    parser.add_argument("--workers", type=int, default=14)
     parser.add_argument("--device", default="0", help='"0" for first GPU, "cpu", or "mps"')
     parser.add_argument("--fraction", type=float, default=1.0, help="fraction of train set (smoke tests)")
     parser.add_argument("--save-period", type=int, default=10, help="also save a checkpoint every N epochs")
