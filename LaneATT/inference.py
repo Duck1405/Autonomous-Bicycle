@@ -85,7 +85,7 @@ def lanes_to_px(lanes, w, h):
 
 device =  torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 
-config_path = "/Users/amannindra/Projects/Auto/Autonomous-Bicycle/LaneATT/experiments/LaneATTresnet34Aug2/config.yaml"
+config_path = "experiments/LaneATTresnet34Aug2/config.yaml"
 cfg = Config(config_path)
 model = cfg.get_model()
 # state_dict = torch.load(
