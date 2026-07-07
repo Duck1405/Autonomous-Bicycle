@@ -121,16 +121,16 @@ d = "video_input/IMG_6893.MOV"
 
 video = VideoInference(model_archiecture = cfg.get_model(), model_path=path_model, frame_limit = 1500, video_path = str(files[0]), view = True, output_folder = output_folder, device = device, yolo_path = "lib/yolo/models/yolo11s.pt", yolo_conf = 0.6)
 # video.video_eval()
-video.set_video_path(s)
-video.video_eval()
-video.set_video_path(d)
-video.video_eval()
+# video.set_video_path(s)
+# video.video_eval()
+# video.set_video_path(d)
+# video.video_eval()
 
 for i in files: 
     print(i)
-    # video_test = str(i)
-    # video.set_video_path(video_test)
-    # video.video_eval()
+    video_test = str(i)
+    video.set_video_path(video_test)
+    video.video_eval()
     
 # video_test = "video_input/1.mp4"
 
