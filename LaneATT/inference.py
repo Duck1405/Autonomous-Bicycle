@@ -81,106 +81,133 @@ def lanes_to_px(lanes, w, h):
 
 
 # print(type(model))
-
+from lib.video import VideoInference
 
 device =  torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
-
-config_path = "experiments/LaneATTresnet34Aug2/config.yaml"
-cfg = Config(config_path)
-model = cfg.get_model()
-# state_dict = torch.load(
-#     "experiments/LaneATTresnet34Aug2/models/model_0020.pt",
-#     map_location='cpu'
-# )['model']
-# model.load_state_dict(state_dict)
-# model = model.to(device)
-# model.eval()
-
-# buffer = io.BytesIO()
-# torch.save(model, buffer)
-# buffer.seek(0)
-
-from lib.video import VideoInference
 
 p = Path(r'video_input').glob('**/*')
 files = [x for x in p if x.is_file() and x.name != ".DS_Store"]
 print(f"files: {files}")
-path_model = "experiments/LaneATTresnet34Aug2/models/model_0013.pt"
-name = Path(path_model).stem
-model_name = Path(path_model).parent.parent.name
 
-print(f"name: {name}")
-print(f"model_name: {model_name}")
+# (config.yaml, checkpoint) per model. Each experiment needs its OWN config
+# because the backbone differs (resnet34 / resnet152 / resnet50).
+# NEWEST_MODELS = [
+#     ("experiments/LaneATTresnet18Aug2/config.yaml", "experiments/LaneATTresnet18Aug2/models/model_0020.pt"),
+#     ("experiments/LaneATTresnet34Aug2/config.yaml", "experiments/LaneATTresnet34Aug2/models/model_0020.pt"),
+#     ("experiments/LaneATTresnet50Aug2/config.yaml", "experiments/LaneATTresnet50Aug2/models/model_0030.pt"),
+#     ("experiments/LaneATTresnet101Aug2/config.yaml", "experiments/LaneATTresnet101Aug2/models/model_0024.pt"),
+#     ("experiments/LaneATTresnet152Aug2/config.yaml", "experiments/LaneATTresnet152Aug2/models/model_0030.pt"),
+# ]
+MODELS = [
+    ("experiments/LaneATTresnet18Aug2/config.yaml", "experiments/LaneATTresnet18Aug2/models/model_0019.pt"),
+    ("experiments/LaneATTresnet34Aug2/config.yaml", "experiments/LaneATTresnet34Aug2/models/model_0013.pt"),
+    ("experiments/LaneATTresnet50Aug2/config.yaml", "experiments/LaneATTresnet50Aug2/models/model_0015.pt"),
+    ("experiments/LaneATTresnet101Aug2/config.yaml", "experiments/LaneATTresnet101Aug2/models/model_0017.pt"),
+    ("experiments/LaneATTresnet152Aug2/config.yaml", "experiments/LaneATTresnet152Aug2/models/model_0015.pt"),
+]
 
+video = None
+model_times = []   # (label, seconds) per model, printed at the end
+for config_path, path_model in MODELS:
+    if not (Path(config_path).exists() and Path(path_model).exists()):
+        print(f"SKIPPING {path_model}: config or checkpoint not found")
+        continue
 
-output_folder = Path("video_output_2") / Path(model_name) / name
-print(f"output_folder: {output_folder}")
+    cfg = Config(config_path)
+    name = Path(path_model).stem
+    model_name = Path(path_model).parent.parent.name
+    output_folder = Path("video_output_2") / model_name / name
+    print(f"=== {model_name}/{name} -> {output_folder} ===")
 
-s = "video_input/IMG_6892.MOV"
-d = "video_input/IMG_6893.MOV"
+    if video is None:
+        video = VideoInference(model_archiecture = cfg.get_model(), model_path=path_model, frame_limit = 9999, video_path = str(files[0]), view = True, output_folder = output_folder, device = device, yolo_path = "lib/yolo/models/yolo11s.pt", yolo_conf = 0.6)
+    else:
+        # Same pipeline object: swap the LaneATT model in place, keep YOLO loaded.
+        video.set_model(cfg.get_model(), path_model)
+        video.set_output_folder(output_folder)
 
+    t_model = time.perf_counter()
+    for i in files:
+        print(i)
+        video.set_video_path(str(i))
+        video.video_eval()
+    model_times.append((f"{model_name}/{name}", time.perf_counter() - t_model))
 
+print("\n=== time per model (all videos) ===")
+for label, seconds in model_times:
+    print(f"{label}: {seconds:.1f} s ({seconds / 60:.1f} min)")
 
+# ---- old per-model blocks (replaced by the MODELS loop above) ----
 
-video = VideoInference(model_archiecture = cfg.get_model(), model_path=path_model, frame_limit = 9999, video_path = str(files[0]), view = True, output_folder = output_folder, device = device, yolo_path = "lib/yolo/models/yolo11s.pt", yolo_conf = 0.6)
-# video.video_eval()
-# video.set_video_path(s)
-# video.video_eval()
-# video.set_video_path(d)
-# video.video_eval()
-
-for i in files: 
-    print(i)
-    video_test = str(i)
-    video.set_video_path(video_test)
-    video.video_eval()
-    
-path_model = "experiments/LaneATTresnet152Aug2/models/model_0015.pt"
-name = Path(path_model).stem
-model_name = Path(path_model).parent.parent.name
-
-print(f"name: {name}")
-print(f"model_name: {model_name}")
-
-
-output_folder = Path("video_output_2") / Path(model_name) / name
-print(f"output_folder: {output_folder}")
-
-s = "video_input/IMG_6892.MOV"
-d = "video_input/IMG_6893.MOV"
-    
-video = VideoInference(model_archiecture = cfg.get_model(), model_path=path_model, frame_limit = 9999, video_path = str(files[0]), view = True, output_folder = output_folder, device = device, yolo_path = "lib/yolo/models/yolo11s.pt", yolo_conf = 0.6)
-
-for i in files: 
-    print(i)
-    video_test = str(i)
-    video.set_video_path(video_test)
-    video.video_eval()
-    
-
-path_model = "experiments/LaneATTresnet50Aug2/models/model_0015.pt"
-
-name = Path(path_model).stem
-model_name = Path(path_model).parent.parent.name
-
-print(f"name: {name}")
-print(f"model_name: {model_name}")
-
-
-output_folder = Path("video_output_2") / Path(model_name) / name
-print(f"output_folder: {output_folder}")
-
+# config_path = "experiments/LaneATTresnet34Aug2/config.yaml"
+# cfg = Config(config_path)
+#
+# path_model = "experiments/LaneATTresnet34Aug2/models/model_0013.pt"
+# name = Path(path_model).stem
+# model_name = Path(path_model).parent.parent.name
+#
+# print(f"name: {name}")
+# print(f"model_name: {model_name}")
+#
+# output_folder = Path("video_output_2") / Path(model_name) / name
+# print(f"output_folder: {output_folder}")
+#
 # s = "video_input/IMG_6892.MOV"
 # d = "video_input/IMG_6893.MOV"
-    
-video = VideoInference(model_archiecture = cfg.get_model(), model_path=path_model, frame_limit = 9999, video_path = str(files[0]), view = True, output_folder = output_folder, device = device, yolo_path = "lib/yolo/models/yolo11s.pt", yolo_conf = 0.6)
+#
+# video = VideoInference(model_archiecture = cfg.get_model(), model_path=path_model, frame_limit = 9999, video_path = str(files[0]), view = True, output_folder = output_folder, device = device, yolo_path = "lib/yolo/models/yolo11s.pt", yolo_conf = 0.6)
+#
+# for i in files:
+#     print(i)
+#     video_test = str(i)
+#     video.set_video_path(video_test)
+#     video.video_eval()
+#
+#
+# path_model = "experiments/LaneATTresnet152Aug2/models/model_0015.pt"
+# name = Path(path_model).stem
+# model_name = Path(path_model).parent.parent.name
+#
+# print(f"name: {name}")
+# print(f"model_name: {model_name}")
+#
+# output_folder = Path("video_output_2") / Path(model_name) / name
+# print(f"output_folder: {output_folder}")
+#
+# config_path = "experiments/LaneATTresnet152Aug2/config.yaml"
+# cfg = Config(config_path)
+#
+# video = VideoInference(model_archiecture = cfg.get_model(), model_path=path_model, frame_limit = 9999, video_path = str(files[0]), view = True, output_folder = output_folder, device = device, yolo_path = "lib/yolo/models/yolo11s.pt", yolo_conf = 0.6)
+#
+# for i in files:
+#     print(i)
+#     video_test = str(i)
+#     video.set_video_path(video_test)
+#     video.video_eval()
+#
+#
+# path_model = "experiments/LaneATTresnet50Aug2/models/model_0015.pt"
+#
+# name = Path(path_model).stem
+# model_name = Path(path_model).parent.parent.name
+#
+# print(f"name: {name}")
+# print(f"model_name: {model_name}")
+#
+# output_folder = Path("video_output_2") / Path(model_name) / name
+# print(f"output_folder: {output_folder}")
+#
+# config_path = "experiments/LaneATTresnet50Aug2/config.yaml"
+# cfg = Config(config_path)
+#
+# video = VideoInference(model_archiecture = cfg.get_model(), model_path=path_model, frame_limit = 9999, video_path = str(files[0]), view = True, output_folder = output_folder, device = device, yolo_path = "lib/yolo/models/yolo11s.pt", yolo_conf = 0.6)
+#
+# for i in files:
+#     print(i)
+#     video_test = str(i)
+#     video.set_video_path(video_test)
+#     video.video_eval()
 
-for i in files: 
-    print(i)
-    video_test = str(i)
-    video.set_video_path(video_test)
-    video.video_eval()
-    
 # video_test = "video_input/1.mp4"
 
 # video = VideoInference(model_wieghts=buffer, frame_limit = 99999, video_path = video_test, view = True, output_folder = "video_output", device = device)
