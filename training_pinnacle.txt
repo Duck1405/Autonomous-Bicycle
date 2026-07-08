@@ -6,8 +6,6 @@ salloc   --partition=cenvalarc.gpu  --nodes=1   --ntasks-per-node=2   --cpus-per
 Test GPU
 salloc   --partition=test  --nodes=1   --ntasks-per-node=2   --cpus-per-task=32   --mem=96G   --gres=gpu:a100:1   --time=01:00:00
 
-
-
 GET GPUS and their node
 
 sinfo -N -O "nodehost:18,statecompact:8,gres:24,gresused:24" | grep -i gpu | grep -i idle
