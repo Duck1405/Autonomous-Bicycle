@@ -92,6 +92,10 @@ def convert_split(coco_root: Path, dst_root: Path, split: str) -> None:
           f"{n_missing} listed-but-missing) | {per_class}")
 
 
+# python Preprocess.py --coco-root /home/anindra/data/ObjectDetection --dst /home/anindra/data/Autonomous-Bicycle/Yolov11/dataset
+
+# /home/anindra/data/ObjectDetection
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--coco-root", default="dataset",

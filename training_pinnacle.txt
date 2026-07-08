@@ -1,10 +1,10 @@
 
 
 Used to allocate a slurm job 
-salloc   --partition=cenvalarc.gpu  --nodes=1   --ntasks-per-node=2   --cpus-per-task=32   --mem=96G   --gres=gpu:l40s:1   --time=24:00:00
+salloc   --partition=cenvalarc.gpu  --nodes=1   --ntasks-per-node=2   --cpus-per-task=28   --mem=96G   --gres=gpu:l40s:1   --time=24:00:00
 
 Test GPU
-salloc   --partition=test  --nodes=1   --ntasks-per-node=2   --cpus-per-task=32   --mem=96G   --gres=gpu:a100:1   --time=01:00:00
+salloc   --partition=test  --nodes=1   --ntasks-per-node=2   --cpus-per-task=28   --mem=96G   --gres=gpu:a100:1   --time=01:00:00
 
 GET GPUS and their node
 
