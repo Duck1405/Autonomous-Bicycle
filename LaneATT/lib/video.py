@@ -51,8 +51,9 @@ class VideoInference():
         self.laneatt.model_archiecture = model_archiecture
         self.laneatt.load_model(model_path)
         
-    def speed_eval(self):
+    def speed_eval(self, speed):
         # First Base Speed on if edges are found 
+    
         return
 
     def video_eval(self):
