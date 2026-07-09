@@ -89,6 +89,8 @@ p = Path(r'video_input').glob('**/*')
 files = [x for x in p if x.is_file() and x.name != ".DS_Store"]
 print(f"files: {files}")
 
+files = [Path("video_input") / Path('IMG_6540.MOV'), Path("video_input") / Path('IMG_6892.MOV'), Path("video_input") / Path('IMG_6893.MOV')]
+
 # (config.yaml, checkpoint) per model. Each experiment needs its OWN config
 # because the backbone differs (resnet34 / resnet152 / resnet50).
 # NEWEST_MODELS = [
@@ -100,15 +102,14 @@ print(f"files: {files}")
 # ]
 MODELS = [
     # ("experiments/LaneATTresnet18Aug2/config.yaml", "experiments/LaneATTresnet18Aug2/models/model_0019.pt"),
-    # ("experiments/LaneATTresnet34Aug2/config.yaml", "experiments/LaneATTresnet34Aug2/models/model_0013.pt"),
+    ("experiments/LaneATTresnet34Aug2/config.yaml", "experiments/LaneATTresnet34Aug2/models/model_0013.pt", "/Users/amannindra/Projects/Auto/Autonomous-Bicycle/Yolov11/runs/yolo11n_coco45/weights/last.pt")
     # ("experiments/LaneATTresnet50Aug2/config.yaml", "experiments/LaneATTresnet50Aug2/models/model_0015.pt"),
     # ("experiments/LaneATTresnet101Aug2/config.yaml", "experiments/LaneATTresnet101Aug2/models/model_0017.pt"),
-    ("experiments/LaneATTresnet152Aug2/config.yaml", "experiments/LaneATTresnet152Aug2/models/model_0015.pt"),
+    # ("experiments/LaneATTresnet152Aug2/config.yaml", "experiments/LaneATTresnet152Aug2/models/model_0015.pt" "/Users/amannindra/Projects/Auto/Autonomous-Bicycle/Yolov11/runs/yolo11n_coco45/weights/last.pt")
 ]
-
 video = None
 model_times = []   # (label, seconds) per model, printed at the end
-for config_path, path_model in MODELS:
+for config_path, path_model, path_yolo in MODELS:
     if not (Path(config_path).exists() and Path(path_model).exists()):
         print(f"SKIPPING {path_model}: config or checkpoint not found")
         continue
@@ -120,7 +121,7 @@ for config_path, path_model in MODELS:
     print(f"=== {model_name}/{name} -> {output_folder} ===")
 
     if video is None:
-        video = VideoInference(model_archiecture = cfg.get_model(), model_path=path_model, frame_limit = 9999, video_path = str(files[0]), view = True, output_folder = output_folder, device = device, yolo_path = "lib/yolo/models/yolo11s.pt", yolo_conf = 0.6)
+        video = VideoInference(model_archiecture = cfg.get_model(), model_path=path_model, frame_limit = 1000, video_path = str(files[0]), view = True, output_folder = output_folder, device = device, yolo_path = path_yolo, yolo_conf = 0.6)
     else:
         # Same pipeline object: swap the LaneATT model in place, keep YOLO loaded.
         video.set_model(cfg.get_model(), path_model)

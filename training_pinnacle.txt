@@ -57,3 +57,6 @@ Submitted batch job 175770
 (base) [anindra@rclogin02 Yolov11]$ sbatch yolo11s_continue.sh
 Submitted batch job 177176
 
+(base) [anindra@rclogin02 Yolov11]$ sbatch yolo11m_continue.sh
+Submitted batch job 177180
+
