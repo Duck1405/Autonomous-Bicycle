@@ -52,3 +52,8 @@ Submitted batch job 175751
 (LaneNet310) [anindra@gnode009 Yolov11]$ sbatch yolo11
 n.sh
 Submitted batch job 175770
+
+
+(base) [anindra@rclogin02 Yolov11]$ sbatch yolo11s_continue.sh
+Submitted batch job 177176
+
