@@ -38,3 +38,17 @@ So to directly answer your question:
 - **`cenvalarc.gpu`**: max wall time is **3 days**, with a default of 1 day if you don't specify `-t`.
 
 One nuance: the doc notes `test` "has access to all node types" via `--constraint`, so you can use it to quickly check hardware on any node type (like you were doing with `gnode022`), but you're capped at 1 hour — fine for testing/debugging, not for actual training runs. For real training jobs on L40S nodes, you'd want `cenvalarc.gpu` (up to 3 days) and specify `-t` explicitly if you want less than the 1-day default, or up to `-t 3-00:00:00` for the max.
+
+
+s.sh
+Submitted batch job 175749
+(LaneNet310) [anindra@gnode009 Yolov11]$ sbatch yolo11m.sh
+Submitted batch job 175750
+(LaneNet310) [anindra@gnode009 Yolov11]$ sbatch yolo11n.sh
+Submitted batch job 175751
+(LaneNet310) [anindra@gnode009 Yolov11]$ scancel 175751 <----- NOOOOO
+
+
+(LaneNet310) [anindra@gnode009 Yolov11]$ sbatch yolo11
+n.sh
+Submitted batch job 175770
