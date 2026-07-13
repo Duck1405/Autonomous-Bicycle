@@ -6,7 +6,6 @@ from ultralytics import YOLO
 # (A bad relative path would make ultralytics silently download a fresh copy.)
 DEFAULT_WEIGHTS = Path(__file__).resolve().parent / "yolo" / "models" / "yolo11n.pt"
 
-
 class YoloInference():
     def __init__(self, model_path = None, conf_threshold = 0.5):
         self.model = None
@@ -23,7 +22,7 @@ class YoloInference():
             print("Model is None")
             return None
         else:
-            return self.model(image, verbose=False, conf=self.conf_threshold)
+            return self.model(image, verbose=True, conf=self.conf_threshold)
 
     def draw(self, frame, results):
         """Draw labeled detection boxes onto frame (BGR) and return it."""

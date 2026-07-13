@@ -121,7 +121,7 @@ for config_path, path_model, path_yolo in MODELS:
     print(f"=== {model_name}/{name} -> {output_folder} ===")
 
     if video is None:
-        video = VideoInference(model_archiecture = cfg.get_model(), model_path=path_model, frame_limit = 1000, video_path = str(files[0]), view = True, output_folder = output_folder, device = device, yolo_path = path_yolo, yolo_conf = 0.6)
+        video = VideoInference(model_archiecture = cfg.get_model(), model_path=path_model, frame_limit = 1000, video_path = str(files[0]), view = True, output_folder = output_folder, device = device, yolo_path = path_yolo, yolo_conf = 0.1)
     else:
         # Same pipeline object: swap the LaneATT model in place, keep YOLO loaded.
         video.set_model(cfg.get_model(), path_model)
@@ -134,9 +134,38 @@ for config_path, path_model, path_yolo in MODELS:
         video.video_eval()
     model_times.append((f"{model_name}/{name}", time.perf_counter() - t_model))
 
-print("\n=== time per model (all videos) ===")
-for label, seconds in model_times:
-    print(f"{label}: {seconds:.1f} s ({seconds / 60:.1f} min)")
+# DON"T REMOVE THIS SYS.exit() I am testing soemthing out with the code about
+# sys.exit()
+
+
+
+# ---- LaneNet + H-Net (model_type="laneNet"; everything else at the lanenet repo defaults) ----
+# LANENET_MODEL = "/Users/amannindra/Projects/Auto/Autonomous-Bicycle/lanenet-lane-detection-pytorch/trained_models/LaneNewTrained.pth"
+# HNET_MODEL    = "/Users/amannindra/Projects/Auto/Autonomous-Bicycle/lanenet-lane-detection-pytorch/trained_models/hnet_best.pth"
+# YOLO_MODEL    = "/Users/amannindra/Projects/Auto/Autonomous-Bicycle/Yolov11/runs/yolo11n_coco45/weights/last.pt"
+
+# model_times = []   # (label, seconds) per model, printed at the end
+
+# if not Path(LANENET_MODEL).exists():
+#     print(f"SKIPPING LaneNet: {LANENET_MODEL} not found")
+# else:
+#     lanenet_name = Path(LANENET_MODEL).stem
+#     lanenet_out = Path("video_output_2") / "LaneNet" / lanenet_name
+#     print(f"=== LaneNet/{lanenet_name} -> {lanenet_out} ===")
+#     video = VideoInference(model_type = "laneNet", model_path = LANENET_MODEL, hnet_path = HNET_MODEL,
+#                            frame_limit = 1000, video_path = str(files[0]), view = True,
+#                            output_folder = lanenet_out, device = device,
+#                            yolo_path = YOLO_MODEL, yolo_conf = 0.4)
+#     t_model = time.perf_counter()
+#     for i in files:
+#         print(i)
+#         video.set_video_path(str(i))
+#         video.video_eval()
+#     model_times.append((f"LaneNet/{lanenet_name}", time.perf_counter() - t_model))
+
+# print("\n=== time per model (all videos) ===")
+# for label, seconds in model_times:
+#     print(f"{label}: {seconds:.1f} s ({seconds / 60:.1f} min)")
 
 # ---- old per-model blocks (replaced by the MODELS loop above) ----
 
