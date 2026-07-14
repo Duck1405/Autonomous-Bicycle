@@ -70,3 +70,6 @@ Submitted batch job 183267
 (LaneNet310) [anindra@rclogin03 shell]$ sbatch yolo11n.sh
 Submitted batch job 183268
 (LaneNet310) [anindra@rclogin03 shell]$ 
+
+ssh mlc@ubuntu
+rayan1234

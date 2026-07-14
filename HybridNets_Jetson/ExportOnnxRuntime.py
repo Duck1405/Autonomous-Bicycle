@@ -219,7 +219,7 @@ def export_onnx(args: argparse.Namespace) -> None:
                 "images": {0: "batch"},
                 "segmentation_logits": {0: "batch"},
             },
-        )
+
 
     onnx_model = onnx.load(str(output_path))
     onnx.checker.check_model(onnx_model)

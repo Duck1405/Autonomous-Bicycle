@@ -11,7 +11,7 @@ from lib.lanenet_infer import LaneNetInference
 from lib.yolo import YoloInference
 from lib.angle import Angle
 from PIL import Image
-
+import numpy as np
 
 class VideoInference():
     """Hub of the pipeline: owns the video loop, run folders, logging and drawing.
@@ -289,6 +289,10 @@ class VideoInference():
         cap.set(cv2.CAP_PROP_POS_FRAMES, frame_number)
         ret, frame = cap.read()
         cap.release()
+        convert = np.array(frame)
+        print(f"Get Image numpy: {convert}")
+        print(f"Get Image Shape: {convert.shape}")
+        
         if not ret:
             raise RuntimeError(f"Could not decode frame {frame_number} of {self.video_path}")
 

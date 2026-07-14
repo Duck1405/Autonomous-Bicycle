@@ -5,3 +5,31 @@
 2026-07-13 17:06:32,850 VideoInference INFO ego_vehicle: EgoVehicleResult(box_xyxy=(842.155517578125, 484.9496154785156, 912.422607421875, 535.510498046875), bottom_center=(np.float32(877.28906), 535.510498046875), confidence=0.2471933811903, track_id=None)
 2026-07-13 17:06:32,850 VideoInference INFO timing: LaneATT 117.4 ms, YOLO 50.1 ms, angle+draw 13.3 ms, total 180.7 ms
 2026-07-13 17:06:32,857 VideoInference INFO saved: image_output_1/LaneATTresnet34Aug2/model_0013/IMG_6540/frame_200/200.jpg
+2026-07-14 08:37:22,824 VideoInference INFO video: video_input/IMG_6540.MOV, frame: 200/1053
+2026-07-14 08:37:22,824 VideoInference INFO model checkpoint: experiments/LaneATTresnet34Aug2/models/model_0013.pt
+2026-07-14 08:37:22,824 VideoInference INFO params: conf_threshold=0.5, nms_thres=50, nms_topk=2, keep_threshold=0.3, match_tolerance=0.05, yolo_conf=0.1, yolo_iou=0.15
+2026-07-14 08:37:23,082 VideoInference INFO steering: SteeringResult(steering_angle_deg=-1.1607495516399355, heading_error_deg=4.491183729666075, cross_track_px=np.float64(-119.0), cross_track_deg=np.float64(-5.578125), confidence=1.0, held=False, cross_track_m=np.float64(-0.2968981793661497))
+2026-07-14 08:37:23,083 VideoInference INFO ego_vehicle: EgoVehicleResult(box_xyxy=(842.155517578125, 484.9496154785156, 912.422607421875, 535.510498046875), bottom_center=(np.float32(877.28906), 535.510498046875), confidence=0.2471933811903, track_id=None)
+2026-07-14 08:37:23,083 VideoInference INFO timing: LaneATT 187.2 ms, YOLO 66.5 ms, angle+draw 4.5 ms, total 258.2 ms
+2026-07-14 08:37:23,091 VideoInference INFO saved: image_output_1/LaneATTresnet34Aug2/model_0013/IMG_6540/frame_200/200.jpg
+2026-07-14 08:38:02,683 VideoInference INFO video: video_input/IMG_6540.MOV, frame: 200/1053
+2026-07-14 08:38:02,683 VideoInference INFO model checkpoint: experiments/LaneATTresnet34Aug2/models/model_0013.pt
+2026-07-14 08:38:02,683 VideoInference INFO params: conf_threshold=0.5, nms_thres=50, nms_topk=2, keep_threshold=0.3, match_tolerance=0.05, yolo_conf=0.1, yolo_iou=0.15
+2026-07-14 08:38:02,918 VideoInference INFO steering: SteeringResult(steering_angle_deg=-1.1607495516399355, heading_error_deg=4.491183729666075, cross_track_px=np.float64(-119.0), cross_track_deg=np.float64(-5.578125), confidence=1.0, held=False, cross_track_m=np.float64(-0.2968981793661497))
+2026-07-14 08:38:02,918 VideoInference INFO ego_vehicle: EgoVehicleResult(box_xyxy=(842.155517578125, 484.9496154785156, 912.422607421875, 535.510498046875), bottom_center=(np.float32(877.28906), 535.510498046875), confidence=0.2471933811903, track_id=None)
+2026-07-14 08:38:02,918 VideoInference INFO timing: LaneATT 170.9 ms, YOLO 60.2 ms, angle+draw 3.9 ms, total 235.0 ms
+2026-07-14 08:38:02,925 VideoInference INFO saved: image_output_1/LaneATTresnet34Aug2/model_0013/IMG_6540/frame_200/200.jpg
+2026-07-14 08:54:40,348 VideoInference INFO video: video_input/IMG_6540.MOV, frame: 200/1053
+2026-07-14 08:54:40,349 VideoInference INFO model checkpoint: experiments/LaneATTresnet34Aug2/models/model_0013.pt
+2026-07-14 08:54:40,349 VideoInference INFO params: conf_threshold=0.5, nms_thres=50, nms_topk=2, keep_threshold=0.3, match_tolerance=0.05, yolo_conf=0.1, yolo_iou=0.15
+2026-07-14 08:54:40,678 VideoInference INFO steering: SteeringResult(steering_angle_deg=-1.1607495516399355, heading_error_deg=4.491183729666075, cross_track_px=np.float64(-119.0), cross_track_deg=np.float64(-5.578125), confidence=1.0, held=False, cross_track_m=np.float64(-0.2968981793661497))
+2026-07-14 08:54:40,678 VideoInference INFO ego_vehicle: EgoVehicleResult(box_xyxy=(842.155517578125, 484.9496154785156, 912.422607421875, 535.510498046875), bottom_center=(np.float32(877.28906), 535.510498046875), confidence=0.2471933811903, track_id=None)
+2026-07-14 08:54:40,678 VideoInference INFO timing: LaneATT 235.5 ms, YOLO 88.7 ms, angle+draw 5.1 ms, total 329.3 ms
+2026-07-14 08:54:40,689 VideoInference INFO saved: image_output_1/LaneATTresnet34Aug2/model_0013/IMG_6540/frame_200/200.jpg
+2026-07-14 08:55:53,049 VideoInference INFO video: video_input/IMG_6540.MOV, frame: 200/1053
+2026-07-14 08:55:53,049 VideoInference INFO model checkpoint: experiments/LaneATTresnet34Aug2/models/model_0013.pt
+2026-07-14 08:55:53,049 VideoInference INFO params: conf_threshold=0.5, nms_thres=50, nms_topk=2, keep_threshold=0.3, match_tolerance=0.05, yolo_conf=0.1, yolo_iou=0.15
+2026-07-14 08:55:53,331 VideoInference INFO steering: SteeringResult(steering_angle_deg=-1.1607495516399355, heading_error_deg=4.491183729666075, cross_track_px=np.float64(-119.0), cross_track_deg=np.float64(-5.578125), confidence=1.0, held=False, cross_track_m=np.float64(-0.2968981793661497))
+2026-07-14 08:55:53,331 VideoInference INFO ego_vehicle: EgoVehicleResult(box_xyxy=(842.155517578125, 484.9496154785156, 912.422607421875, 535.510498046875), bottom_center=(np.float32(877.28906), 535.510498046875), confidence=0.2471933811903, track_id=None)
+2026-07-14 08:55:53,331 VideoInference INFO timing: LaneATT 201.1 ms, YOLO 74.9 ms, angle+draw 5.1 ms, total 281.1 ms
+2026-07-14 08:55:53,337 VideoInference INFO saved: image_output_1/LaneATTresnet34Aug2/model_0013/IMG_6540/frame_200/200.jpg

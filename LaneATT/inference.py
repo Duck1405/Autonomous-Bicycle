@@ -138,7 +138,7 @@ def video_inference(MODELS, files, frame_limit = 1000):
             
         model_times.append((f"{model_name}/{name}", time.perf_counter() - t_model))
 frame_limit = 1000
-video_inference(MODELSED, filesed, frame_limit)
+# video_inference(MODELSED, filesed, frame_limit)
 
 def image_inference(MODELS, files, frame):
    for config_path, path_model, path_yolo in MODELS:
