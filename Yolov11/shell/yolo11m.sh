@@ -21,7 +21,8 @@ export PYTHONUNBUFFERED=1
 # 4-class COCO from prepare_dataset.py (run it once on the cluster first).
 # Do NOT train on yolo11Dataset/data.yaml — that's the Roboflow 80-class yaml
 # whose train split has zero label files (killed jobs 174789-174791).
-DATA_YAML=/home/anindra/data/Autonomous-Bicycle/Yolov11/dataset/data.yaml
+# DATA_YAML=/home/anindra/data/Autonomous-Bicycle/Yolov11/dataset/data.yaml
+DATA_YAML=/home/anindra/data/ObjectDetection/Bdd100k/Bdd100kFinal/data.yaml
 
 # GPU preflight: fail fast (job -> FAILED) if this node can't give us CUDA,
 # e.g. the broken MPS daemon (CUDA error 805) that killed jobs 170777/170778.
