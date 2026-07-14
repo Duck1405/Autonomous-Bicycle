@@ -39,9 +39,11 @@ def main():
     parser.add_argument("--fraction", type=float, default=1.0, help="fraction of train set (smoke tests)")
     parser.add_argument("--save-period", type=int, default=10, help="also save a checkpoint every N epochs")
     parser.add_argument("--resume", default=None, help="runs/<run>/weights/last.pt to continue an interrupted run")
+    parser.add_argument("--name", default=None,
+                        help="run/artifact stem (default yolo11<size>_coco4)")
     args = parser.parse_args()
 
-    stem = f"yolo11{args.size}_coco4"
+    stem = args.name if args.name else f"yolo11{args.size}_coco4"
     models_dir = next_run_dir(Path(__file__).resolve().parent / "models" / stem)
     print(f"artifacts will be saved to {models_dir}")
 
