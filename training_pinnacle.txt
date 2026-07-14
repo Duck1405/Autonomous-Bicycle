@@ -64,10 +64,9 @@ Submitted batch job 177180
 new Yolov11
 
 (LaneNet310) [anindra@rclogin03 shell]$ sbatch yolo11s.sh
-Submitted batch job 182829
+Submitted batch job 183266
 (LaneNet310) [anindra@rclogin03 shell]$ sbatch yolo11m.sh
-Submitted batch job 182831
-(LaneNet310) [anindra@rclogin03 shell]$ sbatch yolo11n.sh.sh
-sbatch: error: Unable to open file yolo11n.sh.sh
+Submitted batch job 183267
 (LaneNet310) [anindra@rclogin03 shell]$ sbatch yolo11n.sh
-Submitted batch job 182838
+Submitted batch job 183268
+(LaneNet310) [anindra@rclogin03 shell]$ 
