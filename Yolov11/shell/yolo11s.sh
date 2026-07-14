@@ -2,7 +2,7 @@
 #SBATCH --job-name=yolo11s
 #SBATCH --partition=cenvalarc.gpu
 #SBATCH --gres=gpu:l40s:1
-#SBATCH --cpus-per-task=16
+#SBATCH --cpus-per-task=24
 #SBATCH --mem=64G
 #SBATCH --time=3-00:00:00
 #SBATCH --output=logs/%x-%j.out
@@ -32,4 +32,4 @@ echo "=== GPU preflight on $(hostname) ==="
 nvidia-smi || exit 1
 python -c "import torch; assert torch.cuda.is_available(), 'torch cannot initialize CUDA'; print('CUDA OK:', torch.cuda.get_device_name(0))" || exit 1
 
-python train.py --size s --data "$DATA_YAML" --device "0" --workers 14 --epochs 250
+python train.py --size s --data "$DATA_YAML" --device "0" --workers 20 --epochs 250
