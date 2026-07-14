@@ -89,7 +89,7 @@ p = Path(r'video_input').glob('**/*')
 files = [x for x in p if x.is_file() and x.name != ".DS_Store"]
 print(f"files: {files}")
 
-files = [Path("video_input") / Path('IMG_6540.MOV'), Path("video_input") / Path('IMG_6892.MOV'), Path("video_input") / Path('IMG_6893.MOV')]
+filesed = [Path("video_input") / Path('IMG_6540.MOV'), Path("video_input") / Path('IMG_6892.MOV'), Path("video_input") / Path('IMG_6893.MOV')]
 
 # (config.yaml, checkpoint) per model. Each experiment needs its OWN config
 # because the backbone differs (resnet34 / resnet152 / resnet50).
@@ -100,39 +100,70 @@ files = [Path("video_input") / Path('IMG_6540.MOV'), Path("video_input") / Path(
 #     ("experiments/LaneATTresnet101Aug2/config.yaml", "experiments/LaneATTresnet101Aug2/models/model_0024.pt"),
 #     ("experiments/LaneATTresnet152Aug2/config.yaml", "experiments/LaneATTresnet152Aug2/models/model_0030.pt"),
 # ]
-MODELS = [
+MODELSED = [
     # ("experiments/LaneATTresnet18Aug2/config.yaml", "experiments/LaneATTresnet18Aug2/models/model_0019.pt"),
     ("experiments/LaneATTresnet34Aug2/config.yaml", "experiments/LaneATTresnet34Aug2/models/model_0013.pt", "/Users/amannindra/Projects/Auto/Autonomous-Bicycle/Yolov11/runs/yolo11n_coco45/weights/last.pt")
     # ("experiments/LaneATTresnet50Aug2/config.yaml", "experiments/LaneATTresnet50Aug2/models/model_0015.pt"),
     # ("experiments/LaneATTresnet101Aug2/config.yaml", "experiments/LaneATTresnet101Aug2/models/model_0017.pt"),
     # ("experiments/LaneATTresnet152Aug2/config.yaml", "experiments/LaneATTresnet152Aug2/models/model_0015.pt" "/Users/amannindra/Projects/Auto/Autonomous-Bicycle/Yolov11/runs/yolo11n_coco45/weights/last.pt")
 ]
-video = None
-model_times = []   # (label, seconds) per model, printed at the end
-for config_path, path_model, path_yolo in MODELS:
-    if not (Path(config_path).exists() and Path(path_model).exists()):
-        print(f"SKIPPING {path_model}: config or checkpoint not found")
-        continue
 
-    cfg = Config(config_path)
-    name = Path(path_model).stem
-    model_name = Path(path_model).parent.parent.name
-    output_folder = Path("video_output_2") / model_name / name
-    print(f"=== {model_name}/{name} -> {output_folder} ===")
+def video_inference(MODELS, files, frame_limit = 1000):
+    video = None
+    model_times = []   # (label, seconds) per model, printed at the end
+    for config_path, path_model, path_yolo in MODELS:
+        if not (Path(config_path).exists() and Path(path_model).exists()):
+            print(f"SKIPPING {path_model}: config or checkpoint not found")
+            continue
 
-    if video is None:
+        cfg = Config(config_path)
+        name = Path(path_model).stem
+        model_name = Path(path_model).parent.parent.name
+        output_folder = Path("video_output_3") / model_name / name
+        print(f"=== {model_name}/{name} -> {output_folder} ===")
+
+        if video is None:
+            video = VideoInference(model_archiecture = cfg.get_model(), model_path=path_model, frame_limit = frame_limit, video_path = str(files[0]), view = True, output_folder = output_folder, device = device, yolo_path = path_yolo, yolo_conf = 0.2)
+        else:
+            # Same pipeline object: swap the LaneATT model in place, keep YOLO loaded.
+            video.set_model(cfg.get_model(), path_model)
+            video.set_output_folder(output_folder)
+
+        t_model = time.perf_counter()
+        for i in files:
+            print(i)
+            video.set_video_path(str(i))
+            video.video_eval()
+        
+            
+        model_times.append((f"{model_name}/{name}", time.perf_counter() - t_model))
+frame_limit = 1000
+video_inference(MODELSED, filesed, frame_limit)
+
+def image_inference(MODELS, files, frame):
+   for config_path, path_model, path_yolo in MODELS:
+        if not (Path(config_path).exists() and Path(path_model).exists()):
+            print(f"SKIPPING {path_model}: config or checkpoint not found")
+            continue
+
+        cfg = Config(config_path)
+        name = Path(path_model).stem
+        model_name = Path(path_model).parent.parent.name
+        output_folder = Path("image_output_1") / model_name / name
+        print(f"=== {model_name}/{name} -> {output_folder} ===")
         video = VideoInference(model_archiecture = cfg.get_model(), model_path=path_model, frame_limit = 1000, video_path = str(files[0]), view = True, output_folder = output_folder, device = device, yolo_path = path_yolo, yolo_conf = 0.1)
-    else:
-        # Same pipeline object: swap the LaneATT model in place, keep YOLO loaded.
         video.set_model(cfg.get_model(), path_model)
         video.set_output_folder(output_folder)
+        steering, ego_vehicle = video.image_eval(frame)
+        print(f"steering: {steering}")
+        print(f"ego_vehicle: {ego_vehicle}")
+        
+        
+image_inference(MODELSED, filesed, 200)
+        
 
-    t_model = time.perf_counter()
-    for i in files:
-        print(i)
-        video.set_video_path(str(i))
-        video.video_eval()
-    model_times.append((f"{model_name}/{name}", time.perf_counter() - t_model))
+
+# video_inference(MODELSED, filesed)     
 
 # DON"T REMOVE THIS SYS.exit() I am testing soemthing out with the code about
 # sys.exit()
