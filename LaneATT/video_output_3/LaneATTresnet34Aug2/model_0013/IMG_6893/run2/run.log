@@ -1,0 +1,21 @@
+2026-07-17 01:57:07,354 VideoInference INFO video: video_input/IMG_6893.MOV
+2026-07-17 01:57:07,354 VideoInference INFO model checkpoint: experiments/LaneATTresnet34Aug2/models/model_0013.pt
+2026-07-17 01:57:07,354 VideoInference INFO params: conf_threshold=0.5, nms_thres=50, nms_topk=2, keep_threshold=0.3, match_tolerance=0.05, yolo_conf=0.2, yolo_iou=0.15, frame_limit=1000
+2026-07-17 01:57:07,354 VideoInference INFO angle params: hfov=90.0, stanley_gain=1.0, nominal_speed=3.0, smoothing_alpha=0.2, hold_decay=0.85, max_extrapolation_px=60.0, vehicle_class_id=1, lane_width_m=3.7
+2026-07-17 01:57:07,356 VideoInference INFO Video Frame rate: 59.97144053265127
+2026-07-17 01:57:07,356 VideoInference INFO Total Frames: 17429
+2026-07-17 01:57:07,356 VideoInference INFO Video Duration: 290.62166666666667
+2026-07-17 01:57:07,575 VideoInference INFO Frame: 0/1000, time: 0.2191638946533203, LaneATT: 0.1s (89 ms/frame), YOLO: 0.1s (71 ms/frame)
+2026-07-17 01:57:26,444 VideoInference INFO Frame: 100/1000, time: 19.08746886253357, LaneATT: 9.9s (98 ms/frame), YOLO: 7.1s (71 ms/frame)
+2026-07-17 01:57:44,146 VideoInference INFO Frame: 200/1000, time: 36.789236068725586, LaneATT: 19.1s (95 ms/frame), YOLO: 13.7s (68 ms/frame)
+2026-07-17 01:58:03,797 VideoInference INFO Frame: 300/1000, time: 56.44055795669556, LaneATT: 29.3s (97 ms/frame), YOLO: 21.0s (70 ms/frame)
+2026-07-17 01:58:22,771 VideoInference INFO Frame: 400/1000, time: 75.41488790512085, LaneATT: 39.3s (98 ms/frame), YOLO: 28.1s (70 ms/frame)
+2026-07-17 01:58:41,178 VideoInference INFO Frame: 500/1000, time: 93.82147002220154, LaneATT: 48.9s (98 ms/frame), YOLO: 35.0s (70 ms/frame)
+2026-07-17 01:58:59,440 VideoInference INFO Frame: 600/1000, time: 112.08395504951477, LaneATT: 58.5s (97 ms/frame), YOLO: 41.7s (69 ms/frame)
+2026-07-17 01:59:17,388 VideoInference INFO Frame: 700/1000, time: 130.03137588500977, LaneATT: 67.9s (97 ms/frame), YOLO: 48.4s (69 ms/frame)
+2026-07-17 01:59:35,204 VideoInference INFO Frame: 800/1000, time: 147.84753894805908, LaneATT: 77.2s (96 ms/frame), YOLO: 55.2s (69 ms/frame)
+2026-07-17 01:59:52,416 VideoInference INFO Frame: 900/1000, time: 165.06003499031067, LaneATT: 86.2s (96 ms/frame), YOLO: 61.6s (68 ms/frame)
+2026-07-17 02:00:10,037 VideoInference INFO second: 182.68120503425598
+2026-07-17 02:00:10,038 VideoInference INFO inference time over 1000 frames: LaneATT 95.5s (95 ms/frame), YOLO 68.2s (68 ms/frame)
+2026-07-17 02:00:10,038 VideoInference INFO ego-lane coverage: 0/1000 frames (0 used a width-prior synthesized edge)
+2026-07-17 02:00:10,038 VideoInference INFO steering coverage: 0/1000 frames, lead vehicle selected on 0/1000 frames

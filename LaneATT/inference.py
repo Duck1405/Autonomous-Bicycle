@@ -102,7 +102,9 @@ filesed = [Path("video_input") / Path('IMG_6540.MOV'), Path("video_input") / Pat
 # ]
 MODELSED = [
     # ("experiments/LaneATTresnet18Aug2/config.yaml", "experiments/LaneATTresnet18Aug2/models/model_0019.pt"),
-    ("experiments/LaneATTresnet34Aug2/config.yaml", "experiments/LaneATTresnet34Aug2/models/model_0013.pt", "/Users/amannindra/Projects/Auto/Autonomous-Bicycle/Yolov11/runs/yolo11n_coco45/weights/last.pt")
+     ("experiments/LaneATTresnet34Aug2/config.yaml", "experiments/LaneATTresnet34Aug2/models/model_0013.pt", "/Users/amannindra/Projects/Auto/Autonomous-Bicycle/Yolov11/runs/yolo11s_coco4_val3_new/run5/yolo11s_coco4.pt"),
+    ("experiments/LaneATTresnet34Aug2/config.yaml", "experiments/LaneATTresnet34Aug2/models/model_0013.pt", "/Users/amannindra/Projects/Auto/Autonomous-Bicycle/Yolov11/runs/yolo11m_coco4_val3_new/run5/yolo11m_coco4.pt"),
+    ("experiments/LaneATTresnet34Aug2/config.yaml", "experiments/LaneATTresnet34Aug2/models/model_0013.pt", "/Users/amannindra/Projects/Auto/Autonomous-Bicycle/Yolov11/runs/yolo11n_coco4_val3_new/run7/yolo11n_coco4.pt"),
     # ("experiments/LaneATTresnet50Aug2/config.yaml", "experiments/LaneATTresnet50Aug2/models/model_0015.pt"),
     # ("experiments/LaneATTresnet101Aug2/config.yaml", "experiments/LaneATTresnet101Aug2/models/model_0017.pt"),
     # ("experiments/LaneATTresnet152Aug2/config.yaml", "experiments/LaneATTresnet152Aug2/models/model_0015.pt" "/Users/amannindra/Projects/Auto/Autonomous-Bicycle/Yolov11/runs/yolo11n_coco45/weights/last.pt")
@@ -138,7 +140,7 @@ def video_inference(MODELS, files, frame_limit = 1000):
             
         model_times.append((f"{model_name}/{name}", time.perf_counter() - t_model))
 frame_limit = 1000
-# video_inference(MODELSED, filesed, frame_limit)
+video_inference(MODELSED, filesed, frame_limit)
 
 def image_inference(MODELS, files, frame):
    for config_path, path_model, path_yolo in MODELS:
@@ -159,7 +161,7 @@ def image_inference(MODELS, files, frame):
         print(f"ego_vehicle: {ego_vehicle}")
         
         
-image_inference(MODELSED, filesed, 200)
+# image_inference(MODELSED, filesed, 200)
         
 
 
