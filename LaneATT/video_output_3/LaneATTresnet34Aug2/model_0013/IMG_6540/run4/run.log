@@ -12,3 +12,10 @@
 2026-07-17 02:01:17,799 VideoInference INFO Frame: 400/1000, time: 67.24290633201599, LaneATT: 36.2s (90 ms/frame), YOLO: 25.8s (64 ms/frame)
 2026-07-17 02:01:34,480 VideoInference INFO Frame: 500/1000, time: 83.92405724525452, LaneATT: 45.3s (90 ms/frame), YOLO: 32.1s (64 ms/frame)
 2026-07-17 02:01:51,235 VideoInference INFO Frame: 600/1000, time: 100.67880725860596, LaneATT: 54.4s (90 ms/frame), YOLO: 38.5s (64 ms/frame)
+2026-07-17 02:02:07,961 VideoInference INFO Frame: 700/1000, time: 117.40538716316223, LaneATT: 63.5s (91 ms/frame), YOLO: 44.8s (64 ms/frame)
+2026-07-17 02:02:23,907 VideoInference INFO Frame: 800/1000, time: 133.35087418556213, LaneATT: 72.1s (90 ms/frame), YOLO: 50.8s (63 ms/frame)
+2026-07-17 02:02:39,903 VideoInference INFO Frame: 900/1000, time: 149.34673428535461, LaneATT: 80.7s (90 ms/frame), YOLO: 56.7s (63 ms/frame)
+2026-07-17 02:02:56,375 VideoInference INFO second: 165.8191783428192
+2026-07-17 02:02:56,375 VideoInference INFO inference time over 1000 frames: LaneATT 89.2s (89 ms/frame), YOLO 62.7s (63 ms/frame)
+2026-07-17 02:02:56,375 VideoInference INFO ego-lane coverage: 1000/1000 frames (5 used a width-prior synthesized edge)
+2026-07-17 02:02:56,375 VideoInference INFO steering coverage: 1000/1000 frames, lead vehicle selected on 1000/1000 frames
