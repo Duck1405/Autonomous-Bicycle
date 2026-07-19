@@ -8,5 +8,3 @@ import numpy as np
 PRECISION = np.float16
 PRECESION_8 = np.int8
 
-
-
