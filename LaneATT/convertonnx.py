@@ -46,9 +46,6 @@ def main():
     dir_path = Path(OUT).parent
     print(f"Path: {dir_path}")
     dir_path.mkdir(parents=True, exist_ok=True)
-
-
-    
     torch.onnx.export(model, (x,), OUT, input_names=["image"],
                       output_names=["proposals"], opset_version=17)
     print(f"wrote {OUT}")
