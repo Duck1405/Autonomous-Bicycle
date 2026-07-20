@@ -189,9 +189,9 @@ class VideoInference():
             yolo_time += time.perf_counter() - t
 
             # Depth also runs on the raw frame (relative depth, unused downstream yet).
-            t = time.perf_counter()
-            depth_results = self.depth.infer(frame)
-            depth_time += time.perf_counter() - t
+            # t = time.perf_counter()
+            # depth_results = self.depth.infer(frame)
+            # depth_time += time.perf_counter() - t
 
             if self.view:
                 # if use_lanenet:
