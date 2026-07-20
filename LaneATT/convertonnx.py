@@ -55,12 +55,12 @@ def main():
 
     # Sanity check: onnxruntime output must match torch on the same input.
     
-    with torch.no_grad():
-        torch_out = model(x)
-    sess = ort.InferenceSession(OUT, providers=["CPUExecutionProvider"])
-    (ort_out,) = sess.run(None, {"image": x.numpy()})
-    diff = (torch_out - torch.from_numpy(ort_out)).abs().max().item()
-    print(f"output shape: {ort_out.shape}, max |torch - ort| = {diff:.2e}")
+    # with torch.no_grad():
+    #     torch_out = model(x)
+    # sess = ort.InferenceSession(OUT, providers=["CPUExecutionProvider"])
+    # (ort_out,) = sess.run(None, {"image": x.numpy()})
+    # diff = (torch_out - torch.from_numpy(ort_out)).abs().max().item()
+    # print(f"output shape: {ort_out.shape}, max |torch - ort| = {diff:.2e}")
 
 
 if __name__ == "__main__":

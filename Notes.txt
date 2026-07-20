@@ -1,6 +1,7 @@
 A100 GPU: LaneATT(cuda) + Yolov11(cuda) == 17.5 FBS 
 
-location: /home/anindra/data/Autonomous-Bicycle/LaneATT/video_output_3/LaneATTresnet34Aug2/model_0013/IMG_6540/run15                                                       
+location: /home/anindra/data/Autonomous-Bicycle/LaneATT/video_output_3/LaneATTresnet34Aug2/model_0013/IMG_6540/run15  
+
 2026-07-19 21:05:19,081 VideoInference INFO video: video_input/IMG_6540.MOV
 2026-07-19 21:05:19,081 VideoInference INFO model checkpoint: experiments/LaneATTresnet34Aug2/models/model_0013.pt
 2026-07-19 21:05:19,081 VideoInference INFO params: conf_threshold=0.5, nms_thres=50, nms_topk=2, keep_threshold=0.3, match_tolerance=0.05, yolo_conf=0.2, yolo_iou=0.1>
@@ -28,7 +29,9 @@ location: /home/anindra/data/Autonomous-Bicycle/LaneATT/video_output_3/LaneATTre
 
 
 A100 GPU: LaneATT(cuda) + Yolov11(cuda) + Depth(cuda) == 10 FBS
-location: /home/anindra/data/Autonomous-Bicycle/LaneATT/video_output_3/LaneATTresnet34Aug2/model_0013/IMG_6540/run13                       
+
+location: /home/anindra/data/Autonomous-Bicycle/LaneATT/video_output_3/LaneATTresnet34Aug2/model_0013/IMG_6540/run13    
+
 2026-07-19 21:03:00,560 VideoInference INFO video: video_input/IMG_6540.MOV
 2026-07-19 21:03:00,560 VideoInference INFO model checkpoint: experiments/LaneATTresnet34Aug2/models/model_0013.pt
 2026-07-19 21:03:00,560 VideoInference INFO params: conf_threshold=0.5, nms_thres=50, nms_topk=2, keep_threshold=0.3, match_tolerance=0.05, yolo_conf=0.2, yolo_iou=>
@@ -53,3 +56,4 @@ location: /home/anindra/data/Autonomous-Bicycle/LaneATT/video_output_3/LaneATTre
 2026-07-19 21:03:57,586 VideoInference INFO inference time over 500 frames: LaneATT 13.1s (26 ms/frame), YOLO 6.0s (12 ms/frame), Depth 27.8s (56 ms/frame)
 2026-07-19 21:03:57,586 VideoInference INFO ego-lane coverage: 500/500 frames (0 used a width-prior synthesized edge)
 2026-07-19 21:03:57,586 VideoInference INFO steering coverage: 500/500 frames, lead vehicle selected on 500/500 frames
+
