@@ -9,6 +9,7 @@ from pathlib import Path
 from lib.LaneATT import LaneATTInference
 from lib.lanenet_infer import LaneNetInference
 from lib.yolo import YoloInference
+from lib.depth import DepthInference
 from lib.angle import Angle
 from PIL import Image
 import numpy as np
@@ -46,6 +47,8 @@ class VideoInference():
                                             match_tolerance=match_tolerance)
         # yolo_path=None -> YoloInference falls back to its lib-relative default weights.
         self.yolo = YoloInference(yolo_path, conf_threshold=yolo_conf, iou_threshold=yolo_iou)
+        # Monocular relative depth (Depth-Anything-V2); picks cuda/cpu itself.
+        self.depth = DepthInference()
         # Steering + lead-vehicle layer over get_ego_lanes()/YOLO (laneATT path only;
         # the laneNet branch doesn't produce get_ego_lanes()-shaped midpoints).
         self.angle = Angle(vehicle_class_id=1)
@@ -132,6 +135,7 @@ class VideoInference():
                                  f"max_extrapolation_px={self.angle.max_extrapolation_px}, "
                                  f"vehicle_class_id={self.angle.vehicle_class_id}, "
                                  f"lane_width_m={self.angle.lane_width_m}")
+            self.logger.info(f"depth model: {self.depth.checkpoint} (device: {self.depth.device})")
             fourcc = cv2.VideoWriter_fourcc(*'mp4v')
             print(f"Output Located: {final_video_path}")
             out_stream = cv2.VideoWriter(str(final_video_path), fourcc, 30.0, (int(cap.get(cv2.CAP_PROP_FRAME_WIDTH)), int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))))
@@ -160,6 +164,7 @@ class VideoInference():
         lead_frames = 0      # frames with a lead vehicle (CIPV) selected
         lane_time = 0.0      # cumulative lane-model inference seconds
         yolo_time = 0.0      # cumulative YOLO inference seconds
+        depth_time = 0.0     # cumulative depth-model inference seconds
 
         t1 = time.time()
 
@@ -179,6 +184,11 @@ class VideoInference():
             t = time.perf_counter()
             yolo_results = self.yolo.infer(frame)
             yolo_time += time.perf_counter() - t
+
+            # Depth also runs on the raw frame (relative depth, unused downstream yet).
+            t = time.perf_counter()
+            depth_results = self.depth.infer(frame)
+            depth_time += time.perf_counter() - t
 
             if self.view:
                 # if use_lanenet:
@@ -253,7 +263,8 @@ class VideoInference():
                 n = i + 1
                 self.logger.info(f"Frame: {i}/{local_frame_local}, time: {str(time.time() - t1)}, "
                                  f"{lane_label}: {lane_time:.1f}s ({1000 * lane_time / n:.0f} ms/frame), "
-                                 f"YOLO: {yolo_time:.1f}s ({1000 * yolo_time / n:.0f} ms/frame)")
+                                 f"YOLO: {yolo_time:.1f}s ({1000 * yolo_time / n:.0f} ms/frame), "
+                                 f"Depth: {depth_time:.1f}s ({1000 * depth_time / n:.0f} ms/frame)")
 
             i += 1
 
@@ -263,7 +274,8 @@ class VideoInference():
         if i > 0:
             self.logger.info(f"inference time over {i} frames: "
                              f"{lane_label} {lane_time:.1f}s ({1000 * lane_time / i:.0f} ms/frame), "
-                             f"YOLO {yolo_time:.1f}s ({1000 * yolo_time / i:.0f} ms/frame)")
+                             f"YOLO {yolo_time:.1f}s ({1000 * yolo_time / i:.0f} ms/frame), "
+                             f"Depth {depth_time:.1f}s ({1000 * depth_time / i:.0f} ms/frame)")
         if not use_lanenet:
             self.logger.info(f"ego-lane coverage: {i - no_ego_frames}/{i} frames "
                              f"({synth_frames} used a width-prior synthesized edge)")
@@ -329,6 +341,10 @@ class VideoInference():
         yolo_time = time.perf_counter() - t0
 
         t0 = time.perf_counter()
+        depth_results = self.depth.infer(frame)
+        depth_time = time.perf_counter() - t0
+
+        t0 = time.perf_counter()
         pts_all = self.laneatt.lanes_to_px(evaluation, frame.shape[1], frame.shape[0])
         for pts in pts_all:
             for p0, p1 in zip(pts[:-1], pts[1:]):
@@ -356,8 +372,9 @@ class VideoInference():
         self.logger.info(f"ego_vehicle: {ego_vehicle}")
         self.logger.info(f"timing: LaneATT {1000 * lane_time:.1f} ms, "
                          f"YOLO {1000 * yolo_time:.1f} ms, "
+                         f"Depth {1000 * depth_time:.1f} ms, "
                          f"angle+draw {1000 * angle_time:.1f} ms, "
-                         f"total {1000 * (lane_time + yolo_time + angle_time):.1f} ms")
+                         f"total {1000 * (lane_time + yolo_time + depth_time + angle_time):.1f} ms")
 
         output_file = folder_path / f"{frame_number}.jpg"
         cv2.imwrite(str(output_file), frame)
