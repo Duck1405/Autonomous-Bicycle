@@ -18,7 +18,6 @@ Check who has used this node and what exactly they are using
 
 squeue -w gnode015 -o "%.10i %.9P %.20j %.8u %.2t %.10M %.20b"
 
-
 Found the queue table on that page. Here's what it says:
 
 | Queue | Max Wall Time | Default Time | Max Nodes/Job | Max jobs |
