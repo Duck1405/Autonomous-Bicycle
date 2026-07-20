@@ -1,0 +1,55 @@
+A100 GPU: LaneATT(cuda) + Yolov11(cuda) == 17.5 FBS 
+
+location: /home/anindra/data/Autonomous-Bicycle/LaneATT/video_output_3/LaneATTresnet34Aug2/model_0013/IMG_6540/run15                                                       
+2026-07-19 21:05:19,081 VideoInference INFO video: video_input/IMG_6540.MOV
+2026-07-19 21:05:19,081 VideoInference INFO model checkpoint: experiments/LaneATTresnet34Aug2/models/model_0013.pt
+2026-07-19 21:05:19,081 VideoInference INFO params: conf_threshold=0.5, nms_thres=50, nms_topk=2, keep_threshold=0.3, match_tolerance=0.05, yolo_conf=0.2, yolo_iou=0.1>
+2026-07-19 21:05:19,081 VideoInference INFO angle params: hfov=90.0, stanley_gain=1.0, nominal_speed=3.0, smoothing_alpha=0.2, hold_decay=0.85, max_extrapolation_px=60>
+2026-07-19 21:05:19,081 VideoInference INFO depth model: depth-anything/Depth-Anything-V2-Small-hf (device: cuda)
+2026-07-19 21:05:19,082 VideoInference INFO Video Frame rate: 32.95774647887324
+2026-07-19 21:05:19,082 VideoInference INFO Total Frames: 1053
+2026-07-19 21:05:19,082 VideoInference INFO Video Duration: 31.95
+2026-07-19 21:05:19,082 VideoInference INFO devices: LaneATT cuda:0, YOLO cuda:0, Depth cuda
+2026-07-19 21:05:19,174 VideoInference INFO Frame: 0/500, time: 0.09178543090820312, LaneATT: 0.0s (37 ms/frame), YOLO: 0.0s (12 ms/frame), Depth: 0.0s (0 ms/frame)
+2026-07-19 21:05:22,100 VideoInference INFO Frame: 50/500, time: 3.0173699855804443, LaneATT: 1.4s (27 ms/frame), YOLO: 0.6s (12 ms/frame), Depth: 0.0s (0 ms/frame)
+2026-07-19 21:05:24,801 VideoInference INFO Frame: 100/500, time: 5.718529939651489, LaneATT: 2.5s (25 ms/frame), YOLO: 1.2s (12 ms/frame), Depth: 0.0s (0 ms/frame)
+2026-07-19 21:05:27,589 VideoInference INFO Frame: 150/500, time: 8.506632566452026, LaneATT: 3.7s (25 ms/frame), YOLO: 1.8s (12 ms/frame), Depth: 0.0s (0 ms/frame)
+2026-07-19 21:05:30,299 VideoInference INFO Frame: 200/500, time: 11.216532707214355, LaneATT: 4.8s (24 ms/frame), YOLO: 2.4s (12 ms/frame), Depth: 0.0s (0 ms/frame)
+2026-07-19 21:05:32,897 VideoInference INFO Frame: 250/500, time: 13.81417202949524, LaneATT: 5.9s (23 ms/frame), YOLO: 3.0s (12 ms/frame), Depth: 0.0s (0 ms/frame)
+2026-07-19 21:05:35,477 VideoInference INFO Frame: 300/500, time: 16.39456868171692, LaneATT: 6.9s (23 ms/frame), YOLO: 3.6s (12 ms/frame), Depth: 0.0s (0 ms/frame)
+2026-07-19 21:05:38,059 VideoInference INFO Frame: 350/500, time: 18.976107358932495, LaneATT: 7.9s (23 ms/frame), YOLO: 4.2s (12 ms/frame), Depth: 0.0s (0 ms/frame)
+2026-07-19 21:05:40,712 VideoInference INFO Frame: 400/500, time: 21.62913751602173, LaneATT: 9.0s (22 ms/frame), YOLO: 4.8s (12 ms/frame), Depth: 0.0s (0 ms/frame)
+2026-07-19 21:05:43,447 VideoInference INFO Frame: 450/500, time: 24.364522695541382, LaneATT: 10.1s (22 ms/frame), YOLO: 5.4s (12 ms/frame), Depth: 0.0s (0 ms/frame)
+2026-07-19 21:05:45,921 VideoInference INFO second: 26.838749647140503
+2026-07-19 21:05:45,921 VideoInference INFO pipeline throughput: 18.63 FPS (54 ms/frame wall)
+2026-07-19 21:05:45,921 VideoInference INFO inference time over 500 frames: LaneATT 11.1s (22 ms/frame), YOLO 6.0s (12 ms/frame), Depth 0.0s (0 ms/frame)
+2026-07-19 21:05:45,921 VideoInference INFO ego-lane coverage: 500/500 frames (0 used a width-prior synthesized edge)
+2026-07-19 21:05:45,921 VideoInference INFO steering coverage: 500/500 frames, lead vehicle selected on 500/500 frames
+
+
+A100 GPU: LaneATT(cuda) + Yolov11(cuda) + Depth(cuda) == 10 FBS
+location: /home/anindra/data/Autonomous-Bicycle/LaneATT/video_output_3/LaneATTresnet34Aug2/model_0013/IMG_6540/run13                       
+2026-07-19 21:03:00,560 VideoInference INFO video: video_input/IMG_6540.MOV
+2026-07-19 21:03:00,560 VideoInference INFO model checkpoint: experiments/LaneATTresnet34Aug2/models/model_0013.pt
+2026-07-19 21:03:00,560 VideoInference INFO params: conf_threshold=0.5, nms_thres=50, nms_topk=2, keep_threshold=0.3, match_tolerance=0.05, yolo_conf=0.2, yolo_iou=>
+2026-07-19 21:03:00,560 VideoInference INFO angle params: hfov=90.0, stanley_gain=1.0, nominal_speed=3.0, smoothing_alpha=0.2, hold_decay=0.85, max_extrapolation_px>
+2026-07-19 21:03:00,560 VideoInference INFO depth model: depth-anything/Depth-Anything-V2-Small-hf (device: cuda)
+2026-07-19 21:03:00,561 VideoInference INFO Video Frame rate: 32.95774647887324
+2026-07-19 21:03:00,561 VideoInference INFO Total Frames: 1053
+2026-07-19 21:03:00,561 VideoInference INFO Video Duration: 31.95
+2026-07-19 21:03:00,561 VideoInference INFO devices: LaneATT cuda:0, YOLO cuda:0, Depth cuda
+2026-07-19 21:03:00,679 VideoInference INFO Frame: 0/500, time: 0.11762714385986328, LaneATT: 0.0s (16 ms/frame), YOLO: 0.0s (12 ms/frame), Depth: 0.0s (48 ms/frame)
+2026-07-19 21:03:06,412 VideoInference INFO Frame: 50/500, time: 5.850928783416748, LaneATT: 1.3s (26 ms/frame), YOLO: 0.6s (12 ms/frame), Depth: 2.9s (57 ms/frame)
+2026-07-19 21:03:11,656 VideoInference INFO Frame: 100/500, time: 11.094984531402588, LaneATT: 2.6s (26 ms/frame), YOLO: 1.2s (12 ms/frame), Depth: 5.2s (52 ms/fram>
+2026-07-19 21:03:18,035 VideoInference INFO Frame: 150/500, time: 17.473774909973145, LaneATT: 4.1s (27 ms/frame), YOLO: 1.8s (12 ms/frame), Depth: 8.5s (56 ms/fram>
+2026-07-19 21:03:24,136 VideoInference INFO Frame: 200/500, time: 23.574482440948486, LaneATT: 5.5s (27 ms/frame), YOLO: 2.4s (12 ms/frame), Depth: 11.5s (57 ms/fra>
+2026-07-19 21:03:29,522 VideoInference INFO Frame: 250/500, time: 28.960893154144287, LaneATT: 6.7s (27 ms/frame), YOLO: 3.0s (12 ms/frame), Depth: 14.0s (56 ms/fra>
+2026-07-19 21:03:34,855 VideoInference INFO Frame: 300/500, time: 34.29430651664734, LaneATT: 7.9s (26 ms/frame), YOLO: 3.6s (12 ms/frame), Depth: 16.6s (55 ms/fram>
+2026-07-19 21:03:40,758 VideoInference INFO Frame: 350/500, time: 40.19737768173218, LaneATT: 9.3s (26 ms/frame), YOLO: 4.2s (12 ms/frame), Depth: 19.5s (56 ms/fram>
+2026-07-19 21:03:46,143 VideoInference INFO Frame: 400/500, time: 45.58212494850159, LaneATT: 10.5s (26 ms/frame), YOLO: 4.8s (12 ms/frame), Depth: 22.1s (55 ms/fra>
+2026-07-19 21:03:52,042 VideoInference INFO Frame: 450/500, time: 51.48124146461487, LaneATT: 11.9s (26 ms/frame), YOLO: 5.4s (12 ms/frame), Depth: 25.0s (55 ms/fra>
+2026-07-19 21:03:57,585 VideoInference INFO second: 57.024354696273804
+2026-07-19 21:03:57,586 VideoInference INFO pipeline throughput: 8.77 FPS (114 ms/frame wall)
+2026-07-19 21:03:57,586 VideoInference INFO inference time over 500 frames: LaneATT 13.1s (26 ms/frame), YOLO 6.0s (12 ms/frame), Depth 27.8s (56 ms/frame)
+2026-07-19 21:03:57,586 VideoInference INFO ego-lane coverage: 500/500 frames (0 used a width-prior synthesized edge)
+2026-07-19 21:03:57,586 VideoInference INFO steering coverage: 500/500 frames, lead vehicle selected on 500/500 frames
