@@ -155,6 +155,8 @@ class VideoInference():
 
         use_lanenet = self.model_type == "laneNet"
         lane_label = "LaneNet" if use_lanenet else "LaneATT"
+        self.logger.info(f"devices: {lane_label} {self.device}, "
+                         f"YOLO {self.yolo.model.device}, Depth {self.depth.device}")
         if not use_lanenet:
             self.laneatt.reset_video_state()
             self.angle.reset_video_state()
@@ -325,6 +327,8 @@ class VideoInference():
             datefmt='%Y-%m-%d %H:%M:%S'))
         self.logger.addHandler(fh)
         self.logger.info(f"video: {self.video_path}, frame: {frame_number}/{total_frames}")
+        self.logger.info(f"devices: LaneATT {self.device}, "
+                         f"YOLO {self.yolo.model.device}, Depth {self.depth.device}")
         self.logger.info(f"model checkpoint: {self.laneatt.model_path}")
         self.logger.info(f"params: conf_threshold={self.laneatt.conf_threshold}, "
                          f"nms_thres={self.laneatt.nms_thres}, nms_topk={self.laneatt.nms_topk}, "

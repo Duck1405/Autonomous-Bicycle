@@ -84,6 +84,7 @@ def lanes_to_px(lanes, w, h):
 from lib.video import VideoInference
 
 device =  torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
+print(f"Using Device:")
 
 p = Path(r'video_input').glob('**/*')
 files = [x for x in p if x.is_file() and x.name != ".DS_Store"]

@@ -43,6 +43,7 @@ def run_depth_on_video(video_path, frame_limit, out):
 
     out_stream = None
     times_ms = []
+    t_start = time.time()
     for i in range(n_frames):
         ret, frame = cap.read()
         if not ret:
@@ -62,7 +63,9 @@ def run_depth_on_video(video_path, frame_limit, out):
                                          fps, (colored.shape[1], colored.shape[0]))
         out_stream.write(colored)
 
-        print(f"\rFrame {i + 1}/{n_frames}: {ms:.0f} ms", end="", flush=True)
+        # Live throughput: model + colorize + write, wall clock.
+        print(f"\rFrame {i + 1}/{n_frames}: {ms:.0f} ms, "
+              f"{(i + 1) / (time.time() - t_start):.2f} FPS", end="", flush=True)
     cap.release()
     if out_stream is not None:
         out_stream.release()
