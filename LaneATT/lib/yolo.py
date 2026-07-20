@@ -7,17 +7,22 @@ from ultralytics import YOLO
 DEFAULT_WEIGHTS = Path(__file__).resolve().parent / "yolo" / "models" / "yolo11n.pt"
 
 class YoloInference():
-    def __init__(self, model_path = None, conf_threshold = 0.5, iou_threshold = 0.4):
+    def __init__(self, model_path = None, conf_threshold = 0.5, iou_threshold = 0.4, device = None):
         self.model = None
         self.conf_threshold = conf_threshold
         # NMS merge threshold. Ultralytics defaults to 0.7, which lets shifted
         # duplicate boxes on the same car survive (they overlap < 70%); 0.4
         # merges them while still keeping side-by-side cars apart.
         self.iou_threshold = iou_threshold
+        # device=None leaves the model where ultralytics loads it (CPU) — pass
+        # the pipeline device or the GPU sits idle for YOLO.
+        self.device = device
         self.load_model(model_path if model_path is not None else DEFAULT_WEIGHTS)
 
     def load_model(self, model_path):
         self.model = YOLO(model_path)
+        if self.device is not None:
+            self.model.to(self.device)
 
     def infer(self, image):
         # verbose=False: ultralytics otherwise prints a summary line per frame,

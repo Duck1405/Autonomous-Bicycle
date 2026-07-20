@@ -46,7 +46,8 @@ class VideoInference():
                                             nms_topk=nms_topk, keep_threshold=keep_threshold,
                                             match_tolerance=match_tolerance)
         # yolo_path=None -> YoloInference falls back to its lib-relative default weights.
-        self.yolo = YoloInference(yolo_path, conf_threshold=yolo_conf, iou_threshold=yolo_iou)
+        self.yolo = YoloInference(yolo_path, conf_threshold=yolo_conf, iou_threshold=yolo_iou,
+                                  device=device)
         # Monocular relative depth (Depth-Anything-V2); picks cuda/cpu itself.
         self.depth = DepthInference()
         # Steering + lead-vehicle layer over get_ego_lanes()/YOLO (laneATT path only;
