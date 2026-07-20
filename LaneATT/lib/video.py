@@ -257,6 +257,8 @@ class VideoInference():
             progress = f"Frame {i + 1}/{local_frame_local}"
             if local_frame_local != total_frames:
                 progress += f" (video has {total_frames})"
+            # Whole-pipeline throughput so far (all models + drawing + writing).
+            progress += f", {(i + 1) / (time.time() - t1):.2f} FPS"
             print(f"\r{progress}", end="", flush=True)
 
             if (i) % max(1, math.floor(local_frame_local / 10)) == 0:
@@ -271,6 +273,9 @@ class VideoInference():
         print()   # end the \r progress line
         t2 = time.time()
         self.logger.info("second: {}".format(t2-t1))
+        if i > 0 and t2 > t1:
+            self.logger.info(f"pipeline throughput: {i / (t2 - t1):.2f} FPS "
+                             f"({1000 * (t2 - t1) / i:.0f} ms/frame wall)")
         if i > 0:
             self.logger.info(f"inference time over {i} frames: "
                              f"{lane_label} {lane_time:.1f}s ({1000 * lane_time / i:.0f} ms/frame), "
