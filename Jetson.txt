@@ -1,6 +1,9 @@
 
 https://anaconda.org/channels/nvidia/packages/cuda-toolkit/files?offset=25&sort=-updated_at
 
+
+https://onnxruntime.ai/docs/execution-providers/TensorRT-ExecutionProvider.html
+
 ssh mlc@ubuntu
 rayan1234
 

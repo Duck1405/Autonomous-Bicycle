@@ -65,7 +65,7 @@ class TQDMProgressMonitor(trt.IProgressMonitor):
 def build(onnx_path: Path, engine_path: Path, fp16: bool, workspace_gb: int, verbose: bool):
     # WARNING level keeps the bars readable; --verbose restores INFO logs.
     logger = trt.Logger(trt.Logger.INFO if verbose else trt.Logger.WARNING)
-    builder = trt.Builder(logger)
+    builder = trt.Builder(  logger)
     network = builder.create_network(0)  # explicit batch — only mode in TRT 10
     parser = trt.OnnxParser(network, logger)
 
