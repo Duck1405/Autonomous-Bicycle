@@ -62,7 +62,8 @@ class TQDMProgressMonitor(trt.IProgressMonitor):
         return d
 
 
-def build(onnx_path: Path, engine_path: Path, fp16: bool, workspace_gb: int, verbose: bool):
+def build(onnx_path: Path, engine_path: Path, fp16: bool, workspace_gb: int, verbose: bool,
+          hardware_compat: bool = False):
     # WARNING level keeps the bars readable; --verbose restores INFO logs.
     logger = trt.Logger(trt.Logger.INFO if verbose else trt.Logger.WARNING)
     builder = trt.Builder(  logger)
@@ -77,7 +78,28 @@ def build(onnx_path: Path, engine_path: Path, fp16: bool, workspace_gb: int, ver
     config = builder.create_builder_config()
     config.set_memory_pool_limit(trt.MemoryPoolType.WORKSPACE, workspace_gb << 30)
     if fp16:
+        # A missing BuilderFlag.FP16 is not a script bug — the flag has existed
+        # since TRT 6. It means the tensorrt / tensorrt_bindings / tensorrt_libs
+        # packages are at mismatched versions (or a system TRT shadows the pip one).
+        # Fail with that diagnosis instead of a cryptic AttributeError.
+        if not hasattr(trt.BuilderFlag, "FP16"):
+            raise SystemExit(
+                "This TensorRT build has no BuilderFlag.FP16 — the tensorrt / "
+                "tensorrt_bindings / tensorrt_libs install is mismatched. Reinstall a "
+                "single matching version (pip uninstall all three, then e.g. "
+                "`pip install tensorrt==10.3.0`) or fall back to `trtexec --fp16`.")
         config.set_flag(trt.BuilderFlag.FP16)
+
+    if hardware_compat:
+        # Lets one engine run across different GPUs on the SAME platform (e.g. build
+        # on an A100 SM80 node, run on an L40S SM89 node) — without it the engine is
+        # pinned to the exact build GPU. This does NOT make cluster engines loadable
+        # on the Jetson: engines never cross platforms (x86_64 -> aarch64). Build
+        # Jetson engines on the Jetson itself: /usr/src/tensorrt/bin/trtexec --fp16.
+        if not hasattr(trt, "HardwareCompatibilityLevel"):
+            raise SystemExit(
+                "This TensorRT build has no HardwareCompatibilityLevel — need TRT 8.6+.")
+        config.hardware_compatibility_level = trt.HardwareCompatibilityLevel.AMPERE_PLUS
 
     monitor = TQDMProgressMonitor()
     config.progress_monitor = monitor
@@ -99,13 +121,17 @@ def main():
     ap.add_argument("--engine", type=Path, default=None,
                     help="output engine path (default: <onnx stem>.engine next to the ONNX)")
     ap.add_argument("--fp16", action="store_true", help="enable FP16 kernels")
+    ap.add_argument("--hardware-compat", action="store_true",
+                    help="build for Ampere+ hardware compatibility (one engine usable across "
+                         "cluster GPU types, e.g. A100 and L40S; does NOT enable Jetson use — "
+                         "build Jetson engines on-device with trtexec)")
     ap.add_argument("--workspace", type=int, default=4, help="workspace pool in GB (default 4)")
     ap.add_argument("--verbose", action="store_true",
                     help="INFO-level TRT logging (noisy alongside the bars)")
     args = ap.parse_args()
 
     engine = args.engine if args.engine else args.onnx.with_suffix(".engine")
-    build(args.onnx, engine, args.fp16, args.workspace, args.verbose)
+    build(args.onnx, engine, args.fp16, args.workspace, args.verbose, args.hardware_compat)
 
 
 if __name__ == "__main__":
