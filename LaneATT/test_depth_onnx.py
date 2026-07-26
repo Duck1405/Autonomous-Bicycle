@@ -2,7 +2,7 @@
 
 Two checks, from strict to end-to-end:
 
-  1. GRAPH FIDELITY  — feed the SAME pixel_values (518x518) to the PyTorch
+  1. GRAPH FIDELITY  — f17
      model and to onnxruntime; the depth tensors must match to ~1e-5. This
      proves the ONNX graph *is* the model, independent of any preprocessing.
 

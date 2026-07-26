@@ -90,3 +90,12 @@ LaneATT/depth_model
 LaneATT/onnxmodels
 
 LaneATT/video_output_3
+
+# Test video corpus — 1.8 GB, including a 1.16 GB video.tar.gz.
+# The *.mov / *.mp4 rules above are lowercase, so they match on macOS
+# (case-insensitive) but NOT on the Jetson's Linux filesystem — which is why
+# `git status` there offers to commit files GitHub would reject at 100 MB.
+LaneATT/video_input/
+*.tar.gz
+*.MOV
+*.MP4

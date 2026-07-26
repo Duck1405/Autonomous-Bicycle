@@ -1,57 +1,384 @@
+================================================================================
+JETSON ORIN NANO SUPER — TensorRT deployment notes
+Last updated: 2026-07-26. Everything below marked [verified] was confirmed by
+running it on the device, not read off a spec sheet.
+================================================================================
 
-https://anaconda.org/channels/nvidia/packages/cuda-toolkit/files?offset=25&sort=-updated_at
+--------------------------------------------------------------------------------
+ACCESS
+--------------------------------------------------------------------------------
+  ssh mlc@ubuntu            # key auth, no password needed [verified]
+  Tailscale: ubuntu.taile454e6.ts.net / 100.124.189.35, ~240 ms RTT
+  LAN:       mlc@10.0.0.226 (MAC f8:3d:c6:56:e2:a5), ~8 ms RTT
+  Camera: /dev/video2 -> Front Camera
 
+USE THE LAN IP WHEN YOU ARE ON THE SAME NETWORK. It is ~30x lower latency than
+the Tailscale relay, and it survives Tailscale outages. Observed 2026-07-26:
+the Jetson vanished from `tailscale status` ("offline, last seen 4m ago") for
+several minutes while the machine was perfectly healthy — still up, still
+building, answering LAN ping in 8 ms. A Tailscale dropout looks exactly like a
+crashed board if you only test the tailnet address. Check the LAN IP before
+concluding the Jetson is down.
+
+Both addresses are the same host — ED25519 host key
+SHA256:z4x724fedXaqgCUBOTWEoakDUiWT3vfx8KJ3LvBJag8 on each [verified].
+
+Repo on device: /home/mlc/aman/Autonomous-Bicycle   (branch main @ 7e712ab)
+
+SECURITY NOTE: this file used to contain the account's plaintext login password.
+It has been removed, but Jetson.txt is git-tracked and was pushed, so the
+password is still in git history on Duck1405/Autonomous-Bicycle. Rotate that
+password. Key-based SSH already works, so nothing needs the password except
+sudo. (Same class of problem as the committed kaggle.json — see skills.md
+Known Issues.)
+
+sudo REQUIRES a password [verified: `sudo -n true` -> "a password is required"].
+That only matters for nvpmodel / jetson_clocks; all build and benchmark work
+runs as an unprivileged user.
+
+--------------------------------------------------------------------------------
+DEVICE INVENTORY  [all verified 2026-07-26]
+--------------------------------------------------------------------------------
+Board          NVIDIA Jetson Orin Nano Engineering Reference Devkit "Super"
+SoC            6x ARM Cortex CPU, Ampere GPU, compute capability sm87
+Memory         7.4 GiB UNIFIED (CPU and GPU share one pool — see OOM notes)
+Swap           16 GiB /swapfile on NVMe + 6x 635 MB zram = ~19.7 GiB
+Storage        NVMe nvme0n1p1, 116 G total, ~21 G free
+L4T            R36 REVISION 4.7, GCID 42132812, aarch64, built 2025-09-18
+JetPack        6.2.1+b38
+CUDA           12.6 runtime (nvcc not on PATH)
+TensorRT       10.3.0.30 from apt (libnvinfer10, libnvinfer-bin, python3-libnvinfer)
+trtexec        /usr/src/tensorrt/bin/trtexec (NOT on PATH; from libnvinfer-bin)
+DLA            NONE. Orin Nano has no NVDLA [verified: /sys/class/nvdla* absent].
+               Never pass --useDLACore / DLA options; Orin NX and AGX have it,
+               Nano does not, and the generic Orin docs blur this.
+Desktop        Xorg + xfce running, plus dockerd, snaps, nvargus-daemon.
+               ~2.9 GiB used at idle; ~4.2 GiB free for CUDA.
+
+Power modes [verified via `nvpmodel -q`, which works WITHOUT sudo]:
+   0 = 15W (factory default)   1 = 25W   2 = MAXN_SUPER   3 = 7W
+MAXN_SUPER measured effect [verified via jetson_clocks --show]:
+   GPU  612 MHz -> 1020 MHz
+   CPU          -> 1728 MHz (all 6 online)
+   EMC          -> 3199 MHz
+   Fan engages (nvfancontrol pwm ~74); idle ~52 C, ~58 C under a build.
+Set it with:  sudo nvpmodel -m 2 && sudo jetson_clocks
+Restore with: sudo nvpmodel -m 0
+Benchmarks taken at 15W understate the bike by a lot — always state the mode.
+
+The apt version string says "+cuda12.5" while the runtime is CUDA 12.6. That is
+a cosmetic packaging artifact, not a broken install.
+
+--------------------------------------------------------------------------------
+MODEL LOCATIONS  (ON THE JETSON — the old list in this file was cluster paths)
+--------------------------------------------------------------------------------
+Base: /home/mlc/aman/Autonomous-Bicycle/LaneATT/onnxmodels/
+
+  LaneATT   LaneATTresnet34Aug2/models/model_0013_raw.onnx   109 MB  opset 17
+  YoloN     YoloN/yolo11n_coco4_nms.onnx                      10 MB  opset 13
+  YoloM     YoloM/yolo11m_coco4_nms.onnx                             opset 13
+  YoloS     YolloS/yolo11s_coco4_nms.onnx                            opset 13
+  Depth     depth_onnx/depth_anything_v2_small.onnx           99 MB  opset 17
+
+(The cluster copies live at /home/anindra/data/Autonomous-Bicycle/... — that is
+what the old version of this file listed, which is wrong for on-device work.)
+
+Test video: LaneATT/video_input/IMG_6540.MOV, 1920x1080, 1053 frames.
+Byte-identical to the Mac and cluster copies, so FPS numbers compare directly.
+
+ONNX validation [verified — all 8 on-device ONNX parsed in memory with TRT]:
+  7 of 8 parse clean with static shapes.
+  BROKEN: YolloS/yolo11s_coco4.onnx is TRUNCATED on the device (30.2 MB here vs
+  36.2 MB on the Mac) and fails with "Failed to parse" / num_errors: 0. It is
+  the non-NMS variant and is not used by the pipeline. Re-copy from the Mac if
+  it is ever needed. A parse failure reporting ZERO errors almost always means a
+  bad file, not a bad model.
+
+--------------------------------------------------------------------------------
+ENVIRONMENT: conda env LaneNet310  [set up 2026-07-26]
+--------------------------------------------------------------------------------
+conda lives at /home/mlc/miniconda3 and is NOT on the PATH for non-interactive
+ssh. Use the absolute path: /home/mlc/miniconda3/bin/conda run -n LaneNet310 ...
+(`bash -lc` does not fix it.)
+
+Python 3.10.20 — this matters. NVIDIA ships TensorRT Python bindings only for
+CPython 3.10 on JetPack 6; there is no other supported version without building
+from source.
+
+1) TensorRT bindings — symlink, do NOT use PYTHONPATH:
+     SP=/home/mlc/miniconda3/envs/LaneNet310/lib/python3.10/site-packages
+     ln -sfn /usr/lib/python3.10/dist-packages/tensorrt                  $SP/tensorrt
+     ln -sfn /usr/lib/python3.10/dist-packages/tensorrt-10.3.0.dist-info $SP/
+
+   *** DO NOT set PYTHONPATH=/usr/lib/python3.10/dist-packages ***  [verified]
+   That directory contains a STUB numpy/ (it has core/, fft/, ... but NO
+   __init__.py). Python imports it as an empty namespace package, so you get:
+       AttributeError: module 'numpy' has no attribute '__version__'
+   and every real numpy in the env is shadowed, because PYTHONPATH PREPENDS.
+   The genuine system numpy is in /usr/local/lib/python3.10/dist-packages.
+   The symlink above appends nothing to sys.path and avoids the whole trap.
+
+2) pip packages (from pypi.org, which is reachable) [verified installed]:
+     numpy 2.2.6, opencv-python-headless 5.0.0.93, tqdm 4.69.1, onnxruntime 1.23.2
+
+   DO NOT `pip install tensorrt` — NVIDIA does not build TensorRT wheels for
+   Tegra ("TensorRT does not currently build wheels for Tegra systems"). apt is
+   the only supported route on Orin.
+
+   DO NOT install CUDA from the anaconda nvidia channel. TensorRT links against
+   JetPack's system CUDA 12.6. (The anaconda cuda-toolkit link that used to head
+   this file is a trap; it is not needed and can only cause version skew.)
+
+   Package index note: pypi.jetson-ai-lab.DEV is DNS-dead [verified: HTTP 000].
+   The live one is pypi.jetson-ai-lab.IO (302). Yolov11/jetson_infer_onnx.py and
+   Yolov11/README.md still reference the dead .dev host and should be updated.
+   Only needed if you ever want torch/onnxruntime-GPU on device — we do not.
+
+3) torch is NOT installed and NOT needed. [verified]
+   A tiny FP16 engine was built in memory and executed end-to-end using only
+   ctypes + libcudart, producing correct output. jetson_tools/trt_runner.py does
+   all buffer management that way. This avoids a multi-GB install on a disk with
+   21 G free, and avoids the torch-CUDA failure already recorded in test.txt
+   (pip torch 2.11.0/cu13 -> "CUDA available: False"; only 2.5.1+cu124 worked).
+
+4) The SYSTEM python3's cv2 is BROKEN: opencv-python 4.13.0.92 was compiled
+   against NumPy 1.x while system numpy is 2.2.6, so it raises
+   "numpy.core.multiarray failed to import". Another reason to work only in
+   LaneNet310. The pip opencv-python-headless in the env is FFMPEG=YES,
+   GStreamer=NO, CUDA=NO — fine for decoding the test video and for CPU
+   preprocessing, which is what we measure.
+
+--------------------------------------------------------------------------------
+TOOLING  (new, in jetson_tools/ + reused from the cluster work)
+--------------------------------------------------------------------------------
+jetson_tools/trt_runner.py         torch-free TRT 10 runtime (ctypes/libcudart).
+                                   CudaRT + TrtEngine, static shapes only.
+jetson_tools/preprocess.py         the 3 preprocessors, shared by the benchmark
+                                   and the parity test so they cannot drift.
+jetson_tools/jetson_env_check.py   preflight; exits nonzero on blockers.
+jetson_tools/trt_engine_probe.py   engine IO contract + raw forward latency.
+jetson_tools/trt_vs_onnx_parity.py engine vs onnxruntime-CPU numeric comparison.
+Yolov11/onnx_tensorRT.py           the builder (hardened for 8 GB, see below).
+LaneATT/trt_video_benchmark.py     full sequential per-frame pipeline benchmark.
+
+Run everything from the repo root inside LaneNet310, e.g.
+  /home/mlc/miniconda3/bin/conda run -n LaneNet310 python jetson_tools/jetson_env_check.py
+
+--------------------------------------------------------------------------------
+BUILDING ENGINES
+--------------------------------------------------------------------------------
+  sudo nvpmodel -m 2 && sudo jetson_clocks          # do this first
+  cd /home/mlc/aman/Autonomous-Bicycle
+  /home/mlc/miniconda3/bin/conda run --no-capture-output -n LaneNet310 \
+    python Yolov11/onnx_tensorRT.py \
+      --onnx LaneATT/onnxmodels/YoloN/yolo11n_coco4_nms.onnx \
+      --fp16 --workspace 1 --timing-cache /home/mlc/aman/trt_timing.cache
+
+onnx_tensorRT.py changes made for this device:
+  * --workspace now defaults to 1 GB on Tegra (was a flat 4 GB, sized for an
+    A100). CPU and GPU share 8 GB here.
+  * --timing-cache added — a retried build skips autotuning it already did.
+  * --builder-opt-level added (TRT default 3; lower = faster build).
+  * tqdm import is now optional instead of a hard dependency.
+  * --hardware-compat is REFUSED on Tegra. NVIDIA documents hardware
+    compatibility as unsupported on JetPack/DRIVE OS, so it could only make the
+    engine worse.
+  * The FP16 error message no longer tells you to `pip install tensorrt` — that
+    is impossible on Tegra and sent readers down a dead end.
+  * A build returning None now prints cudaMemGetInfo free memory so OOM is
+    distinguishable from a real build failure.
+  * Every build now writes a <engine>.json sidecar: TRT version, sm arch,
+    platform, precision, workspace, build seconds, source ONNX md5.
+  * init_libnvinfer_plugins() is called before parsing, so EfficientNMS_TRT-style
+    plugin exports parse too.
+
+Build one model per process. The allocator does not fully release between
+builds, and on 8 GB that is the difference between finishing and being killed.
+
+Engines are written next to their ONNX (same layout as the cluster).
+
+*** ENGINES DO NOT TRANSFER. *** An engine is locked to the TensorRT version AND
+the GPU arch that built it. The A100 engines cannot run here (x86_64 -> aarch64
+never works), and these Jetson engines cannot run on the cluster. A JetPack
+upgrade that bumps TensorRT invalidates every .engine on the device — that is
+what the .json sidecars are for. Prebuilt engines from HuggingFace are useless
+for the same reason.
+
+--------------------------------------------------------------------------------
+RESULTS  [MAXN_SUPER + jetson_clocks unless noted]
+--------------------------------------------------------------------------------
+Build times (FP16, workspace 1 GB, opt level default 3, MAXN_SUPER):
+  yolo11n_coco4_nms       437.4 s  ->   8.8 MB engine
+  LaneATT model_0013_raw   44.8 s  ->  53.2 MB engine
+  depth_anything_v2_small  (in progress at time of writing)
+
+Note the 10x spread: LaneATT is 109 MB of ONNX but builds in 45 s because a
+ResNet-34 backbone is almost all plain convolution, which TensorRT autotunes
+quickly. yolo11n is a 10 MB ONNX and takes 7 minutes because it is many small
+heterogeneous ops plus NonMaxSuppression. ONNX file size does NOT predict build
+time — op variety does.
+
+Power draw during a build at MAXN_SUPER + jetson_clocks [verified via tegrastats]:
+  VDD_IN 8683 mW total, tj 51.6 C, RAM 5169/7620 MB, swap 0 used, GR3D 0%,
+  one CPU core at 100%.
+That is comfortable. Worth stating because the NVIDIA forums are full of Orin
+Nano overcurrent-and-reboot reports at 25W/MAXN — this unit and this PSU are
+not near that limit, at least during builds. Also note the builder is CPU-bound
+(GPU at 0%) for long stretches; that is normal, not a hang.
+
+IO CONTRACTS — all three match the A100 engines exactly [trt_engine_probe.py]:
+  LaneATT  image[1,3,360,640]        -> proposals[1,1000,77]
+  yolo11n  images[1,3,640,640]       -> output0[1,300,6]
+  depth    pixel_values[1,3,518,518] -> predicted_depth[1,518,518]
+
+Engine forward latency, dummy input, 100 iters, MAXN_SUPER:
+  LaneATT  10.14 ms ->  98.7 FPS   (device memory +20 MB)
+  yolo11n   8.09 ms -> 123.6 FPS   (+16 MB)
+  depth    18.32 ms ->  54.6 FPS   (+11 MB)
+  all three sequentially 36.55 ms -> 27.4 FPS
+
+NUMERIC PARITY vs onnxruntime-CPU FP32 on frame 0 of IMG_6540.MOV — ALL PASS:
+  LaneATT proposals       max_abs 0.8159   mean_abs 0.0723    corr 1.000000
+                          onnx [-854.9, 1495]  trt [-855, 1495]
+  yolo11n output0         max_abs 0.05215  mean_abs 8.57e-05  corr 1.000000
+                          onnx [0, 334.2]      trt [0, 334.2]
+  depth predicted_depth   max_abs 0.1776   mean_abs 0.00287   corr 0.999999
+                          onnx [0, 11.94]      trt [0, 11.93]
+No NaN/Inf anywhere. *** The documented Depth-Anything-V2 FP16 degradation on
+this exact stack DID NOT REPRODUCE for our export. *** The forum report showed a
+TRT range of ~0.17-4.3 against a PyTorch 0-6.9; ours matches the reference to
+six digits of correlation. The most likely reason is that this export is opset
+17 with native LayerNormalization nodes, so TensorRT uses INormalizationLayer
+instead of a decomposed ReduceMean/Sub/Pow/Sqrt/Div chain that can overflow in
+FP16. FP16 depth is safe to ship here — but re-run the parity check if the model
+is ever re-exported at a lower opset.
+
+500-FRAME PIPELINE BENCHMARK — IMG_6540.MOV, sequential per frame:
+
+                      MAXN_SUPER      15W (default)     A100 (cluster)
+  video read              1.6 ms          2.6 ms
+  laneatt pre + engine    1.8 + 10.5      3.7 + 19.3
+  yolo    pre + engine    2.8 +  9.0      5.9 + 16.5
+  depth   pre + engine    8.1 + 18.9     17.8 + 35.4
+  engines only           38.4 ms         71.1 ms          5.4 ms (184 FPS)
+  preprocess only        12.7 ms         27.5 ms          7.6 ms
+  PIPELINE               52.8 ms         101.2 ms         14.0 ms
+  PIPELINE FPS           18.95           9.88             71.19
+  peak tj                60.7 C          58.2 C
+  peak RAM               3390/7620 MB
+
+*** MAXN_SUPER IS 1.92x FASTER THAN THE 15W DEFAULT. *** That is the single
+cheapest performance win available and it costs nothing but power and a fan.
+Decide deliberately which mode the bike ships in. NOTE: the nvpmodel setting is
+PERSISTENT ACROSS REBOOTS (stored in /var/lib/nvpmodel/status, not just
+/etc/nvpmodel.conf), so setting it once sticks. jetson_clocks is NOT persistent
+and must be re-applied each boot if you want it.
+
+The Jetson is 3.8x slower than the A100 end to end, but only 7.1x slower on the
+engines and 1.7x on CPU preprocessing. Neither run thermally throttled — 60.7 C
+peak against a ~95 C+ limit, so these are sustained numbers, not burst.
+
+*** THE BOTTLENECK INVERTED vs THE A100. *** On the A100, CPU preprocessing was
+the bottleneck (7.6 of 14.0 ms = 54%). On the Jetson, the ENGINES dominate
+(38.4 of 52.8 ms = 73%) and depth alone is 27.0 ms of that. This changes what
+the ROS2 work should optimize — see below.
+
+--------------------------------------------------------------------------------
+GOTCHAS THAT WILL BITE YOU
+--------------------------------------------------------------------------------
+* The numpy stub / PYTHONPATH trap (above). This is the single most confusing
+  failure mode in this environment.
+* Orin Nano has NO DLA. Ultralytics issue #19302 shows the confusing
+  "DLA validation failed" you get for trying.
+* Pure-ONNX NonMaxSuppression is a data-dependent-shape op, and TensorRT
+  10.0-10.6 has a documented performance regression for DDS ops. JetPack 6.2
+  ships 10.3, which is inside that window. yolo11n_coco4_nms.onnx DOES contain
+  a real NonMaxSuppression node (opset 13) — see "how to improve".
+* Depth-Anything-V2 FP16 on this exact stack (Orin Nano, JetPack 6.2, TRT
+  10.3.0.30) has an NVIDIA forum report of badly degraded output, closed with no
+  confirmed fix; the usual cause is LayerNorm overflowing in FP16 in ViT
+  backbones. GOOD NEWS for us [verified]: our export is opset 17 with 28 native
+  LayerNormalization nodes, so TensorRT maps them to its own normalization layer
+  instead of decomposing into ReduceMean/Sub/Pow/Sqrt/Div — the configuration
+  least likely to overflow. Confirm with trt_vs_onnx_parity.py regardless; never
+  trust an FPS number from an engine whose output you have not checked.
+* There is a reported L4T 36.4.7 firmware bug ("unable to allocate CUDA0
+  buffer"). It does NOT affect this unit [verified: 2 GiB cudaMalloc succeeds,
+  4.2+ GiB free]. If large allocations start failing after an apt upgrade, that
+  is the bug, not your workspace setting.
+* TensorRT docs default to the latest version (11.x), which REMOVED --fp16 and
+  --best and renamed flags. Pin doc URLs to 10.3 or just read
+  /usr/src/tensorrt/bin/trtexec --help on the device.
+* trtexec flag renames since 8.x, if you use it instead of the Python API:
+  --workspace=N -> --memPoolSize=workspace:NM ; --buildOnly -> --skipInference ;
+  --batch/--maxBatch removed entirely (implicit batch is gone in TRT 10).
+
+--------------------------------------------------------------------------------
+HOW TO IMPROVE  (ranked, for the ROS2 work)
+--------------------------------------------------------------------------------
+Re-ranked against the MEASURED Jetson numbers, not the A100 assumptions.
+
+1. RUN AT MAXN_SUPER. 9.88 -> 18.95 FPS for one command. Nothing else on this
+   list comes close to a 1.92x win for that little effort.
+     sudo nvpmodel -m 2 && sudo jetson_clocks     # nvpmodel survives reboot
+
+2. Be realistic about what ROS2 parallelism buys. The three models are
+   independent, but they contend for ONE GPU, so the engines effectively
+   serialize: 38.4 ms of GPU work per frame is a floor no amount of threading
+   removes. What parallelism DOES buy is overlapping the 12.7 ms of CPU
+   preprocessing and 1.6 ms of decode with GPU execution, i.e.
+     52.8 ms  ->  max(engines 38.4, cpu 14.3)  =  38.4 ms  =  ~26 FPS.
+   So: pipeline CPU against GPU for ~26 FPS. Getting past ~26 FPS requires
+   cutting actual GPU work (items 3-5), not more threads. Budget accordingly —
+   "run them in parallel" is worth about +37%, not +200%.
+
+3. Run depth at a lower rate. Depth is 27.0 of the 52.8 ms budget (51%) and is
+   the slowest engine by 2x. Scene depth changes slowly compared to lane
+   position; running it every 2nd or 3rd frame while lane/object detection stay
+   at full rate is the largest single reduction in GPU work available. Combined
+   with item 2 this plausibly reaches 35-40 FPS.
+
+4. Test a non-NMS YOLO export with NMS on the CPU. We already have the raw
+   yolo11n on device (output0[1,6,8400]). The NMS variant contains a real
+   NonMaxSuppression node, and TensorRT 10.0-10.6 (we run 10.3) has a documented
+   data-dependent-shape performance regression. Cheap to test: ~7 min to build.
+   Note the NMS build also took 437 s versus LaneATT's 45 s, which is consistent
+   with the DDS ops being hard to autotune.
+
+5. Try INT8 if items 2-4 are not enough. The FP16 parity results are excellent
+   (corr >= 0.999999), which suggests headroom, but INT8 needs a calibration set
+   and a fresh parity run — do not ship it on faith.
+
+6. --builder-opt-level 4 or 5 for models you build once and ship. Slower build,
+   better tactics. Use the timing cache so retries are cheap.
+
+7. GPU-side preprocessing matters LESS here than on the A100 — it is only 12.7
+   of 52.8 ms, and item 2 already hides most of it behind GPU work. Do this
+   after 2-4, not before.
+
+8. Going headless (systemctl set-default multi-user.target) frees ~0.8-1 GiB.
+   NOT NEEDED — peak RAM during the benchmark was 3390/7620 MB and builds never
+   touched swap. Keep the desktop.
+
+--------------------------------------------------------------------------------
+RAW REFERENCE  (original notes, kept)
+--------------------------------------------------------------------------------
 https://onnxruntime.ai/docs/execution-providers/TensorRT-ExecutionProvider.html
-
-ssh mlc@ubuntu
-rayan1234
-
-
-LaneATT model: /home/anindra/data/Autonomous-Bicycle/LaneATT/onnxmodels/LaneATTresnet34Aug2/models/model_0013_raw.onnx
-YolovS model: /home/anindra/data/Autonomous-Bicycle/LaneATT/onnxmodels/YolloS/yolo11s_coco4_nms.onnx
-YolovM model: /home/anindra/data/Autonomous-Bicycle/LaneATT/onnxmodels/YoloM/yolo11m_coco4_nms.onnx
-YoloN model: /home/anindra/data/Autonomous-Bicycle/LaneATT/onnxmodels/YoloN/yolo11n_coco4_nms.onnx
-Depth model: /home/anindra/data/Autonomous-Bicycle/LaneATT/onnxmodels/depth_onnx/depth_anything_v2_small.onnx
-
-
+   Only relevant if you want the onnxruntime TensorRT EP instead of raw TRT.
+   Note ORT's TRT EP needed a special parser branch for DDS ops before TRT 10.7.
 
 cat /etc/nv_tegra_release
-# R36 (release), REVISION: 4.7, GCID: 42132812, BOARD: generic, EABI: aarch64, DATE: Thu Sep 18 22:54:44 UTC 2025
-# KERNEL_VARIANT: oot 
+# R36 (release), REVISION: 4.7, GCID: 42132812, BOARD: generic, EABI: aarch64,
+# DATE: Thu Sep 18 22:54:44 UTC 2025
+# KERNEL_VARIANT: oot
 TARGET_USERSPACE_LIB_DIR=nvidia
 TARGET_USERSPACE_LIB_DIR_PATH=usr/lib/aarch64-linux-gnu/nvidia
 
-
 nvidia-jetpack  6.2.1+b38
 
-
-(base) mlc@ubuntu:~$ dpkg-query -W -f='${Package}\t${Version}\n' \
-  'libnvinfer*' 'tensorrt*' 2>/dev/null | sort
-libnvinfer10    10.3.0.30-1+cuda12.5
-libnvinfer6
-libnvinfer7
-libnvinfer-bin  10.3.0.30-1+cuda12.5
-libnvinfer-dev  10.3.0.30-1+cuda12.5
-libnvinfer-dev-cross-aarch64
-libnvinfer-dispatch10   10.3.0.30-1+cuda12.5
-libnvinfer-dispatch-dev 10.3.0.30-1+cuda12.5
-libnvinfer-dispatch-dev-cross-aarch64
-libnvinfer-doc
-libnvinfer-headers-dev  10.3.0.30-1+cuda12.5
-libnvinfer-headers-plugin-dev   10.3.0.30-1+cuda12.5
-libnvinfer-lean10       10.3.0.30-1+cuda12.5
-libnvinfer-lean-dev     10.3.0.30-1+cuda12.5
-libnvinfer-lean-dev-cross-aarch64
-libnvinfer-plugin10     10.3.0.30-1+cuda12.5
-libnvinfer-plugin6
-libnvinfer-plugin7
-libnvinfer-plugin-dev   10.3.0.30-1+cuda12.5
-libnvinfer-plugin-dev-cross-aarch64
-libnvinfer-samples      10.3.0.30-1+cuda12.5
-libnvinfer-vc-plugin10  10.3.0.30-1+cuda12.5
-libnvinfer-vc-plugin-dev        10.3.0.30-1+cuda12.5
-libnvinfer-vc-plugin-dev-cross-aarch64
-tensorrt        10.3.0.30-1+cuda12.5
-tensorrt-libs   10.3.0.30-1+cuda12.5
-(base) mlc@ubuntu:~$ 
-
+dpkg-query -W -f='${Package}\t${Version}\n' 'libnvinfer*' 'tensorrt*' | sort
+   All real packages report 10.3.0.30-1+cuda12.5, including libnvinfer10,
+   libnvinfer-bin (trtexec), libnvinfer-dev, libnvinfer-plugin10, tensorrt,
+   tensorrt-libs. The versionless libnvinfer6 / libnvinfer7 / libnvinfer-plugin6
+   / libnvinfer-plugin7 entries are stale leftovers with no version and can be
+   ignored.

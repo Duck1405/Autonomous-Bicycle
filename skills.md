@@ -15,12 +15,16 @@ conditions (night, glare, etc.).
 
 **Where work actually happens today:** local Mac (CPU/MPS, small-scale
 testing) + UC Merced's Slurm HPC cluster (L40S for multi-day training jobs,
-A100 via the `test` partition for quick interactive throughput checks). No
-physical Jetson Orin Nano Super work exists in this repo yet — the only
-Jetson-named folder (`HybridNets_Jetson/`) is a dormant, currently-broken
-experiment (see Repository Map). Treat every FPS number attributed to "the
-Jetson" elsewhere in this doc as a *projection*, not a measurement, unless
-explicitly marked otherwise.
+A100 via the `test` partition for quick interactive throughput checks).
+
+**As of 2026-07-26 the physical Jetson Orin Nano Super IS exercised and
+measured** — all three FP16 engines are built on-device, numerically validated,
+and benchmarked over 500 frames (**18.95 FPS at MAXN_SUPER**, 9.88 FPS at the
+15W default). `Jetson.txt` is the authoritative record; read it before doing
+any Jetson work. Older FPS numbers attributed to "the Jetson" elsewhere in this
+doc are still *projections* — trust `Jetson.txt` over them. Note the
+Jetson-named folder `HybridNets_Jetson/` is unrelated: a dormant, broken
+experiment (see Repository Map).
 
 Owner: Aman, UC Merced. Also does infra work at UC Merced's Vista Compute Lab
 (Kubernetes ML training platform) and is starting LLNL's Data Science
@@ -271,11 +275,18 @@ ruled out, it's the thing actually being built right now.**
   `test_depth_onnx.py`'s `ONNX_PATH` all say bare `depth_onnx/...`) — the
   real file lives at `onnxmodels/depth_onnx/...`. Running any of the three
   with no explicit override will fail to find it.
-- `LaneATT/inference.py` has no `if __name__ == "__main__":` guard (runs at
-  import time) and its active `MODELSED` list hardcodes YOLO checkpoint paths
-  to a different (Linux/cluster) machine (`/home/anindra/data/...`); its
-  skip-check verifies the LaneATT checkpoint exists but never checks the YOLO
-  path, so on a machine without that path it fails instead of skipping.
+- ~~`LaneATT/inference.py` runs at import time / cluster-hardcoded MODELSED~~
+  **FIXED 2026-07-23**: it now has a `__main__` guard and a CLI
+  (`--videos --config --laneatt --yolo --frame-limit --output-dir --yolo-conf`).
+  Zero-arg = MacBook defaults (MODELSED points at local
+  `Yolov11/runs/*_val3_new/` m/n/s checkpoints); on the cluster pass
+  `--yolo /home/anindra/data/Autonomous-Bicycle/Yolov11/models/yolo11n_coco4/run7/yolo11n_coco4.pt`
+  (env `LaneNet310`, run from `LaneATT/`). Verified on A100 2026-07-23:
+  17.87 FPS wall (LaneATT 26 ms, YOLO11n .pt 11 ms/frame), coverage 500/500
+  ego-lane/steering/lead-vehicle on IMG_6540 (`video_output_3/.../run17`).
+  Remaining quirk: `VideoInference` has no `set_yolo()`, so with multiple
+  MODELSED entries (or multiple `--yolo` paths) every run after the first
+  silently reuses the first YOLO model — benchmark one YOLO per invocation.
 - `LaneATT/requirements.txt` is essentially the untouched upstream LaneATT
   file — missing `torch`, `ultralytics`, `transformers`, `onnxruntime`,
   `albumentations`, `pandas`: every dependency the live pipeline actually
@@ -409,6 +420,25 @@ folder.
   `model_0013_raw.engine.trt11.bak`). Build times on one shared A100: ~8–15
   min each under 3-way contention (~7.5 min solo). Remember these engines are
   **cluster-only artifacts** — Jetson engines get built on-device (above).
+- **Measured TensorRT FPS (2026-07-23, A100, 500 frames of `IMG_6540.MOV`,
+  via `LaneATT/trt_video_benchmark.py`)** — sequential per-frame loop
+  mirroring VideoInference; engine time includes the H2D input copy but not
+  LaneATT proposal decoding or drawing:
+  LaneATT **1.5 ms/frame** (torch .pt same day: 26 ms), YOLO11n **1.7 ms**
+  (torch wall: 11 ms), depth **2.2 ms** (depth never ran per-frame in the
+  torch pipeline). Engines-only 5.4 ms/frame → 184 FPS; full sequential wall
+  (video read + CPU preprocess + engines) 14.0 ms/frame → **71.2 FPS**, vs
+  17.87 FPS for the torch pipeline without depth. CPU preprocess now
+  dominates (7.6 of 14.0 ms — depth's 518² bicubic resize alone is 4.6 ms);
+  next optimization levers: pinned memory, a non-default CUDA stream (TRT
+  warns about `enqueueV3` on the default stream), cheaper depth resize, and
+  Aman's planned ROS2 model-parallelism. The script is in the repo
+  (`LaneATT/trt_video_benchmark.py`, run from `LaneATT/` so relative
+  engine/video defaults resolve; the cluster runs a copy at
+  `~/data/trt_bench/` to keep the repo tree clean for `git pull`). Cluster
+  env `LaneNetCuda_12_6` (`opencv-python-headless` added 2026-07-23). The
+  same script benchmarks the Jetson later — pass
+  `--laneatt-engine/--yolo-engine/--depth-engine` at the on-device engines.
 - **Cluster-built engines can never deploy to the Jetson** — TensorRT engines
   don't cross platforms (x86_64 → aarch64) under any flag or version
   combination. Cluster builds are for TRT-10.3 parity validation (same
@@ -457,26 +487,46 @@ folder.
 - Only pull this context in if the task is explicitly about Vista Compute Lab
   infra, not the AV pipeline itself.
 
-### Jetson deployment environment (target — not yet exercised on real hardware)
-- Known device state (from `Jetson.txt`, verified on-device 2026-07): JetPack
-  **6.2.1+b38**, L4T **R36.4.7**, TensorRT **10.3.0.30**+cuda12.5 (aarch64),
-  `libnvinfer-bin` installed — so NVIDIA's official CLI
-  `/usr/src/tensorrt/bin/trtexec` **is available on the Jetson** even though
-  it doesn't exist on the cluster. Engines for the Jetson must be built on the
-  Jetson itself (see the conversion section above for why and how).
-- **Use `venv` over system Python, not conda.** conda-forge can silently
-  shadow JetPack's TensorRT/CUDA/PyTorch ARM bindings with CPU-only or
-  incompatible builds. This has already caused problems on prior projects —
-  don't suggest conda.
-- Deployment stack: TensorRT (INT8 primary, FP16 fallback for
-  quantization-sensitive heads), ONNX Runtime with TensorRT Execution
-  Provider, `nvidia-modelopt` for QAT and 2:4 sparsity-aware fine-tuning.
-- Optimization levers identified but not yet used (no physical Jetson
-  benchmarking has happened in this repo yet — these are the plan, not
-  measured results): DLA offload (e.g. LaneATT on DLA while YOLO11n runs on
-  GPU simultaneously), VPI for preprocessing on PVA/VIC hardware blocks, CUDA
-  Graphs to cut inter-stage kernel launch overhead, multi-stream concurrent
-  execution.
+### Jetson deployment environment (EXERCISED AND MEASURED — see `Jetson.txt`)
+
+**`Jetson.txt` is the authoritative reference.** It has the access details,
+full device inventory, the environment recipe, build commands, all measured
+results, and a ranked "how to improve" list. This section is only the summary.
+
+- Device: JetPack **6.2.1+b38**, L4T **R36.4.7**, TensorRT **10.3.0.30**,
+  CUDA 12.6, **sm87**, 7.4 GiB *unified* CPU+GPU RAM, NVMe root.
+  `/usr/src/tensorrt/bin/trtexec` exists on the Jetson (from `libnvinfer-bin`)
+  but is not on `PATH`; we use the Python API instead. Engines must be built
+  on-device — they are locked to both TensorRT version and GPU arch.
+- Access: **prefer the LAN IP `mlc@10.0.0.226` (~8 ms)** over `mlc@ubuntu` via
+  Tailscale (~240 ms). Tailscale dropped the node for several minutes on
+  2026-07-26 while the machine was completely healthy — check the LAN IP before
+  concluding the board is down. Same ED25519 host key on both addresses.
+- **conda DOES work on this Jetson** — env `LaneNet310` (Python 3.10.20).
+  The old "use venv, never conda" advice here was over-broad. The real hazard
+  is *how* you expose TensorRT: symlink the apt bindings (`tensorrt` +
+  `tensorrt-10.3.0.dist-info`) into the env's `site-packages`, and **never set
+  `PYTHONPATH=/usr/lib/python3.10/dist-packages`** — that directory holds a
+  stub `numpy/` with no `__init__.py`, and because `PYTHONPATH` *prepends*, it
+  shadows the real numpy and breaks the env. Full recipe in `Jetson.txt`.
+- **torch is not installed on the Jetson and is not needed.**
+  `jetson_tools/trt_runner.py` does all GPU buffer management through ctypes +
+  `libcudart`, so the whole TensorRT path runs torch-free.
+- **There is NO DLA on Orin Nano** (verified: no `/sys/class/nvdla*`). Any plan
+  involving "LaneATT on DLA while YOLO runs on GPU" is impossible on this
+  board — that lever was listed here previously and is simply unavailable.
+  Orin NX and AGX have DLA; Nano does not, and generic "Orin" docs blur this.
+- Measured, 500 frames, sequential, no thermal throttling (60.7 C peak):
+  **18.95 FPS at MAXN_SUPER**, **9.88 FPS at the 15W default** (1.92x), against
+  71.19 FPS on the A100. Engines are 73% of the frame budget — the bottleneck
+  **inverted** relative to the A100, where CPU preprocessing dominated.
+- Real remaining levers, in measured priority order: run at MAXN_SUPER; overlap
+  CPU preprocessing with GPU execution (ceiling ~26 FPS, since the three
+  engines contend for one GPU and 38.4 ms of GPU work per frame is a floor);
+  run depth at a reduced rate (it is 51% of the budget); test a non-NMS YOLO
+  export (TRT 10.3 has a documented data-dependent-shape regression); then
+  INT8/CUDA Graphs. VPI for preprocessing is still unexplored but is now a
+  lower priority than it looked, since preprocessing is only 24% of the budget.
 
 ## Datasets
 
@@ -560,14 +610,19 @@ folder.
 
 ## Known Issues / Housekeeping
 
-- **`kaggle.json` and a file literally named `ec2-user@54.224.142.22`** are
-  both committed to git and pushed to `origin` (`Duck1405/Autonomous-Bicycle`)
-  — they contain what look like live Kaggle API credentials. `Jetson.txt`
-  (also tracked, currently modified in the working tree) contains a plaintext
-  SSH username/password for a remote Jetson/Ubuntu host. **Rotate these
-  credentials and remove the files from tracking** (`git rm --cached` +
-  `.gitignore`); history-rewriting is a separate, bigger decision — don't do
-  it without being asked.
+- **Credentials committed to git and pushed to `origin`
+  (`Duck1405/Autonomous-Bicycle`).** Three of them:
+  `kaggle.json` and a file literally named `ec2-user@54.224.142.22` hold what
+  look like live Kaggle API credentials, and `Jetson.txt` held the Jetson's
+  plaintext SSH password. The password has been removed from the working copy
+  of `Jetson.txt` (2026-07-26), **but that does not undo the exposure** — it is
+  still readable in history, in at least commits `29b0e05`, `64cb784`,
+  `1bdf47d`, and `7e712ab`, and `7e712ab` is on `origin/main`.
+  **Rotate all three credentials**, then `git rm --cached` + `.gitignore` the
+  two credential files. Key-based SSH to `mlc@ubuntu` already works, so
+  rotating the Jetson password costs nothing operationally (only `sudo` needs
+  it). History-rewriting is a separate, bigger decision — don't do it without
+  being asked.
 - `README.md`'s stated 3-branch policy (`main`=docs, `ai`=ML work,
   `hardware`=firmware) doesn't match reality: all ML work above lives on
   `main`, and the firmware branch is actually named `S3-code`.

@@ -1,0 +1,25 @@
+{
+  "frames": 500,
+  "video": "video_input/IMG_6540.MOV",
+  "tensorrt": "10.3.0",
+  "compute_capability": "sm87",
+  "read_ms": 2.5570370920013374,
+  "models": {
+    "laneatt": {
+      "preprocess_ms": 3.749049254014608,
+      "engine_ms": 19.26080020999143
+    },
+    "yolo": {
+      "preprocess_ms": 5.931144787962694,
+      "engine_ms": 16.47157713002707
+    },
+    "depth": {
+      "preprocess_ms": 17.777645602031043,
+      "engine_ms": 35.41498428799059
+    }
+  },
+  "engines_only_ms": 71.1473616280091,
+  "engines_only_fps": 14.055334971217299,
+  "pipeline_ms": 101.22624921999886,
+  "pipeline_fps": 9.87886054956617
+}
