@@ -24,8 +24,12 @@ def pre_laneatt(frame):
     return np.ascontiguousarray(arr.transpose(2, 0, 1)[None])
 
 
-def pre_yolo(frame, size=640):
-    """Letterbox to size x size, gray 114 pad, RGB, /255 (mirrors jetson_infer_onnx.py)."""
+def pre_yolo_meta(frame, size=640):
+    """As pre_yolo, but also returns the letterbox (scale, dx, dy).
+
+    Decoding boxes back to frame coordinates needs those three numbers, so
+    anything that draws detections must call this rather than pre_yolo.
+    """
     h, w = frame.shape[:2]
     r = min(size / h, size / w)
     nw, nh = round(w * r), round(h * r)
@@ -33,7 +37,12 @@ def pre_yolo(frame, size=640):
     dx, dy = (size - nw) // 2, (size - nh) // 2
     canvas[dy:dy + nh, dx:dx + nw] = cv2.resize(frame, (nw, nh))
     blob = cv2.cvtColor(canvas, cv2.COLOR_BGR2RGB).transpose(2, 0, 1)[None]
-    return np.ascontiguousarray(blob, dtype=np.float32) / 255.0
+    return np.ascontiguousarray(blob, dtype=np.float32) / 255.0, r, dx, dy
+
+
+def pre_yolo(frame, size=640):
+    """Letterbox to size x size, gray 114 pad, RGB, /255 (mirrors jetson_infer_onnx.py)."""
+    return pre_yolo_meta(frame, size)[0]
 
 
 def pre_depth(frame, size=518):

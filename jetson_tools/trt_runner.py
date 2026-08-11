@@ -141,12 +141,21 @@ class TrtEngine:
             raise RuntimeError("execute_async_v3 returned False")
         self.cuda.sync(self.stream)
 
-    def infer(self, arr):
-        """run() plus D2H of every output. Returns {name: ndarray} (views reused)."""
-        self.run(arr)
+    def fetch(self):
+        """D2H of every output. Returns {name: ndarray}.
+
+        The host buffers are preallocated and reused, so a result is only valid
+        until the next fetch() on this engine — copy anything that must outlive
+        the current frame.
+        """
         for name, host in self.outputs.items():
             self.cuda.dtoh(host, self._device[name])
         return self.outputs
+
+    def infer(self, arr):
+        """run() plus D2H of every output. Returns {name: ndarray} (views reused)."""
+        self.run(arr)
+        return self.fetch()
 
     def close(self):
         for ptr in self._device.values():
