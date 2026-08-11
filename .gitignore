@@ -101,3 +101,5 @@ LaneATT/video_input/
 *.MP4
 
 LaneATT/jetson_video/
+
+LaneATT/jetson_video
