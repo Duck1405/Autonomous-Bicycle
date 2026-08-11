@@ -99,3 +99,5 @@ LaneATT/video_input/
 *.tar.gz
 *.MOV
 *.MP4
+
+LaneATT/jetson_video/
