@@ -23,33 +23,42 @@ __pycache__/
 *.mp4
 *.mov
 
+# Useless/deeplab
+# Useless/HybridNets
+# Useless/HybridNets_Jetson
 LaneNet/lanenet-lane-detection-pytorch/data
 lanenet-lane-detection-pytorch/data
 HybridNets/data
 HybridNets/data/
+Useless/HybridNets/data/
+Useless/HybridNets/data
 LaneNet/archive
 LaneNet/lanenet-lane-detection-pytorch/TuSimple.tar.gz
 lanenet-lane-detection-pytorch/TuSimple.tar.gz
+# Useless/lanenet-lane-detection-pytorch
 LaneNet/archive.zip
 new_data.tar
 LaneNet/CuLane Extra
 LaneNet/CuLane
+# Useless/LaneTCA
+
+#Useless/Send
 
 LaneNet/TUSimple
 /Send/numpy_output
 
 
 
-HybridNets_Jetson/onnx
+Useless/HybridNets_Jetson/onnx
 *.onnx
 *.onnxruntime
 
 # Send output files
-HybridNets_Jetson/numpy_videos
-HybridNets_Jetson/numpy_output
+Useless/HybridNets_Jetson/numpy_videos
+Useless/HybridNets_Jetson/numpy_output
 
-HybridNets_Jetson/numpy_concat
-HybridNets_Jetson/numpy_videos_concat
+Useless/HybridNets_Jetson/numpy_concat
+Useless/HybridNets_Jetson/numpy_videos_concat
 CuLane
 TUSimple
 

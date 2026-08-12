@@ -1,3 +1,0 @@
-/home/ubuntu/Wmq/Task/LaneDetection/BaseLineNew/Ultra-Fast-Lane-Detection-master-Train/evaluation/culane/CMakeFiles/rebuild_cache.dir
-/home/ubuntu/Wmq/Task/LaneDetection/BaseLineNew/Ultra-Fast-Lane-Detection-master-Train/evaluation/culane/CMakeFiles/edit_cache.dir
-/home/ubuntu/Wmq/Task/LaneDetection/BaseLineNew/Ultra-Fast-Lane-Detection-master-Train/evaluation/culane/CMakeFiles/culane_evaluator.dir
