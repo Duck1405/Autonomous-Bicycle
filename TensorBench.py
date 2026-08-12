@@ -70,7 +70,7 @@ if __name__ == "__main__":
     YoloN_engine = Path("LaneATT/onnxmodels/YoloN/yolo11n_coco4_nms.engine")
 
     videos = "Videos2"
-    video_main = ["camera.mp4"]
+    video_main = [videos / Path("camera.mp4")]
     
     frame = get_frame(video_main[0], 200)
     
