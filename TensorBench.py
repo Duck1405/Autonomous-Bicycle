@@ -68,7 +68,7 @@ if __name__ == "__main__":
 
     # 2. Add arguments
     # Positional argument (Required by default)
-    parser.add_argument("frame", type=int, 2100)
+    parser.add_argument("frame", type=int, default=2100)
     args = parser.parse_args()
     
     depth_engine= Path("LaneATT/onnxmodels/depth_onnx/depth_anything_v2_small.engine")
