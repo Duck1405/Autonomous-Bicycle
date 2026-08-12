@@ -126,8 +126,8 @@ def main():
           f"{free / 2**30:.2f} GiB GPU free of {total / 2**30:.2f} GiB")
 
     specs = [("laneatt", args.laneatt_engine, _pre_laneatt),
-             ("yolo", args.yolo_engine, _pre_yolo),
-             ("depth", args.depth_engine, _pre_depth)]
+             ("yolo", args.yolo_engine, _pre_yolo),]
+            #  ("depth", args.depth_engine, _pre_depth)]
     models = []
     for label, path, pre in specs:
         if label not in wanted:
