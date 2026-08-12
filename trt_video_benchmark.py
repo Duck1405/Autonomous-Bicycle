@@ -206,6 +206,9 @@ def main():
             writer.write(compose(frame, raw, hysteresis))
             t_render += time.perf_counter() - t0
         done += 1
+        if done % 10 == 0 or done == args.frames:
+            print(f"\r{done}/{args.frames} frames", end="", flush=True)
+        
     t_wall = time.perf_counter() - t_wall
     cap.release()
     if writer is not None:
@@ -248,8 +251,19 @@ def main():
     }
     
     print(json.dumps(json_output, indent=2) + "\n")
-    print("again")
-    print(json_output)
+
+    if args.json:
+        print("Json is enabled")
+        folder = Path(args.json)
+        files = [f.name for f in folder_path.iterdir() if f.is_file()]
+        total = len(files)
+        name = f"Benchmark_{total + 1}.json"
+        file_json = folder / name
+        print(f"Writing to {args.json}")
+        
+        with open(file_json, "w") as f:
+            json.dump(json_output, f, indent=2)
+    
     # if args.json:
         # args.json.write_text(json.dumps({
         #     "frames": done,
