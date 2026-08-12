@@ -74,7 +74,7 @@ def parse_args():
                         default=Path("LaneATT/onnxmodels/YoloN/YoloN_fb16.engine"))
     parser.add_argument("--depth-engine", type=Path,
                         default=Path("LaneATT/onnxmodels/depth_onnx/depth_anything_v2_small.engine"))
-    parser.add_argument("--render", type=Path, default="LaneATT/video_output_4",
+    parser.add_argument("--render", type=Path, default="LaneATT/video_output_4/render.mp4",
                         help="write an annotated video here (decode + draw are "
                              "timed separately as render_ms)")
     parser.add_argument("--codec", default="mp4v",
@@ -180,6 +180,16 @@ def main():
     t_eng = {label: 0.0 for label, _, _ in models}
     done = 0
     t_wall = time.perf_counter()
+    
+    total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+    print(f"video: {args.video} ({total_frames} frames), "
+          f"timing {args.frames} frames after {args.warmup} warmup")
+    
+    if args.frames > total_frames:
+        print(f"WARNING: requested {args.frames} frames, but video only has {total_frames}. "
+              f"Will process {total_frames} frames instead.")
+        args.frames = total_frames
+    
     while done < args.frames:
         t0 = time.perf_counter()
         ok, frame = cap.read()
