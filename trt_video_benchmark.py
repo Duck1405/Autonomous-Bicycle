@@ -74,7 +74,7 @@ def parse_args():
                         default=Path("LaneATT/onnxmodels/YoloN/yolo11n_coco4_nms.engine"))
     parser.add_argument("--depth-engine", type=Path,
                         default=Path("LaneATT/onnxmodels/depth_onnx/depth_anything_v2_small.engine"))
-    parser.add_argument("--render", type=Path, default=None,
+    parser.add_argument("--render", type=Path, default=None, # LaneATT/video_output_4
                         help="write an annotated video here (decode + draw are "
                              "timed separately as render_ms)")
     parser.add_argument("--codec", default="mp4v",
@@ -257,7 +257,6 @@ def main():
         folder = Path(args.json)
         if folder.is_file():
             folder = folder.parent
-        folder.mkdir(parents=True, exist_ok=True)
         files = [f.name for f in folder.iterdir() if f.is_file()]
         total = len(files)
         name = f"Benchmark_{total + 1}.json"
