@@ -2,9 +2,9 @@
 
 
 
-from cuda.bindings import runtime as cudart
+# from cuda.bindings import runtime as cudart
 import sys
-import tensorrt as trt
+# import tensorrt as trt
 from pathlib import Path
 
 import re
@@ -16,6 +16,7 @@ import numpy as np
 
 import time 
 
+import argparse
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "jetson_tools"))
 from jetson_tools.postprocess import (LaneHysteresis, depth_colorize, draw_boxes,  # noqa: E402
@@ -48,9 +49,9 @@ def get_frame(video_path, frame):
     # Seek directly to the requested frame.
     cap.set(cv2.CAP_PROP_POS_FRAMES, frame)
     ret, img = cap.read()
-    cv2.imshow("title", img)
-    cv2.waitKey(0)
-    cv2.destroyAllWindows()    
+    # cv2.imshow("title", img)
+    # cv2.waitKey(0)
+    # cv2.destroyAllWindows()    
     cap.release()
     return img
     
@@ -58,11 +59,18 @@ def get_frame(video_path, frame):
 def main(frame, model):
     logger = trt.Logger(trt.Logger.WARNING)
     runtime = trt.Runtime(logger)
-    engine = load_engine(runtime, model)
+    #engine = load_engine(runtime, model)
     
 
 
 if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="A simple example script using argparse.")
+
+    # 2. Add arguments
+    # Positional argument (Required by default)
+    parser.add_argument("frame", type=str, 2100)
+    args = parser.parse_args()
+    
     depth_engine= Path("LaneATT/onnxmodels/depth_onnx/depth_anything_v2_small.engine")
     laneNet = Path("LaneATT/onnxmodels/depth_onnx/depth_anything_v2_small.engine")
     YoloS_engine = Path("LaneATT/onnxmodels/LaneATTresnet34Aug2/models/model_0013_raw.engine")
@@ -71,8 +79,9 @@ if __name__ == "__main__":
 
     videos = "Videos2"
     video_main = [videos / Path("camera.mp4")]
+    video_main = ["/Users/amannindra/Projects/Auto/Autonomous-Bicycle/LaneATT/video_input/camera.mp4"]
     
-    frame = get_frame(video_main[0], 200)
+    frame = get_frame(video_main[0], args.frame)
     
     main(
         frame, laneNet
