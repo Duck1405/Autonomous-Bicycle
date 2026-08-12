@@ -4,7 +4,7 @@
 
 # from cuda.bindings import runtime as cudart
 import sys
-import tensorrt as trt
+
 from pathlib import Path
 
 import re
@@ -23,7 +23,7 @@ from jetson_tools.postprocess import (LaneHysteresis, depth_colorize, draw_boxes
                          draw_lanes, laneatt_decode, yolo_decode)
 from jetson_tools.preprocess import pre_depth, pre_laneatt, pre_yolo_meta  # noqa: E402
 from jetson_tools.trt_runner import CudaRT, TrtEngine  # noqa: E402
-
+import tensorrt as trt
 
 
 def check(err):
@@ -59,7 +59,9 @@ def get_frame(video_path, frame):
 def main(frame, model):
     logger = trt.Logger(trt.Logger.WARNING)
     runtime = trt.Runtime(logger)
-    #engine = load_engine(runtime, model)
+    engine = load_engine(runtime, model)
+    context = engine.create_execution_context()
+    
     
 
 
