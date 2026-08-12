@@ -18,10 +18,10 @@ import time
 
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "jetson_tools"))
-from postprocess import (LaneHysteresis, depth_colorize, draw_boxes,  # noqa: E402
+from jetson_tools.postprocess import (LaneHysteresis, depth_colorize, draw_boxes,  # noqa: E402
                          draw_lanes, laneatt_decode, yolo_decode)
-from preprocess import pre_depth, pre_laneatt, pre_yolo_meta  # noqa: E402
-from trt_runner import CudaRT, TrtEngine  # noqa: E402
+from jetson_tools.preprocess import pre_depth, pre_laneatt, pre_yolo_meta  # noqa: E402
+from jetson_tools.trt_runner import CudaRT, TrtEngine  # noqa: E402
 
 
 
