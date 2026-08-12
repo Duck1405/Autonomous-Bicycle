@@ -83,7 +83,7 @@ def parse_args():
     parser.add_argument("--no-hysteresis", action="store_true",
                         help="draw every lane the model NMS returns instead of "
                              "the two-threshold filtered set")
-    parser.add_argument("--json", type=Path, default=None,
+    parser.add_argument("--json", type=Path, default="Benchmark",
                         help="also write the results here as JSON")
     return parser.parse_args()
 
@@ -146,6 +146,8 @@ def main():
         models.append((label, eng, pre))
     if not models:
         raise SystemExit("no engines found")
+    else:
+        print(f"Models: {models}")
 
     cap = cv2.VideoCapture(str(args.video))
     ok, first = cap.read()
@@ -227,24 +229,45 @@ def main():
           f"{' + render' if writer is not None else ''}, sequential): "
           f"{ms(t_wall):.1f} ms/frame -> {done / t_wall:.2f} FPS")
 
-    if args.json:
-        args.json.write_text(json.dumps({
-            "frames": done,
-            "video": str(args.video),
-            "tensorrt": trt.__version__,
-            "compute_capability": f"sm{cc[0]}{cc[1]}" if cc else None,
-            "render": str(args.render) if args.render else None,
-            "read_ms": ms(t_read),
-            "models": {label: {"preprocess_ms": ms(t_pre[label]),
-                               "engine_ms": ms(t_eng[label])}
-                       for label, _, _ in models},
-            "engines_only_ms": ms(total_eng),
-            "engines_only_fps": done / total_eng,
-            "render_ms": ms(t_render),
-            "pipeline_ms": ms(t_wall),
-            "pipeline_fps": done / t_wall,
-        }, indent=2) + "\n")
-        print(f"wrote {args.json}")
+
+    json_output = {
+        "frames": done,
+        "video": str(args.video),
+        "tensorrt": trt.__version__,
+        "compute_capability": f"sm{cc[0]}{cc[1]}" if cc else None,
+        "render": str(args.render) if args.render else None,
+        "read_ms": ms(t_read),
+        "models": {label: {"preprocess_ms": ms(t_pre[label]),
+                           "engine_ms": ms(t_eng[label])}
+                   for label, _, _ in models},
+        "engines_only_ms": ms(total_eng),
+        "engines_only_fps": done / total_eng,
+        "render_ms": ms(t_render),
+        "pipeline_ms": ms(t_wall),
+        "pipeline_fps": done / t_wall,
+    }
+    
+    print(json.dumps(json_output, indent=2) + "\n")
+    print("again")
+    print(json_output)
+    # if args.json:
+        # args.json.write_text(json.dumps({
+        #     "frames": done,
+        #     "video": str(args.video),
+        #     "tensorrt": trt.__version__,
+        #     "compute_capability": f"sm{cc[0]}{cc[1]}" if cc else None,
+        #     "render": str(args.render) if args.render else None,
+        #     "read_ms": ms(t_read),
+        #     "models": {label: {"preprocess_ms": ms(t_pre[label]),
+        #                        "engine_ms": ms(t_eng[label])}
+        #                for label, _, _ in models},
+        #     "engines_only_ms": ms(total_eng),
+        #     "engines_only_fps": done / total_eng,
+        #     "render_ms": ms(t_render),
+        #     "pipeline_ms": ms(t_wall),
+        #     "pipeline_fps": done / t_wall,
+        # }, indent=2) + "\n")
+        # print(f"wrote {args.json}")
 
     for _, eng, _ in models:
         eng.close()
