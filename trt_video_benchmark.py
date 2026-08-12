@@ -69,9 +69,9 @@ def parse_args():
     parser.add_argument("--models", default=",".join(LABELS),
                         help=f"comma-separated subset of {','.join(LABELS)}")
     parser.add_argument("--laneatt-engine", type=Path,
-                        default=Path("LaneATT/onnxmodels/LaneATTresnet34Aug2/models/model_0013_raw.engine"))
+                        default=Path("LaneATT/onnxmodels/LaneATTresnet34Aug2/models/LaneATT_fb16.engine"))
     parser.add_argument("--yolo-engine", type=Path,
-                        default=Path("LaneATT/onnxmodels/YoloN/yolo11n_coco4_nms.engine"))
+                        default=Path("LaneATT/onnxmodels/YoloN/YoloN_fb16.engine"))
     parser.add_argument("--depth-engine", type=Path,
                         default=Path("LaneATT/onnxmodels/depth_onnx/depth_anything_v2_small.engine"))
     parser.add_argument("--render", type=Path, default=None, # LaneATT/video_output_4
