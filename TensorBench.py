@@ -68,7 +68,8 @@ if __name__ == "__main__":
 
     # 2. Add arguments
     # Positional argument (Required by default)
-    parser.add_argument("frame", type=int, default=2100)
+    parser.add_argument("--frame", type=int, default=2100)
+    parser.add_argument("--video", type=str, default="video_input/1.mp4", help="Path to the video file.")
     args = parser.parse_args()
     
     depth_engine= Path("LaneATT/onnxmodels/depth_onnx/depth_anything_v2_small.engine")
@@ -79,7 +80,8 @@ if __name__ == "__main__":
 
     videos = "Videos2"
     video_main = [videos / Path("camera.mp4")]
-    video_main = ["/Users/amannindra/Projects/Auto/Autonomous-Bicycle/LaneATT/video_input/camera.mp4"]
+    video_main = ["Videos2/camera.mp4"]
+
     
     frame = get_frame(video_main[0], args.frame)
     
