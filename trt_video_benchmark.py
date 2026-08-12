@@ -255,6 +255,9 @@ def main():
     if args.json:
         print("Json is enabled")
         folder = Path(args.json)
+        if folder.is_file():
+            folder = folder.parent
+        folder.mkdir(parents=True, exist_ok=True)
         files = [f.name for f in folder.iterdir() if f.is_file()]
         total = len(files)
         name = f"Benchmark_{total + 1}.json"
