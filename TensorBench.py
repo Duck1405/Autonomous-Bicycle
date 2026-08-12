@@ -4,7 +4,7 @@
 
 # from cuda.bindings import runtime as cudart
 import sys
-# import tensorrt as trt
+import tensorrt as trt
 from pathlib import Path
 
 import re
