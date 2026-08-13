@@ -24,7 +24,7 @@ from pathlib import Path
 # Defaults for the Mac; override on the cluster with --images/--labels/--out.
 DEFAULT_IMAGES_DIR = "/Users/amannindra/Projects/Auto/100k_images"
 DEFAULT_LABELS_DIR = "/Users/amannindra/Projects/Auto/100k_json"
-DEFAULT_OUT_DIR = "/Users/amannindra/Projects/Auto/Bdd100Final"
+DEFAULT_OUT_DIR = "/Users/amannindra/Projects/Auto/Bdd100Final2"
 
 # Set from the parsed args in main() before any conversion runs.
 IMAGES_DIR = Path(DEFAULT_IMAGES_DIR)

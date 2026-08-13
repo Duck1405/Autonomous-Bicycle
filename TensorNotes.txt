@@ -68,12 +68,10 @@ engines only:      39.8 ms/frame -> 25.1 FPS
 preprocess only:    8.4 ms/frame
 pipeline wall (read + preprocess + engines, sequential): 48.9 ms/frame -> 20.45 FPS
 
-
-
-
-
-
-
-
+ python trt_video_benchmark.py \
+    --video Videos2/camera_1.mp4 \
+    --warmup 200 \
+    --frames 99999 \
+    --render LaneATT/video_output_4/render2.mp4
 
 

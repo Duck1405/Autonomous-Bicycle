@@ -70,3 +70,10 @@ Submitted batch job 183267
 Submitted batch job 183268
 (LaneNet310) [anindra@rclogin03 shell]$ 
 
+
+
+
+Base Output with rergular bdd100k classes.
+
+{'traffic sign': 239961, 'traffic light': 186301, 'car': 714121, 'area/drivable': 64050, 'lane/road curb': 109868, 'lane/double yellow': 37519, 'truck': 30012, 'bus': 11688, 'area/alternative': 61799, 'lane/single yellow': 20220, 'lane/single white': 247108, 'person': 91435, 'lane/crosswalk': 108284, 'rider': 4522, 'bike': 7227, 'lane/single other': 249, 'lane/double white': 5674, 'motor': 3002, 'train': 136, 'area/unknown': 2, 'lane/double other': 26}
+
