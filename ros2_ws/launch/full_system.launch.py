@@ -65,4 +65,5 @@ def generate_launch_description():
         }],
     )
 
+
     return LaunchDescription(camera_nodes + tf_nodes + [stereo_node])
