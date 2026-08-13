@@ -82,6 +82,24 @@ ros2_ws/build
 ros2_ws/install
 ros2_ws/log
 
+ros2_ws_old/*.pyc
+ros2_ws_old/*.iml
+ros2_ws_old/*.swp
+ros2_ws_old/.project
+ros2_ws_old/.pydevproject
+ros2_ws_old/.DS_Store
+ros2_ws_old/.idea
+
+ros2_ws_old/.vscode/*
+ros2_ws_old/!.vscode/extensions.json
+ros2_ws_old/!.vscode/settings.json
+
+# colcon/CMake output
+ros2_ws_old/build
+ros2_ws_old/install
+ros2_ws_old/log
+
+
 .vscode
 
 /LaneATT/cache
