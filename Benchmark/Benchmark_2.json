@@ -1,0 +1,23 @@
+{
+  "frames": 500,
+  "video": "/home/mlc/aman/Autonomous-Bicycle/Videos2/camera_1.mp4",
+  "tensorrt": "10.3.0",
+  "compute_capability": "sm87",
+  "render": null,
+  "read_ms": 0.7558245061372872,
+  "models": {
+    "laneatt": {
+      "preprocess_ms": 4.541214631841285,
+      "engine_ms": 22.79682035591395
+    },
+    "yolo": {
+      "preprocess_ms": 5.7487652481213445,
+      "engine_ms": 18.692404907909804
+    }
+  },
+  "engines_only_ms": 41.489225263823755,
+  "engines_only_fps": 24.10264336441932,
+  "render_ms": 0.0,
+  "pipeline_ms": 52.59844317799434,
+  "pipeline_fps": 19.011969548527833
+}
