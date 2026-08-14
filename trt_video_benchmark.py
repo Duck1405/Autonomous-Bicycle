@@ -72,6 +72,10 @@ def parse_args():
                         default=Path("LaneATT/onnxmodels/LaneATTresnet34Aug2/models/LaneATT_fb16.engine"))
     parser.add_argument("--yolo-engine", type=Path,
                         default=Path("LaneATT/onnxmodels/YoloN/YoloN_fb16.engine"))
+    parser.add_argument("--laneatt-on", type=bool, default=True,)
+    parser.add_argument("--yolo-on", type=bool, default=True,)
+    parser.add_argument("--depth-on", type=bool, default=False,)
+    
     parser.add_argument("--depth-engine", type=Path,
                         default=Path("LaneATT/onnxmodels/depth_onnx/depth_anything_v2_small.engine"))
     parser.add_argument("--render", type=Path, default="LaneATT/video_output_4/render.mp4",
@@ -125,9 +129,14 @@ def main():
     print(f"tensorrt {trt.__version__}, {arch}, "
           f"{free / 2**30:.2f} GiB GPU free of {total / 2**30:.2f} GiB")
 
-    specs = [("laneatt", args.laneatt_engine, _pre_laneatt),
-             ("yolo", args.yolo_engine, _pre_yolo),]
-            #  ("depth", args.depth_engine, _pre_depth)]
+    specs = []
+    if args.laneatt_on:
+        specs.append(("laneatt", args.laneatt_engine, _pre_laneatt))
+    if args.yolo_on:
+        specs.append(("yolo", args.yolo_engine, _pre_yolo))
+    if args.depth_engine.exists():
+        specs.append(("depth", args.depth_engine, _pre_depth))
+        
     models = []
     for label, path, pre in specs:
         if label not in wanted:
