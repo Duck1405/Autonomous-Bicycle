@@ -161,6 +161,11 @@ def main():
         print(f"Models: {models}")
 
     print(f"Opening video {args.video}")
+    
+    if not args.video.exists():
+
+        raise SystemExit(f"{args.video} not found")
+    
     cap = cv2.VideoCapture(str(args.video))
     ok, first = cap.read()
     if not ok:
@@ -201,6 +206,8 @@ def main():
         print(f"WARNING: requested {args.frames} frames, but video only has {total_frames}. "
               f"Will process {total_frames} frames instead.")
         args.frames = total_frames
+    
+    print(f"Models used: {models}")
     
     while done < args.frames:
         t0 = time.perf_counter()
