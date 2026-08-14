@@ -160,6 +160,7 @@ def main():
     else:
         print(f"Models: {models}")
 
+    print(f"Opening video {args.video}")
     cap = cv2.VideoCapture(str(args.video))
     ok, first = cap.read()
     if not ok:
