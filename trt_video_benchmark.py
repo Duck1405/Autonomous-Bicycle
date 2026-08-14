@@ -161,6 +161,10 @@ def main():
         print(f"Models: {models}")
 
     print(f"Opening video {args.video}")
+    
+    if not args.video.exists():
+        raise SystemExit(f"{args.video} not found")
+    
     cap = cv2.VideoCapture(str(args.video))
     ok, first = cap.read()
     if not ok:
