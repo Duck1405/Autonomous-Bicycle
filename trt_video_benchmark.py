@@ -72,9 +72,9 @@ def parse_args():
                         default=Path("LaneATT/onnxmodels/LaneATTresnet34Aug2/models/LaneATT_fb16.engine"))
     parser.add_argument("--yolo-engine", type=Path,
                         default=Path("LaneATT/onnxmodels/YoloN/YoloN_fb16.engine"))
-    parser.add_argument("--laneatt-on", type=bool, default=True,)
-    parser.add_argument("--yolo-on", type=bool, default=True,)
-    parser.add_argument("--depth-on", type=bool, default=False,)
+    parser.add_argument("--laneatt-on", action=argparse.BooleanOptionalAction, default=True)
+    parser.add_argument("--yolo-on", action=argparse.BooleanOptionalAction, default=True)
+    parser.add_argument("--depth-on", action=argparse.BooleanOptionalAction, default=False)
     
     parser.add_argument("--depth-engine", type=Path,
                         default=Path("LaneATT/onnxmodels/depth_onnx/depth_anything_v2_small.engine"))
