@@ -1,0 +1,19 @@
+{
+  "frames": 500,
+  "video": "Videos2/IMG_2635.mp4",
+  "tensorrt": "10.3.0",
+  "compute_capability": "sm87",
+  "render": "LaneATT/video_output_4/render.mp4",
+  "read_ms": 42.27142772998195,
+  "models": {
+    "yolo": {
+      "preprocess_ms": 4.1265655034803785,
+      "engine_ms": 16.677420647989493
+    }
+  },
+  "engines_only_ms": 16.677420647989493,
+  "engines_only_fps": 59.96131063112284,
+  "render_ms": 23.841723663790617,
+  "pipeline_ms": 86.9802556859795,
+  "pipeline_fps": 11.496862042004686
+}

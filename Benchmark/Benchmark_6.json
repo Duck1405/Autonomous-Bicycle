@@ -1,0 +1,23 @@
+{
+  "frames": 500,
+  "video": "Videos2/IMG_2635.mp4",
+  "tensorrt": "10.3.0",
+  "compute_capability": "sm87",
+  "render": "LaneATT/video_output_4/render.mp4",
+  "read_ms": 40.86096130212536,
+  "models": {
+    "laneatt": {
+      "preprocess_ms": 2.419442704122048,
+      "engine_ms": 26.280088141560555
+    },
+    "yolo": {
+      "preprocess_ms": 4.170241569401696,
+      "engine_ms": 16.531839923758525
+    }
+  },
+  "engines_only_ms": 42.81192806531908,
+  "engines_only_fps": 23.357976274142068,
+  "render_ms": 24.280132492422126,
+  "pipeline_ms": 114.62302155798534,
+  "pipeline_fps": 8.724250908829177
+}

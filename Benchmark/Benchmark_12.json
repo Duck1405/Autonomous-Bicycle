@@ -1,0 +1,19 @@
+{
+  "frames": 500,
+  "video": "Videos2/IMG_2635.mp4",
+  "tensorrt": "10.3.0",
+  "compute_capability": "sm87",
+  "render": null,
+  "read_ms": 52.25476604187861,
+  "models": {
+    "laneatt": {
+      "preprocess_ms": 3.263232654426247,
+      "engine_ms": 39.762864331831224
+    }
+  },
+  "engines_only_ms": 39.762864331831224,
+  "engines_only_fps": 25.149093678331255,
+  "render_ms": 0.0,
+  "pipeline_ms": 95.36279085202841,
+  "pipeline_fps": 10.486270284933985
+}
