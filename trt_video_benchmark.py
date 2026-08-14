@@ -54,6 +54,14 @@ def _pre_depth(frame):
     return pre_depth(frame), None
 
 
+def str2bool(value):
+    if value.lower() in ("true", "1", "yes", "y"):
+        return True
+    if value.lower() in ("false", "0", "no", "n"):
+        return False
+    raise argparse.ArgumentTypeError(f"expected a boolean string, got {value!r}")
+
+
 def parse_args():
     parser = argparse.ArgumentParser(
         description="Sequential per-frame TensorRT benchmark of the LaneATT / "
@@ -72,9 +80,9 @@ def parse_args():
                         default=Path("LaneATT/onnxmodels/LaneATTresnet34Aug2/models/LaneATT_fb16.engine"))
     parser.add_argument("--yolo-engine", type=Path,
                         default=Path("LaneATT/onnxmodels/YoloN/YoloN_fb16.engine"))
-    parser.add_argument("--laneatt-on", action=argparse.BooleanOptionalAction, default=True)
-    parser.add_argument("--yolo-on", action=argparse.BooleanOptionalAction, default=True)
-    parser.add_argument("--depth-on", action=argparse.BooleanOptionalAction, default=False)
+    parser.add_argument("--laneatt-on", type=str2bool, default=True)
+    parser.add_argument("--yolo-on", type=str2bool, default=True)
+    parser.add_argument("--depth-on", type=str2bool, default=False)
     
     parser.add_argument("--depth-engine", type=Path,
                         default=Path("LaneATT/onnxmodels/depth_onnx/depth_anything_v2_small.engine"))
