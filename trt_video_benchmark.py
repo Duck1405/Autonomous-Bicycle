@@ -134,8 +134,10 @@ def main():
         specs.append(("laneatt", args.laneatt_engine, _pre_laneatt))
     if args.yolo_on:
         specs.append(("yolo", args.yolo_engine, _pre_yolo))
-    if args.depth_engine.exists():
+    if args.depth_on:
         specs.append(("depth", args.depth_engine, _pre_depth))
+        
+    print(f"Loading engines for {wanted} from {[str(p) for _, p, _ in specs]}")
         
     models = []
     for label, path, pre in specs:
