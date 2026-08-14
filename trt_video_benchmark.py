@@ -206,6 +206,8 @@ def main():
               f"Will process {total_frames} frames instead.")
         args.frames = total_frames
     
+    print(f"Models used: {models}")
+    
     while done < args.frames:
         t0 = time.perf_counter()
         ok, frame = cap.read()
