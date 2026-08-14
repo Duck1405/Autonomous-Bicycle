@@ -89,6 +89,10 @@ def parse_args():
     parser.add_argument("--render", type=Path, default="LaneATT/video_output_4/render.mp4",
                         help="write an annotated video here (decode + draw are "
                              "timed separately as render_ms)")
+    parser.add_argument("--no-render", action="store_true",
+                        help="skip writing the annotated video entirely (no D2H "
+                             "copy, decode, draw, or encode) for an engines-only "
+                             "benchmark; --render is ignored when this is set")
     parser.add_argument("--codec", default="mp4v",
                         help="fourcc for --render; avc1 has no encoder on the "
                              "Jetson, MJPG with a .avi path is the fallback")
@@ -125,6 +129,8 @@ def compose(frame, raw, hysteresis):
 
 def main():
     args = parse_args()
+    if args.no_render:
+        args.render = None
     wanted = [m.strip() for m in args.models.split(",") if m.strip()]
     unknown = [m for m in wanted if m not in LABELS]
     if unknown:
