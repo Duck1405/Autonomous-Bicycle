@@ -74,6 +74,176 @@ pipeline wall (read + preprocess + engines, sequential): 48.9 ms/frame -> 20.45 
     --frames 99999 \
     --render LaneATT/video_output_4/render2.mp4
 
-Only LaneATT
 
 Only Yolov11
+
+(LaneNet310) mlc@ubuntu:~/aman/Autonomous-Bicycle$ python trt_video_benchmark.py --laneatt-on False --video Videos2/IMG_2635.mp4
+
+
+tensorrt 10.3.0, sm87, 4.63 GiB GPU free of 7.44 GiB
+Loading engines for ['laneatt', 'yolo', 'depth'] from ['LaneATT/onnxmodels/YoloN/YoloN_fb16.engine']
+yolo: LaneATT/onnxmodels/YoloN/YoloN_fb16.engine
+    in  images[1, 3, 640, 640] float32
+    out output0[1, 300, 6] float32
+Models: [('yolo', <jetson_tools.trt_runner.TrtEngine object at 0xffff7827d300>, <function _pre_yolo at 0xffff93eee560>)]
+Opening video Videos2/IMG_2635.mp4
+rendering 1080x1920 @ 29.97 fps [mp4v] -> LaneATT/video_output_4/render.mp4
+video: Videos2/IMG_2635.mp4 (18506 frames), timing 500 frames after 20 warmup
+Models used: [('yolo', <jetson_tools.trt_runner.TrtEngine object at 0xffff7827d300>, <function _pre_yolo at 0xffff93eee560>)]
+500/500 frames
+=== TensorRT sequential per-frame benchmark: 500 frames of Videos2/IMG_2635.mp4 ===
+video read: 42.3 ms/frame
+yolo     preprocess    4.1 ms/frame + engine   16.7 ms/frame
+engines only:      16.7 ms/frame -> 60.0 FPS
+preprocess only:    4.1 ms/frame
+render (D2H + decode + draw + write):   23.8 ms/frame
+pipeline wall (read + preprocess + engines + render, sequential): 87.0 ms/frame -> 11.50 FPS
+{
+  "frames": 500,
+  "video": "Videos2/IMG_2635.mp4",
+  "tensorrt": "10.3.0",
+  "compute_capability": "sm87",
+  "render": "LaneATT/video_output_4/render.mp4",
+  "read_ms": 42.27142772998195,
+  "models": {
+    "yolo": {
+      "preprocess_ms": 4.1265655034803785,
+      "engine_ms": 16.677420647989493
+    }
+  },
+  "engines_only_ms": 16.677420647989493,
+  "engines_only_fps": 59.96131063112284,
+  "render_ms": 23.841723663790617,
+  "pipeline_ms": 86.9802556859795,
+  "pipeline_fps": 11.496862042004686
+}
+
+Json is enabled
+Writing to Benchmark
+
+
+
+Only LaneATT
+
+(LaneNet310) mlc@ubuntu:~/aman/Autonomous-Bicycle$ python trt_video_benchmark.py --laneatt-on False --video Videos2/IMG_2635.mp4 --no-render 
+tensorrt 10.3.0, sm87, 4.62 GiB GPU free of 7.44 GiB
+Loading engines for ['laneatt', 'yolo', 'depth'] from ['LaneATT/onnxmodels/YoloN/YoloN_fb16.engine']
+yolo: LaneATT/onnxmodels/YoloN/YoloN_fb16.engine
+    in  images[1, 3, 640, 640] float32
+    out output0[1, 300, 6] float32
+Models: [('yolo', <jetson_tools.trt_runner.TrtEngine object at 0xffff505e15d0>, <function _pre_yolo at 0xffff6a24e560>)]
+Opening video Videos2/IMG_2635.mp4
+video: Videos2/IMG_2635.mp4 (18506 frames), timing 500 frames after 20 warmup
+Models used: [('yolo', <jetson_tools.trt_runner.TrtEngine object at 0xffff505e15d0>, <function _pre_yolo at 0xffff6a24e560>)]
+500/500 frames
+=== TensorRT sequential per-frame benchmark: 500 frames of Videos2/IMG_2635.mp4 ===
+video read: 41.1 ms/frame
+yolo     preprocess    3.8 ms/frame + engine   16.8 ms/frame
+engines only:      16.8 ms/frame -> 59.7 FPS
+preprocess only:    3.8 ms/frame
+pipeline wall (read + preprocess + engines, sequential): 61.7 ms/frame -> 16.21 FPS
+{
+  "frames": 500,
+  "video": "Videos2/IMG_2635.mp4",
+  "tensorrt": "10.3.0",
+  "compute_capability": "sm87",
+  "render": null,
+  "read_ms": 41.11377167433966,
+  "models": {
+    "yolo": {
+      "preprocess_ms": 3.784406661579851,
+      "engine_ms": 16.75959924655035
+    }
+  },
+  "engines_only_ms": 16.75959924655035,
+  "engines_only_fps": 59.6672978445968,
+  "render_ms": 0.0,
+  "pipeline_ms": 61.70422625797801,
+  "pipeline_fps": 16.20634534527861
+}
+
+Json is enabled
+Writing to Benchmark
+
+
+Both in two different terminals
+
+
+(base) mlc@ubuntu:~/aman/Autonomous-Bicycle$ ./dual.sh
+tensorrt 10.3.0, sm87, 4.48 GiB GPU free of 7.44 GiB
+Loading engines for ['laneatt', 'yolo', 'depth'] from ['LaneATT/onnxmodels/LaneATTresnet34Aug2/models/LaneATT_fb16.engine']
+tensorrt 10.3.0, sm87, 4.48 GiB GPU free of 7.44 GiB
+Loading engines for ['laneatt', 'yolo', 'depth'] from ['LaneATT/onnxmodels/YoloN/YoloN_fb16.engine']
+laneatt: LaneATT/onnxmodels/LaneATTresnet34Aug2/models/LaneATT_fb16.engine
+    in  image[1, 3, 360, 640] float32
+    out proposals[1, 1000, 77] float32
+Models: [('laneatt', <jetson_tools.trt_runner.TrtEngine object at 0xffff66cf1660>, <function _pre_laneatt at 0xffffa213f6d0>)]
+Opening video Videos2/IMG_2635.mp4
+yolo: LaneATT/onnxmodels/YoloN/YoloN_fb16.engine
+    in  images[1, 3, 640, 640] float32
+    out output0[1, 300, 6] float32
+Models: [('yolo', <jetson_tools.trt_runner.TrtEngine object at 0xffff7487d660>, <function _pre_yolo at 0xffff944ee560>)]
+Opening video Videos2/IMG_2635.mp4
+video: Videos2/IMG_2635.mp4 (18506 frames), timing 500 frames after 20 warmup
+Models used: [('laneatt', <jetson_tools.trt_runner.TrtEngine object at 0xffff66cf1660>, <function _pre_laneatt at 0xffffa213f6d0>)]
+video: Videos2/IMG_2635.mp4 (18506 frames), timing 500 frames after 20 warmup
+Models used: [('yolo', <jetson_tools.trt_runner.TrtEngine object at 0xffff7487d660>, <function _pre_yolo at 0xffff944ee560>)]
+500/500 frames
+=== TensorRT sequential per-frame benchmark: 500 frames of Videos2/IMG_2635.mp4 ===
+video read: 56.0 ms/frame
+yolo     preprocess    5.1 ms/frame + engine   29.3 ms/frame
+engines only:      29.3 ms/frame -> 34.1 FPS
+preprocess only:    5.1 ms/frame
+pipeline wall (read + preprocess + engines, sequential): 90.5 ms/frame -> 11.05 FPS
+{
+  "frames": 500,
+  "video": "Videos2/IMG_2635.mp4",
+  "tensorrt": "10.3.0",
+  "compute_capability": "sm87",
+  "render": null,
+  "read_ms": 55.96574765164405,
+  "models": {
+    "yolo": {
+      "preprocess_ms": 5.1496796639985405,
+      "engine_ms": 29.29859625082463
+    }
+  },
+  "engines_only_ms": 29.29859625082463,
+  "engines_only_fps": 34.131328048587115,
+  "render_ms": 0.0,
+  "pipeline_ms": 90.47747384995455,
+  "pipeline_fps": 11.052474803378944
+}
+
+Json is enabled
+Writing to Benchmark
+500/500 frames
+=== TensorRT sequential per-frame benchmark: 500 frames of Videos2/IMG_2635.mp4 ===
+video read: 53.1 ms/frame
+laneatt  preprocess    3.2 ms/frame + engine   39.7 ms/frame
+engines only:      39.7 ms/frame -> 25.2 FPS
+preprocess only:    3.2 ms/frame
+pipeline wall (read + preprocess + engines, sequential): 96.1 ms/frame -> 10.40 FPS
+{
+  "frames": 500,
+  "video": "Videos2/IMG_2635.mp4",
+  "tensorrt": "10.3.0",
+  "compute_capability": "sm87",
+  "render": null,
+  "read_ms": 53.10582197189797,
+  "models": {
+    "laneatt": {
+      "preprocess_ms": 3.1994896807009354,
+      "engine_ms": 39.70775455003604
+    }
+  },
+  "engines_only_ms": 39.70775455003604,
+  "engines_only_fps": 25.183997718629303,
+  "render_ms": 0.0,
+  "pipeline_ms": 96.11390623397892,
+  "pipeline_fps": 10.404321696858393
+}
+
+Json is enabled
+Writing to Benchmark
+(base) mlc@ubuntu:~/aman/Autonomous-Bicycle$ 
