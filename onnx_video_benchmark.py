@@ -10,6 +10,7 @@ from pathlib import Path
 
 import cv2
 import onnxruntime as ort
+import sys
 
 from jetson_tools.postprocess import draw_lanes, laneatt_decode
 from jetson_tools.preprocess import pre_laneatt
