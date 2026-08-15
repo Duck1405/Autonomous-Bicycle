@@ -46,9 +46,16 @@ if __name__ == "__main__":
     h, w = frame.shape[:2]
     print(f"frame: {args.video} #{args.frame}  ({w}x{h})")
 
-    providers = ['CUDAExecutionProvider'] 
-    print(f"Using ONNX Runtime providers: {providers}")
+    providers = ['CUDAExecutionProvider', 'CPUExecutionProvider']
     session = ort.InferenceSession(args.onnx, providers=providers)
+    # get_providers() is what ORT actually bound. Asking for CUDA is not the same
+    # as getting it: the CPU-only wheel warns once and falls back silently.
+    active = session.get_providers()
+    print(f"providers: {active}")
+    if 'CUDAExecutionProvider' not in active:
+        print("  -> running on CPU (needs the Jetson onnxruntime-gpu wheel for CUDA)")
+        sys.exit(1)
+
     input_name = session.get_inputs()[0].name
     output_name = session.get_outputs()[0].name
 
