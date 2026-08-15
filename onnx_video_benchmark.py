@@ -12,6 +12,25 @@ import onnxruntime as ort
 one = "LaneATT/onnxmodels/YoloN/yolo11n_coco4_nms.onnx"
 two = "LaneATT/onnxmodels/LaneATTresnet34Aug2/models/model_0013_raw.onnx"
 
+
+def get_frame(video_path, frame):
+    cap = cv2.VideoCapture(str(video_path))
+    if not cap.isOpened():
+        raise FileNotFoundError(f"could not open video: {video_path}")
+    total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+    if frame < 0 or frame >= total_frames:
+        cap.release()
+        raise ValueError(f"frame {frame} out of range (video has {total_frames} frames)")
+
+    # Seek directly to the requested frame.
+    cap.set(cv2.CAP_PROP_POS_FRAMES, frame)
+    ret, img = cap.read()
+    # cv2.imshow("title", img)
+    # cv2.waitKey(0)
+    # cv2.destroyAllWindows()    
+    cap.release()
+    return img
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--video", default="video_input/1.mp4")
