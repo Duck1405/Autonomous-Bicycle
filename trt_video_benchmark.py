@@ -74,6 +74,8 @@ def parse_args():
                         help="frames to time (after warmup)")
     parser.add_argument("--warmup", type=int, default=20,
                         help="untimed warmup iterations on the first frame")
+    parser.add_argument("--start-frame", type=int, default=0,
+                        help="frame index to start timing from")
     parser.add_argument("--models", default=",".join(LABELS),
                         help=f"comma-separated subset of {','.join(LABELS)}")
     parser.add_argument("--laneatt-engine", type=Path,
@@ -180,13 +182,14 @@ def main():
         raise SystemExit(f"{args.video} not found")
     
     cap = cv2.VideoCapture(str(args.video))
+    cap.set(cv2.CAP_PROP_POS_FRAMES, args.start_frame)
     ok, first = cap.read()
     if not ok:
         raise SystemExit(f"cannot read {args.video}")
     for _ in range(args.warmup):
         for _, eng, pre in models:
             eng.run(pre(first)[0])
-    cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
+    cap.set(cv2.CAP_PROP_POS_FRAMES, args.start_frame)
 
     writer, hysteresis = None, None
     if args.render:
@@ -213,12 +216,14 @@ def main():
     
     total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
     print(f"video: {args.video} ({total_frames} frames), "
-          f"timing {args.frames} frames after {args.warmup} warmup")
-    
-    if args.frames > total_frames:
-        print(f"WARNING: requested {args.frames} frames, but video only has {total_frames}. "
-              f"Will process {total_frames} frames instead.")
-        args.frames = total_frames
+          f"timing {args.frames} frames from frame {args.start_frame} "
+          f"after {args.warmup} warmup")
+
+    available = total_frames - args.start_frame
+    if args.frames > available:
+        print(f"WARNING: requested {args.frames} frames, but video only has {available}. "
+              f"Will process {available} frames instead.")
+        args.frames = available
     
     print(f"Models used: {models}")
     
