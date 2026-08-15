@@ -5,12 +5,14 @@ from pathlib import Path
 import cv2
 import numpy as np
 import onnxruntime as ort
-
-
+from jetson_tools.preprocess import pre_depth, pre_laneatt, pre_yolo_meta
+import time
 
 
 one = "LaneATT/onnxmodels/YoloN/yolo11n_coco4_nms.onnx"
 two = "LaneATT/onnxmodels/LaneATTresnet34Aug2/models/model_0013_raw.onnx"
+
+
 
 
 def get_frame(video_path, frame):
@@ -49,6 +51,24 @@ if __name__ == "__main__":
     
     input_name = session.get_inputs()[0].name
     output_name = session.get_outputs()[0].name
+    
+    input_data = pre_laneatt(frame)
+
+    t0 = time.perf_counter()
+    outputs = session.run([output_name], {input_name: input_data})
+    t1 = time.perf_counter()
+    
+    print(f"ONNX Inference Time: {t1 - t0:.4f} seconds")
+    
+    predictions = outputs[0]
+    
+    
+    
+    
+    
+    
+    
+
 
     print(f"Model Input Node Name: {input_name}")
     print(f"Model Output Node Name: {output_name}")
