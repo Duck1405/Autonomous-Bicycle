@@ -1,0 +1,19 @@
+{
+  "frames": 500,
+  "video": "Videos2/IMG_2635.mp4",
+  "tensorrt": "10.3.0",
+  "compute_capability": "sm87",
+  "render": null,
+  "read_ms": 41.11377167433966,
+  "models": {
+    "yolo": {
+      "preprocess_ms": 3.784406661579851,
+      "engine_ms": 16.75959924655035
+    }
+  },
+  "engines_only_ms": 16.75959924655035,
+  "engines_only_fps": 59.6672978445968,
+  "render_ms": 0.0,
+  "pipeline_ms": 61.70422625797801,
+  "pipeline_fps": 16.20634534527861
+}

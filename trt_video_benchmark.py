@@ -54,6 +54,14 @@ def _pre_depth(frame):
     return pre_depth(frame), None
 
 
+def str2bool(value):
+    if value.lower() in ("true", "1", "yes", "y"):
+        return True
+    if value.lower() in ("false", "0", "no", "n"):
+        return False
+    raise argparse.ArgumentTypeError(f"expected a boolean string, got {value!r}")
+
+
 def parse_args():
     parser = argparse.ArgumentParser(
         description="Sequential per-frame TensorRT benchmark of the LaneATT / "
@@ -72,15 +80,19 @@ def parse_args():
                         default=Path("LaneATT/onnxmodels/LaneATTresnet34Aug2/models/LaneATT_fb16.engine"))
     parser.add_argument("--yolo-engine", type=Path,
                         default=Path("LaneATT/onnxmodels/YoloN/YoloN_fb16.engine"))
-    parser.add_argument("--laneatt-on", type=bool, default=True,)
-    parser.add_argument("--yolo-on", type=bool, default=True,)
-    parser.add_argument("--depth-on", type=bool, default=False,)
+    parser.add_argument("--laneatt-on", type=str2bool, default=True)
+    parser.add_argument("--yolo-on", type=str2bool, default=True)
+    parser.add_argument("--depth-on", type=str2bool, default=False)
     
     parser.add_argument("--depth-engine", type=Path,
                         default=Path("LaneATT/onnxmodels/depth_onnx/depth_anything_v2_small.engine"))
     parser.add_argument("--render", type=Path, default="LaneATT/video_output_4/render.mp4",
                         help="write an annotated video here (decode + draw are "
                              "timed separately as render_ms)")
+    parser.add_argument("--no-render", action="store_true",
+                        help="skip writing the annotated video entirely (no D2H "
+                             "copy, decode, draw, or encode) for an engines-only "
+                             "benchmark; --render is ignored when this is set")
     parser.add_argument("--codec", default="mp4v",
                         help="fourcc for --render; avc1 has no encoder on the "
                              "Jetson, MJPG with a .avi path is the fallback")
@@ -117,6 +129,8 @@ def compose(frame, raw, hysteresis):
 
 def main():
     args = parse_args()
+    if args.no_render:
+        args.render = None
     wanted = [m.strip() for m in args.models.split(",") if m.strip()]
     unknown = [m for m in wanted if m not in LABELS]
     if unknown:
@@ -163,7 +177,6 @@ def main():
     print(f"Opening video {args.video}")
     
     if not args.video.exists():
-
         raise SystemExit(f"{args.video} not found")
     
     cap = cv2.VideoCapture(str(args.video))
