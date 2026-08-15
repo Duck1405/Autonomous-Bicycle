@@ -47,6 +47,7 @@ if __name__ == "__main__":
     print(f"frame: {args.video} #{args.frame}  ({w}x{h})")
 
     providers = ['CUDAExecutionProvider'] if 'CUDAExecutionProvider' in ort.get_available_providers() else ['CPUExecutionProvider']
+    print(f"Using ONNX Runtime providers: {providers}")
     session = ort.InferenceSession(args.onnx, providers=providers)
     input_name = session.get_inputs()[0].name
     output_name = session.get_outputs()[0].name
