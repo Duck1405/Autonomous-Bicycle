@@ -732,3 +732,266 @@ pipeline wall (read + preprocess + engines, sequential): 136.5 ms/frame -> 7.33 
 > FP32) but run 3 days later at MAXN_SUPER instead of whatever mode was active on
 > 2026-08-14 — 129.5 ms vs 125.7 ms engine time, consistent within run-to-run
 > noise. No TensorRT counterpart run alongside it this time.
+
+---
+
+## 8. Power-mode matrix — MAXN_SUPER vs 15W — 2026-08-17
+
+Full 2×2×2 sweep (LaneATT / YOLOv11n × ONNX Runtime / TensorRT × MAXN_SUPER / 15W)
+run over SSH (Tailscale, `mlc@ubuntu`) to directly answer: does MAXN_SUPER measurably
+raise FPS for each model/runtime, not just the full 3-model pipeline already
+documented in `Jetson.txt`?
+
+| | |
+|---|---|
+| Env | conda `LaneNet310Cuda` |
+| Video | `Videos2/IMG_6893_30fps.mp4` (8719 frames) |
+| Timing | 500 timed frames, start frame 0, 20-frame warmup |
+| Power mode confirmed via | `nvpmodel -q` before each block |
+
+> **Status: MAXN_SUPER half complete (4/8 runs). The 15W half is blocked** — switching
+> power mode needs `sudo`, which requires a password that was deliberately removed from
+> this repo (see `Jetson.txt`'s SECURITY NOTE) and is not available to this session.
+> `jetson_clocks` was also not (re-)applied for the same reason; the MAXN_SUPER runs
+> below reflect the power mode only (`nvpmodel -q` confirmed `MAXN_SUPER` before each
+> run), not a guaranteed pinned-clock state. Someone with the password needs to run
+> `sudo nvpmodel -m 0` on the Jetson before the remaining 4 runs can happen.
+
+### Summary so far
+
+| Model | Runtime | Power mode | Preprocess | Engine | Engine FPS | Pipeline | Pipeline FPS |
+|---|---|---|---:|---:|---:|---:|---:|
+| LaneATT | ONNX Runtime FP32 | MAXN_SUPER | 4.0 ms | 129.4 ms | 7.7 | 136.4 ms | 7.33 |
+| YOLOv11n | ONNX Runtime FP32 | MAXN_SUPER | 6.1 ms | 27.5 ms | 36.4 | 37.1 ms | 26.98 |
+| LaneATT | TensorRT FP16 | MAXN_SUPER | 4.3 ms | 29.1 ms | 34.3 | 36.6 ms | 27.32 |
+| YOLOv11n | TensorRT FP16 | MAXN_SUPER | 4.6 ms | 17.9 ms | 55.9 | 25.0 ms | 39.94 |
+| LaneATT | ONNX Runtime FP32 | 15W | *pending* | *pending* | *pending* | *pending* | *pending* |
+| YOLOv11n | ONNX Runtime FP32 | 15W | *pending* | *pending* | *pending* | *pending* | *pending* |
+| LaneATT | TensorRT FP16 | 15W | *pending* | *pending* | *pending* | *pending* | *pending* |
+| YOLOv11n | TensorRT FP16 | 15W | *pending* | *pending* | *pending* | *pending* | *pending* |
+
+These MAXN_SUPER numbers line up closely with the unlabeled §4 runs (LaneATT TRT
+27.6 → 29.1 ms, YOLOv11n TRT 16.6 → 17.9 ms, LaneATT ORT 125.7 → 129.4 ms, YOLOv11n
+ORT 30.3 → 27.5 ms) — consistent with §4 having also been taken at MAXN_SUPER, even
+though that wasn't recorded at the time. This run is the first place power mode is
+explicitly confirmed via `nvpmodel -q` rather than assumed.
+
+### 8.1 LaneATT — ONNX Runtime CUDA FP32 — MAXN_SUPER
+
+```bash
+python onnx_video_LaneaTT.py --video Videos2/IMG_6893_30fps.mp4 --start-frame 0 --frames 500 --warmup 20
+```
+
+```text
+onnxruntime 1.24.0, providers ['CUDAExecutionProvider', 'CPUExecutionProvider']
+laneatt: LaneATT/onnxmodels/LaneATTresnet34Aug2/models/model_0013_raw.onnx
+    in  image [1, 3, 360, 640] tensor(float)
+    out proposals [1, 1000, 77] tensor(float)
+
+=== ONNX Runtime sequential per-frame benchmark: 500 frames of Videos2/IMG_6893_30fps.mp4 ===
+video read: 2.9 ms/frame
+laneatt  preprocess    4.0 ms/frame + engine  129.4 ms/frame
+engines only:     129.4 ms/frame -> 7.7 FPS
+preprocess only:    4.0 ms/frame
+pipeline wall (read + preprocess + engines, sequential): 136.4 ms/frame -> 7.33 FPS
+```
+
+<details>
+<summary>JSON output</summary>
+
+```json
+{
+  "frames": 500,
+  "video": "Videos2/IMG_6893_30fps.mp4",
+  "runtime": "onnxruntime",
+  "onnxruntime": "1.24.0",
+  "providers": [
+    "CUDAExecutionProvider",
+    "CPUExecutionProvider"
+  ],
+  "model": "LaneATT/onnxmodels/LaneATTresnet34Aug2/models/model_0013_raw.onnx",
+  "start_frame": 0,
+  "warmup": 20,
+  "read_ms": 2.864338720450178,
+  "models": {
+    "laneatt": {
+      "preprocess_ms": 4.04245115496451,
+      "engine_ms": 129.4056752459146
+    }
+  },
+  "engines_only_ms": 129.4056752459146,
+  "engines_only_fps": 7.727636350567016,
+  "pipeline_ms": 136.35338383400813,
+  "pipeline_fps": 7.333884733050448
+}
+```
+
+</details>
+
+### 8.2 YOLOv11n — ONNX Runtime CUDA FP32 — MAXN_SUPER
+
+```bash
+python onnx_video_Yolo.py --video Videos2/IMG_6893_30fps.mp4 --start-frame 0 --frames 500 --warmup 20
+```
+
+```text
+onnxruntime 1.24.0, providers ['CUDAExecutionProvider', 'CPUExecutionProvider']
+yolo: LaneATT/onnxmodels/YoloN/yolo11n_coco4_nms.onnx
+    in  images [1, 3, 640, 640] tensor(float)
+    out output0 [1, 300, 6] tensor(float)
+
+=== ONNX Runtime sequential per-frame benchmark: 500 frames of Videos2/IMG_6893_30fps.mp4 ===
+video read: 3.4 ms/frame
+yolo     preprocess    6.1 ms/frame + engine   27.5 ms/frame
+engines only:      27.5 ms/frame -> 36.4 FPS
+preprocess only:    6.1 ms/frame
+pipeline wall (read + preprocess + engines, sequential): 37.1 ms/frame -> 26.98 FPS
+```
+
+<details>
+<summary>JSON output</summary>
+
+```json
+{
+  "frames": 500,
+  "video": "Videos2/IMG_6893_30fps.mp4",
+  "runtime": "onnxruntime",
+  "onnxruntime": "1.24.0",
+  "providers": [
+    "CUDAExecutionProvider",
+    "CPUExecutionProvider"
+  ],
+  "model": "LaneATT/onnxmodels/YoloN/yolo11n_coco4_nms.onnx",
+  "start_frame": 0,
+  "warmup": 20,
+  "read_ms": 3.384554250515066,
+  "models": {
+    "yolo": {
+      "preprocess_ms": 6.145625690172892,
+      "engine_ms": 27.502212856488768
+    }
+  },
+  "engines_only_ms": 27.502212856488768,
+  "engines_only_fps": 36.36071050784787,
+  "pipeline_ms": 37.06889684399357,
+  "pipeline_fps": 26.976794162733068
+}
+```
+
+</details>
+
+### 8.3 LaneATT — TensorRT 10.3.0 FP16 — MAXN_SUPER
+
+```bash
+python trt_video_benchmark.py --video Videos2/IMG_6893_30fps.mp4 --start-frame 0 --frames 500 --warmup 20 \
+    --models laneatt --laneatt-on true --yolo-on false --depth-on false --no-render
+```
+
+```text
+tensorrt 10.3.0, sm87, 5.20 GiB GPU free of 7.44 GiB
+Loading engines for ['laneatt'] from ['LaneATT/onnxmodels/LaneATTresnet34Aug2/models/LaneATT_fb16.engine']
+laneatt: LaneATT/onnxmodels/LaneATTresnet34Aug2/models/LaneATT_fb16.engine
+    in  image[1, 3, 360, 640] float32
+    out proposals[1, 1000, 77] float32
+
+=== TensorRT sequential per-frame benchmark: 500 frames of Videos2/IMG_6893_30fps.mp4 ===
+video read: 3.1 ms/frame
+laneatt  preprocess    4.3 ms/frame + engine   29.1 ms/frame
+engines only:      29.1 ms/frame -> 34.3 FPS
+preprocess only:    4.3 ms/frame
+pipeline wall (read + preprocess + engines, sequential): 36.6 ms/frame -> 27.32 FPS
+```
+
+<details>
+<summary>JSON output</summary>
+
+```json
+{
+  "frames": 500,
+  "video": "Videos2/IMG_6893_30fps.mp4",
+  "tensorrt": "10.3.0",
+  "compute_capability": "sm87",
+  "render": null,
+  "read_ms": 3.06744408828672,
+  "models": {
+    "laneatt": {
+      "preprocess_ms": 4.339380760444328,
+      "engine_ms": 29.141910321603063
+    }
+  },
+  "engines_only_ms": 29.141910321603063,
+  "engines_only_fps": 34.31484034382929,
+  "render_ms": 0.0,
+  "pipeline_ms": 36.60303388000466,
+  "pipeline_fps": 27.320139726075425
+}
+```
+
+</details>
+
+### 8.4 YOLOv11n — TensorRT 10.3.0 FP16 — MAXN_SUPER
+
+```bash
+python trt_video_benchmark.py --video Videos2/IMG_6893_30fps.mp4 --start-frame 0 --frames 500 --warmup 20 \
+    --models yolo --laneatt-on false --yolo-on true --depth-on false --no-render
+```
+
+```text
+tensorrt 10.3.0, sm87, 5.21 GiB GPU free of 7.44 GiB
+Loading engines for ['yolo'] from ['LaneATT/onnxmodels/YoloN/YoloN_fb16.engine']
+yolo: LaneATT/onnxmodels/YoloN/YoloN_fb16.engine
+    in  images[1, 3, 640, 640] float32
+    out output0[1, 300, 6] float32
+
+=== TensorRT sequential per-frame benchmark: 500 frames of Videos2/IMG_6893_30fps.mp4 ===
+video read: 2.5 ms/frame
+yolo     preprocess    4.6 ms/frame + engine   17.9 ms/frame
+engines only:      17.9 ms/frame -> 55.9 FPS
+preprocess only:    4.6 ms/frame
+pipeline wall (read + preprocess + engines, sequential): 25.0 ms/frame -> 39.94 FPS
+```
+
+<details>
+<summary>JSON output</summary>
+
+```json
+{
+  "frames": 500,
+  "video": "Videos2/IMG_6893_30fps.mp4",
+  "tensorrt": "10.3.0",
+  "compute_capability": "sm87",
+  "render": null,
+  "read_ms": 2.5163310226053,
+  "models": {
+    "yolo": {
+      "preprocess_ms": 4.57711079751607,
+      "engine_ms": 17.899227088491898
+    }
+  },
+  "engines_only_ms": 17.899227088491898,
+  "engines_only_fps": 55.86833414963144,
+  "render_ms": 0.0,
+  "pipeline_ms": 25.036959416000172,
+  "pipeline_fps": 39.94095222924465
+}
+```
+
+</details>
+
+### 8.5 – 8.8 LaneATT / YOLOv11n — ONNX Runtime & TensorRT — 15W
+
+**Pending.** Blocked on `sudo nvpmodel -m 0`, see the status note above. Commands to run
+once the Jetson is switched to 15W (same video/start-frame/frames/warmup as 8.1–8.4):
+
+```bash
+# on the Jetson, with the password:
+sudo nvpmodel -m 0
+nvpmodel -q   # confirm: "NV Power Mode: 15W"
+
+python onnx_video_LaneaTT.py --video Videos2/IMG_6893_30fps.mp4 --start-frame 0 --frames 500 --warmup 20
+python onnx_video_Yolo.py --video Videos2/IMG_6893_30fps.mp4 --start-frame 0 --frames 500 --warmup 20
+python trt_video_benchmark.py --video Videos2/IMG_6893_30fps.mp4 --start-frame 0 --frames 500 --warmup 20 \
+    --models laneatt --laneatt-on true --yolo-on false --depth-on false --no-render
+python trt_video_benchmark.py --video Videos2/IMG_6893_30fps.mp4 --start-frame 0 --frames 500 --warmup 20 \
+    --models yolo --laneatt-on false --yolo-on true --depth-on false --no-render
+```
