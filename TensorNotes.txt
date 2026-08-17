@@ -168,7 +168,6 @@ Writing to Benchmark
 
 Both in two different terminals
 
-
 (base) mlc@ubuntu:~/aman/Autonomous-Bicycle$ ./dual.sh
 tensorrt 10.3.0, sm87, 4.48 GiB GPU free of 7.44 GiB
 Loading engines for ['laneatt', 'yolo', 'depth'] from ['LaneATT/onnxmodels/LaneATTresnet34Aug2/models/LaneATT_fb16.engine']
@@ -243,6 +242,9 @@ pipeline wall (read + preprocess + engines, sequential): 96.1 ms/frame -> 10.40 
   "pipeline_ms": 96.11390623397892,
   "pipeline_fps": 10.404321696858393
 }
+
+
+
 
 Json is enabled
 Writing to Benchmark
@@ -444,3 +446,157 @@ pipeline wall (read + preprocess + engines, sequential): 23.3 ms/frame -> 42.96 
 
 Json is enabled
 Writing to Benchmark
+
+
+==============================================================================
+2026-08-14  TensorRT concurrent-process versus serial paired inference
+Jetson Orin Nano Super, conda env LaneNet310Cuda, MAXN_SUPER selected
+video: Videos2/IMG_6893_30fps.mp4, 500 frames, 20 warmup frames, no rendering
+==============================================================================
+
+Your observation is real and reproducible. Both modes were run on the Jetson
+in LaneNet310Cuda with MAXN_SUPER selected:
+
+  Mode                           LaneATT engine    YOLO engine          Combined/pair pipeline rate
+  -----------------------------  ----------------  -------------  -----------------------------------
+  One process, current script           29.0 ms        19.9 ms                            16.00 FPS
+  Two concurrent processes              20.7 ms        16.0 ms    35.75 LaneATT FPS, 43.07 YOLO FPS
+
+The current "together" mode is explicitly serial. Its loop does:
+
+  1. preprocess LaneATT
+  2. H2D copy, execute LaneATT, cudaStreamSynchronize
+  3. preprocess YOLO
+  4. H2D copy, execute YOLO, cudaStreamSynchronize
+
+That synchronization is in jetson_tools/trt_runner.py, so the next model cannot
+begin until the prior engine has fully completed. Therefore 29.0 + 19.9 = 48.9
+ms engine time; preprocessing and video I/O raise the total to 62.5 ms/frame.
+
+The two-terminal test creates two separate CUDA contexts/streams. While one
+process is doing CPU video decoding/preprocessing or waiting on its stream, the
+other can submit and run GPU work. Their timed intervals overlap, so their
+individual FPS values must not be added. This gives higher throughput, but each
+process independently decodes the video, so the predictions are not synchronized
+as one LaneATT+YOLO result for the same frame.
+
+Resource measurement during the concurrent run:
+
+  - Unified RAM: 1.51 GB idle/start to 2.16 / 7.62 GB peak
+  - Swap: 0 MB used
+  - GPU activity: sampled 23-97% GR3D, frequently 70-90%
+  - Junction temperature: 49.1-52.2 C
+  - Peak input power: 13.46 W
+  - CPU reached 1.728 GHz
+
+This is not a GPU-memory issue and not thermal throttling. MAXN_SUPER permits
+high clocks, but clocks are still dynamically managed; jetson_clocks --show
+requires sudo and was not applied or verified in this run.
+
+Conclusion: 16 FPS is correct for strict serial, same-frame paired inference.
+The faster two-process result is concurrent throughput. To preserve one shared
+camera/frame stream while executing concurrently, the runtime must submit each
+engine to a separate stream and synchronize only after both have been submitted.
+No source code was changed for this measurement.
+
+
+==============================================================================
+2026-08-14  TensorRT three-model concurrent-process versus serial analysis
+Jetson Orin Nano Super, conda env LaneNet310Cuda, MAXN_SUPER selected
+video: Videos2/IMG_6893_30fps.mp4, 500 frames, 20 warmup frames, no rendering
+==============================================================================
+
+LaneATT, YOLOv11n, and Depth Anything V2 Small were run concurrently as three
+independent TensorRT processes, then compared against a serial one-process run.
+All runs completed 500 frames successfully with render=null; no output video
+was produced.
+
+  Mode                              LaneATT          YOLOv11n          Depth        Same-frame pipeline
+  --------------------------------  ---------------  ----------------  -----------  -------------------
+  Serial, one script                 18.8 ms engine   15.7 ms engine    34.6 ms      10.14 FPS
+  Three concurrent processes         21.6 ms engine   19.1 ms engine    34.1 ms      17.81 FPS (Depth)
+
+Concurrent-process pipeline rates:
+
+  - LaneATT: 33.99 FPS
+  - YOLOv11n: 36.19 FPS
+  - Depth: 17.81 FPS
+
+Depth is the slowest process, so it limits effective three-model throughput to
+about 17.8 FPS. This is 1.76x the 10.14 FPS serial same-frame pipeline rate.
+The individual concurrent-process FPS values overlap and must not be added.
+
+Resource measurement:
+
+  Metric                                  Three processes       Serial script
+  --------------------------------------  --------------------  --------------------
+  Unified RAM peak                        2.75 / 7.62 GB       2.23 / 7.62 GB
+  Swap                                    0 MB                  0 MB
+  GPU activity, average / peak            66.1% / 99%           55.5% / 99%
+  CPU per-core use, average / peak         41.9% / 100%          26.8% / 100%
+  CPU clock peak                          1.728 GHz             1.728 GHz
+  Junction temperature peak               54.9 C                53.9 C
+  Input-power peak                        9.57 W                9.07 W
+
+The three-process run is faster because it keeps the GPU busier: average GPU
+activity rose from 55.5% to 66.1%. There was no swap use, memory pressure, or
+thermal throttling. However, independent processes decode and advance through
+the video independently; their outputs are not synchronized as one same-frame
+LaneATT+YOLO+Depth result. A production implementation should share one decoder,
+submit the three engines to separate CUDA streams, and synchronize once per
+frame. No source code was changed for this measurement.
+
+
+Running Onnx + LaneATT + MaxMode:
+
+python onnx_video_LaneaTT.py --video Videos2/IMG_6893_30fps.mp4 --start-frame 0 --frames 500 --warmup 20
+
+LaneNet310Cuda) mlc@ubuntu:~/aman/Autonomous-Bicycle$ python onnx_video_LaneaTT.py --video Videos2/IMG_6893_30fps.mp4 --start-frame 0 --frames 500 --warmup 20
+2026-08-17 15:13:08.509854322 [W:onnxruntime:Default, device_discovery.cc:211 DiscoverDevicesForPlatform] GPU device discovery failed: device_discovery.cc:91 ReadFileContents Failed to open file: "/sys/class/drm/card1/device/vendor"
+2026-08-17 15:13:09.590128866 [W:onnxruntime:Default, scatter_nd.h:51 ScatterNDWithAtomicReduction] ScatterND with reduction=='none' only guarantees to be correct if indices are not duplicated.
+2026-08-17 15:13:09.590197252 [W:onnxruntime:Default, scatter_nd.h:51 ScatterNDWithAtomicReduction] ScatterND with reduction=='none' only guarantees to be correct if indices are not duplicated.
+2026-08-17 15:13:09.590226565 [W:onnxruntime:Default, scatter_nd.h:51 ScatterNDWithAtomicReduction] ScatterND with reduction=='none' only guarantees to be correct if indices are not duplicated.
+2026-08-17 15:13:09.590241669 [W:onnxruntime:Default, scatter_nd.h:51 ScatterNDWithAtomicReduction] ScatterND with reduction=='none' only guarantees to be correct if indices are not duplicated.
+2026-08-17 15:13:09.590253349 [W:onnxruntime:Default, scatter_nd.h:51 ScatterNDWithAtomicReduction] ScatterND with reduction=='none' only guarantees to be correct if indices are not duplicated.
+onnxruntime 1.24.0, providers ['CUDAExecutionProvider', 'CPUExecutionProvider']
+laneatt: LaneATT/onnxmodels/LaneATTresnet34Aug2/models/model_0013_raw.onnx
+    in  image [1, 3, 360, 640] tensor(float)
+    out proposals [1, 1000, 77] tensor(float)
+Opening video Videos2/IMG_6893_30fps.mp4
+video: Videos2/IMG_6893_30fps.mp4 (8719 frames), timing 500 frames from frame 0 after 20 warmup
+500/500 frames
+=== ONNX Runtime sequential per-frame benchmark: 500 frames of Videos2/IMG_6893_30fps.mp4 ===
+video read: 2.9 ms/frame
+laneatt  preprocess    4.1 ms/frame + engine  129.5 ms/frame
+engines only:     129.5 ms/frame -> 7.7 FPS
+preprocess only:    4.1 ms/frame
+pipeline wall (read + preprocess + engines, sequential): 136.5 ms/frame -> 7.33 FPS
+{
+  "frames": 500,
+  "video": "Videos2/IMG_6893_30fps.mp4",
+  "runtime": "onnxruntime",
+  "onnxruntime": "1.24.0",
+  "providers": [
+    "CUDAExecutionProvider",
+    "CPUExecutionProvider"
+  ],
+  "model": "LaneATT/onnxmodels/LaneATTresnet34Aug2/models/model_0013_raw.onnx",
+  "start_frame": 0,
+  "warmup": 20,
+  "read_ms": 2.876383224269375,
+  "models": {
+    "laneatt": {
+      "preprocess_ms": 4.07855007739272,
+      "engine_ms": 129.45717089780373
+    }
+  },
+  "engines_only_ms": 129.45717089780373,
+  "engines_only_fps": 7.724562440727377,
+  "pipeline_ms": 136.45163447997766,
+  "pipeline_fps": 7.328604042091821
+}
+
+
+
+
+

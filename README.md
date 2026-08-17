@@ -63,3 +63,10 @@ https://xingangpan.github.io/projects/CULane.html
 http://bdd-data.berkeley.edu/
 
 Models: 
+
+## Recent Jetson benchmark documentation
+
+- `TensorNotes.txt` records the 2026-08-14 TensorRT comparisons between serial
+  same-frame inference and concurrent processes for both LaneATT+YOLO and
+  LaneATT+YOLO+Depth, including GPU/RAM/CPU/thermal measurements and the
+  synchronization limitation.
