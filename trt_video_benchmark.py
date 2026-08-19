@@ -84,11 +84,11 @@ def parse_args():
                         default=Path("LaneATT/onnxmodels/YoloN/YoloN_fb16.engine"))
     parser.add_argument("--laneatt-on", type=str2bool, default=True)
     parser.add_argument("--yolo-on", type=str2bool, default=True)
-    parser.add_argument("--depth-on", type=str2bool, default=False)
+    parser.add_argument("--depth-on", type=str2bool, default=True)
     
     parser.add_argument("--depth-engine", type=Path,
                         default=Path("LaneATT/onnxmodels/depth_onnx/depth_anything_v2_small.engine"))
-    parser.add_argument("--render", type=Path, default="LaneATT/video_output_4/render.mp4",
+    parser.add_argument("--render", type=Path, default="LaneATT/video_output_5/render.mp4",
                         help="write an annotated video here (decode + draw are "
                              "timed separately as render_ms)")
     parser.add_argument("--no-render", action="store_true",

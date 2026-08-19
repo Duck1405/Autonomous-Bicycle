@@ -382,3 +382,62 @@ dpkg-query -W -f='${Package}\t${Version}\n' 'libnvinfer*' 'tensorrt*' | sort
    tensorrt-libs. The versionless libnvinfer6 / libnvinfer7 / libnvinfer-plugin6
    / libnvinfer-plugin7 entries are stale leftovers with no version and can be
    ignored.
+
+
+Both Running at the same time: 
+
+
+
+(LaneNet310Cuda) mlc@ubuntu:~/aman/Autonomous-Bicycle$   python trt_video_benchmark.py \
+    --video Videos2/IMG_6893_30fps.mp4 \
+    --start-frame 0 \
+    --frames 500 \
+    --warmup 20 \
+    --models yolo,laneatt \
+    --laneatt-on true \
+    --yolo-on true \
+    --depth-on false \
+    --no-render
+tensorrt 10.3.0, sm87, 5.60 GiB GPU free of 7.44 GiB
+Loading engines for ['yolo', 'laneatt'] from ['LaneATT/onnxmodels/LaneATTresnet34Aug2/models/LaneATT_fb16.engine', 'LaneATT/onnxmodels/YoloN/YoloN_fb16.engine']
+laneatt: LaneATT/onnxmodels/LaneATTresnet34Aug2/models/LaneATT_fb16.engine
+    in  image[1, 3, 360, 640] float32
+    out proposals[1, 1000, 77] float32
+yolo: LaneATT/onnxmodels/YoloN/YoloN_fb16.engine
+    in  images[1, 3, 640, 640] float32
+    out output0[1, 300, 6] float32
+Models: [('laneatt', <jetson_tools.trt_runner.TrtEngine object at 0xffff479811b0>, <function _pre_laneatt at 0xffff81b2f640>), ('yolo', <jetson_tools.trt_runner.TrtEngine object at 0xffff47981240>, <function _pre_yolo at 0xffff71fc7490>)]
+Opening video Videos2/IMG_6893_30fps.mp4
+video: Videos2/IMG_6893_30fps.mp4 (8719 frames), timing 500 frames from frame 0 after 20 warmup
+Models used: [('laneatt', <jetson_tools.trt_runner.TrtEngine object at 0xffff479811b0>, <function _pre_laneatt at 0xffff81b2f640>), ('yolo', <jetson_tools.trt_runner.TrtEngine object at 0xffff47981240>, <function _pre_yolo at 0xffff71fc7490>)]
+500/500 frames
+=== TensorRT sequential per-frame benchmark: 500 frames of Videos2/IMG_6893_30fps.mp4 ===
+video read: 3.1 ms/frame
+laneatt  preprocess    4.1 ms/frame + engine   29.0 ms/frame
+yolo     preprocess    6.4 ms/frame + engine   19.8 ms/frame
+engines only:      48.8 ms/frame -> 20.5 FPS
+preprocess only:   10.5 ms/frame
+pipeline wall (read + preprocess + engines, sequential): 62.4 ms/frame -> 16.02 FPS
+{
+  "frames": 500,
+  "video": "Videos2/IMG_6893_30fps.mp4",
+  "tensorrt": "10.3.0",
+  "compute_capability": "sm87",
+  "render": null,
+  "read_ms": 3.0570413239865957,
+  "models": {
+    "laneatt": {
+      "preprocess_ms": 4.128114602007372,
+      "engine_ms": 28.980899660012255
+    },
+    "yolo": {
+      "preprocess_ms": 6.354400644006091,
+      "engine_ms": 19.842643603994475
+    }
+  },
+  "engines_only_ms": 48.82354326400673,
+  "engines_only_fps": 20.4819218996998,
+  "render_ms": 0.0,
+  "pipeline_ms": 62.44077422200007,
+  "pipeline_fps": 16.015176180305353
+}
