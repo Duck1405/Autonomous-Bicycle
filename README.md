@@ -66,7 +66,8 @@ Models:
 
 ## Recent Jetson benchmark documentation
 
-- `TensorNotes.txt` records the 2026-08-14 TensorRT comparisons between serial
+- `TensorNotes.md` records the 2026-08-14 TensorRT comparisons between serial
   same-frame inference and concurrent processes for both LaneATT+YOLO and
   LaneATT+YOLO+Depth, including GPU/RAM/CPU/thermal measurements and the
-  synchronization limitation.
+  synchronization limitation, plus the 2026-08-17 ONNX Runtime vs TensorRT and
+  power-mode (MAXN_SUPER vs 15W) benchmark sweeps.
