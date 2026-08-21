@@ -24,6 +24,8 @@ from pathlib import Path
 
 import cv2
 import numpy as np
+import onnxruntime as ort
+
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from preprocess import PREPROCESSORS  # noqa: E402
@@ -77,10 +79,26 @@ def main():
     ap.add_argument("--onnx", required=True, type=Path)
     ap.add_argument("--engine", required=True, type=Path)
     ap.add_argument("--video", type=Path, default=Path("LaneATT/video_input/IMG_6540.MOV"))
-    ap.add_argument("--frame", type=int, default=0, help="frame index to test")
+    ap.add_argument("--frame", type=int, default=500, help="frame index to test")
     args = ap.parse_args()
 
-    import onnxruntime as ort
+
+
+    i = 0
+    
+    cap = cv2.VideoCapture(str(args.video))
+    cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
+    
+    if not ok:
+        raise SystemExit(f"cannot read frame {args.frame} of {str(args.video)}")
+    while i < args.frame:
+        ok, frame = cap.read()
+        blob = PREPROCESSORS[args.model](frame)
+    
+    cap.release()
+        
+
+
 
     frame = load_frame(args.video, args.frame)
     blob = PREPROCESSORS[args.model](frame)
