@@ -1,4 +1,4 @@
-#!/bin/bash
+l#!/bin/bash
 
 source /home/mlc/miniconda3/etc/profile.d/conda.sh
 conda activate LaneNet310
