@@ -24,7 +24,7 @@ setup(
     },
     entry_points={
         'console_scripts': [
-            'yolov112_executable = yolo112.yolov11_node:main',
+            'yolov112_executable = yolov112.yolov11_node:main',
         ],
     },
 )

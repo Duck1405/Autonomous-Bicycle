@@ -10,7 +10,7 @@ from .trt_runner import CudaRT, TrtEngine
 
 class Yolov11Node(Node):
     def __init__(self):
-        super().__init__('yolov11_node')
+        super().__init__('yolov112_node')
         self.engine = "/home/mlc/aman/Autonomous-Bicycle/LaneATT/onnxmodels/YoloN/YoloN_fb16.engine"
         self.warmup = 20
         self.CudaRT = CudaRT()
@@ -83,7 +83,7 @@ class Yolov11Node(Node):
 
     def image_callback(self, frame):
     # Your stereo camera appears to publish RG10 Bayer images
-
+        frame = self.bridge.imgmsg_to_cv2(frame, desired_encoding='bgr8')
         self.get_logger().info(f'Image received, type: {type(frame)}')
         
 
@@ -104,7 +104,7 @@ class Yolov11Node(Node):
 
 def main(args=None):
     rclpy.init(args=args)
-    node = Yolov11()
+    node = Yolov11Node()
     rclpy.spin(node)
     node.trt_engine.close()
     node.destroy_node()
