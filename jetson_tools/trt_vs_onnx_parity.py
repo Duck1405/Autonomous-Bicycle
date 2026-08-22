@@ -109,14 +109,14 @@ def main():
     
     cap.release()
     
-    frame = load_frame(args.video, args.frame)
-    blob = PREPROCESSORS[args.model](frame)
-    print(f"{args.model}: frame {args.frame} of {args.video.name} -> input {blob.shape}")
+    # frame = load_frame(args.video, args.frame)
+    # blob = PREPROCESSORS[args.model](frame)
+    # print(f"{args.model}: frame {args.frame} of {args.video.name} -> input {blob.shape}")
 
-    sess = ort.InferenceSession(str(args.onnx), providers=["CPUExecutionProvider"])
-    in_name = sess.get_inputs()[0].name
-    ref_names = [o.name for o in sess.get_outputs()]
-    ref_outs = sess.run(None, {in_name: blob})
+    # sess = ort.InferenceSession(str(args.onnx), providers=["CPUExecutionProvider"])
+    # in_name = sess.get_inputs()[0].name
+    # ref_names = [o.name for o in sess.get_outputs()]
+    # ref_outs = sess.run(None, {in_name: blob})
     # print(f"onnxruntime CPU (FP32 reference): {len(ref_outs)} output(s)")
 
     if not args.engine.exists():
