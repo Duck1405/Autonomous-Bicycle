@@ -75,8 +75,11 @@ class LaneATTNode(Node):
 
     def image_callback(self, msg):
         frame = self.bridge.imgmsg_to_cv2(msg, desired_encoding='bgr8')
+        self.get_logger().info('Image received, shape: {}'.format(frame.shape))
         lanes = self.get_inference(frame)
+        self.get_logger().info(f"Detected {len(lanes)} lanes")
         left, right = self.split_left_right(lanes)
+        
         if left is not None:
             self.get_logger().info(f"left points shape: {left['points'].shape}")
         if right is not None:
