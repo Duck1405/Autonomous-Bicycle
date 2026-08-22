@@ -8,7 +8,6 @@ import numpy as np
 
 from .trt_runner import CudaRT, TrtEngine
 
-
 class LaneATTNode(Node):
     def __init__(self):
         super().__init__('laneAtt_node')
@@ -18,7 +17,7 @@ class LaneATTNode(Node):
         self.trt_engine = TrtEngine(self.engine, self.CudaRT)
 
         self.bridge = CvBridge()
-        self.sub = self.create_subscription(Image, '/dev/video0', self.image_callback, 10)  # Ros2: "/left/raw", "/right/raw"
+        self.sub = self.create_subscription(Image, '/stereo/depth/color', self.image_callback, 10)  # Ros2: "/left/raw", "/right/raw"
         # raw_camera left: /dev/video0, right: /dev/video1
         self.left_pub = self.create_publisher(Float32MultiArray, '/laneatt/left_lane', 10)
         self.right_pub = self.create_publisher(Float32MultiArray, '/laneatt/right_lane', 10)
@@ -204,7 +203,6 @@ class LaneATTNode(Node):
         return cv2.cvtColor(raw8, cv2.COLOR_BayerRG2BGR)
 
     def image_callback(self, msg):
-        frame = self.rg10_to_bgr(msg)
         self.get_logger().info('Image received, shape: {}'.format(frame.shape))
         lanes = self.get_inference(frame)
         self.get_logger().info(f"Detected {len(lanes)} lanes")

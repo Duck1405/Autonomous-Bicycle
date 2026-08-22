@@ -8,8 +8,6 @@ import numpy as np
 
 from .trt_runner import CudaRT, TrtEngine
 
-
-
 class Yolov11(Node):
     def __init__(self):
         super().__init__('yolov11_node')
@@ -19,7 +17,7 @@ class Yolov11(Node):
         self.trt_engine = TrtEngine(self.engine, self.CudaRT)
 
         self.bridge = CvBridge()
-        self.sub = self.create_subscription(Image, '/dev/video0', self.image_callback, 10)  # Ros2: "/left/raw", "/right/raw"
+        self.sub = self.create_subscription(Image, '/stereo/depth/color', self.image_callback, 10)  # Ros2: "/left/raw", "/right/raw"
         # raw_camera left: /dev/video0, right: /dev/video1
         self.det_pub = self.create_publisher(Float32MultiArray, '/yolov11/detections', 10)
 
@@ -83,8 +81,7 @@ class Yolov11(Node):
         msg.data = np.asarray(rows, dtype=np.float32).flatten().tolist() if rows else []
         return msg
 
-    def image_callback(self, msg):
-        frame = self.rg10_to_bgr(msg)
+    def image_callback(self, frame):
         self.get_logger().info('Image received, shape: {}'.format(frame.shape))
         objects = self.get_inference(frame)
         self.get_logger().info(f"Detected {len(objects)} Objects")
