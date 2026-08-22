@@ -202,7 +202,7 @@ class LaneATTNode(Node):
         raw8 = (raw >> 2).astype(np.uint8)          # 10-bit (0-1023) -> 8-bit (0-255)
         return cv2.cvtColor(raw8, cv2.COLOR_BayerRG2BGR)
 
-    def image_callback(self, msg):
+    def image_callback(self, frame):
         self.get_logger().info('Image received, shape: {}'.format(frame.shape))
         lanes = self.get_inference(frame)
         self.get_logger().info(f"Detected {len(lanes)} lanes")

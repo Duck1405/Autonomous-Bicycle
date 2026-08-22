@@ -82,9 +82,22 @@ class Yolov11(Node):
         return msg
 
     def image_callback(self, frame):
-        self.get_logger().info('Image received, shape: {}'.format(frame.shape))
+    # Your stereo camera appears to publish RG10 Bayer images
+
+        self.get_logger().info(f'Image received, shape: {frame.shape}')
+
         objects = self.get_inference(frame)
-        self.get_logger().info(f"Detected {len(objects)} Objects")
+        self.get_logger().info(f'Detected {len(objects)} objects')
+
+        for i, (p1, p2, conf, cls) in enumerate(objects, start=1):
+            cx = (p1[0] + p2[0]) // 2
+            cy = (p1[1] + p2[1]) // 2
+            self.get_logger().info(
+                f'  Object {i}: class={cls}, confidence={conf:.2f}, '
+                f'box=({p1[0]}, {p1[1]}) to ({p2[0]}, {p2[1]}), '
+                f'center=({cx}, {cy})'
+            )
+
         self.det_pub.publish(self._to_msg(objects))
 
 
