@@ -5,6 +5,7 @@ from std_msgs.msg import Float32MultiArray
 from cv_bridge import CvBridge
 import cv2
 import numpy as np
+import time
 
 from .trt_runner import CudaRT, TrtEngine
 
@@ -83,11 +84,17 @@ class Yolov11Node(Node):
 
     def image_callback(self, frame):
     # Your stereo camera appears to publish RG10 Bayer images
+        t0 = time.perf_counter()
         frame = self.bridge.imgmsg_to_cv2(frame, desired_encoding='bgr8')
+        t1 = time.perf_counter()
+        self.get_logger().info(f'Image conversion took {t1 - t0:.4f} seconds. FPS: {1/(t1 - t0):.2f}')
         self.get_logger().info(f'Image received, type: {type(frame)}')
         
-
+        t2 = time.perf_counter()
         objects = self.get_inference(frame)
+        t3 = time.perf_counter()
+        self.get_logger().info(f'Image Inference took {t1 - t0:.4f} seconds')
+        
         self.get_logger().info(f'Detected {len(objects)} objects')
 
         for i, (p1, p2, conf, cls) in enumerate(objects, start=1):
@@ -99,6 +106,7 @@ class Yolov11Node(Node):
                 f'center=({cx}, {cy})'
             )
 
+        self.get_logger().info(f"Total Time: {t3 - t0:.4f} seconds. FPS: {1/(t3 - t0):.2f}")   
         self.det_pub.publish(self._to_msg(objects))
 
 
