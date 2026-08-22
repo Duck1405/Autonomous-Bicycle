@@ -77,7 +77,7 @@ def main():
     ap.add_argument("--model", required=True, choices=sorted(PREPROCESSORS),
                     help="which preprocessing to apply")
     ap.add_argument("--onnx", required=True, type=Path)
-    ap.add_argument("--engine", required=True, type=Path)
+    ap.add_argument("--engine", required=False, type=Path)
     ap.add_argument("--video", type=Path, default=Path("LaneATT/video_input/IMG_6540.MOV"))
     ap.add_argument("--frame", type=int, default=500, help="frame index to test")
     args = ap.parse_args()
