@@ -203,7 +203,8 @@ class LaneATTNode(Node):
         return cv2.cvtColor(raw8, cv2.COLOR_BayerRG2BGR)
 
     def image_callback(self, frame):
-        self.get_logger().info('Image received, shape: {}'.format(frame.shape))
+
+        self.get_logger().info(f'Image received, type: {type(frame)}')
         lanes = self.get_inference(frame)
         self.get_logger().info(f"Detected {len(lanes)} lanes")
         left, right = self.split_left_right(lanes)
