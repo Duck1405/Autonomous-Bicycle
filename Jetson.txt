@@ -441,3 +441,35 @@ pipeline wall (read + preprocess + engines, sequential): 62.4 ms/frame -> 16.02 
   "pipeline_ms": 62.44077422200007,
   "pipeline_fps": 16.015176180305353
 }
+
+
+
+(LaneNet310Cuda) mlc@ubuntu:~/aman/Autonomous-Bicycle/jetson_tools$ python trt_vs_onnx_parity.py   --model laneatt   --onnx /home/mlc/aman/Autonomous-Bicycle/LaneATT/onnxmodels/LaneATTresnet34Aug2/models/model_0013_raw.onnx   --engine /home/mlc/aman/Autonomous-Bicycle/LaneATT/onnxmodels/LaneATTresnet34Aug2/models/LaneATT_fb16.engine   --video /home/mlc/aman/Autonomous-Bicycle/Videos2/IMG_6540.MOV   --max-frames 100
+2026-08-22 16:18:37.854619208 [W:onnxruntime:Default, device_discovery.cc:211 DiscoverDevicesForPlatform] GPU device discovery failed: device_discovery.cc:91 ReadFileContents Failed to open file: "/sys/class/drm/card1/device/vendor"
+Loading ONNX Runtime CPU reference...
+Loading TensorRT engine...
+Video: IMG_6540.MOV | total frames: 1053 | starting at: 0
+Comparing 100 frame(s), stride=1
+Warming up TensorRT for 20 frame(s)...
+Frame 0, proposals: corr=0.99999991, mean_abs=0.0722761, max_abs=0.815918, p99_rel=0.00196187
+Frame 25, proposals: corr=0.99999990, mean_abs=0.0727347, max_abs=0.886841, p99_rel=0.00220994
+Frame 50, proposals: corr=0.99999991, mean_abs=0.0725119, max_abs=0.978271, p99_rel=0.00218921
+Frame 75, proposals: corr=0.99999990, mean_abs=0.0723969, max_abs=0.916016, p99_rel=0.00198545
+
+======================================================================
+PARITY RESULTS: 100 compared frame(s)
+======================================================================
+
+proposals overall parity:
+  valid frames:       100
+  failed frames:      0
+  global mean abs:    0.0725685
+  worst max abs:      0.984863
+  mean correlation:   0.99999990
+  median correlation: 0.99999990
+  p5 correlation:     0.99999990
+  worst correlation:  0.99999990
+  median frame p99 relative error: 0.00206226
+
+PASS - TensorRT consistently tracks the ONNX reference.
+(LaneNet310Cuda) mlc@ubuntu:~/aman/Autonomous-Bicycle/jetson_tools$ 
