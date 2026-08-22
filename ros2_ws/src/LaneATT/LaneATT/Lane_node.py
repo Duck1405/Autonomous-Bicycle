@@ -72,9 +72,17 @@ class LaneATTNode(Node):
         if lane is not None:
             msg.data = lane["points"].astype(np.float32).flatten().tolist()
         return msg
+    
+    def rg10_to_bgr(self, msg):
+        """RG10 (V4L2 SRGGB10, 10-bit Bayer RGGB padded into 16-bit words) -> BGR8."""
+        dtype = np.dtype(np.uint16).newbyteorder('>' if msg.is_bigendian else '<')
+        raw = np.frombuffer(msg.data, dtype=dtype).reshape(msg.height, msg.step // 2)
+        raw = raw[:, :msg.width]
+        raw8 = (raw >> 2).astype(np.uint8)          # 10-bit (0-1023) -> 8-bit (0-255)
+        return cv2.cvtColor(raw8, cv2.COLOR_BayerRG2BGR)
 
     def image_callback(self, msg):
-        frame = self.bridge.imgmsg_to_cv2(msg, desired_encoding='bgr8')
+        frame = self.rg10_to_bgr(msg)
         self.get_logger().info('Image received, shape: {}'.format(frame.shape))
         lanes = self.get_inference(frame)
         self.get_logger().info(f"Detected {len(lanes)} lanes")
