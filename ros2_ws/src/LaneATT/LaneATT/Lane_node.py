@@ -17,7 +17,7 @@ class LaneATTNode(Node):
         self.trt_engine = TrtEngine(self.engine, self.CudaRT)
 
         self.bridge = CvBridge()
-        self.sub = self.create_subscription(Image, '/stereo/depth/color', self.image_callback, 10)  # Ros2: "/left/raw", "/right/raw"
+        self.sub = self.create_subscription(Image, '/stereo/left/image_raw', self.image_callback, 10)  # Ros2: "/left/raw", "/right/raw"
         # raw_camera left: /dev/video0, right: /dev/video1
         self.left_pub = self.create_publisher(Float32MultiArray, '/laneatt/left_lane', 10)
         self.right_pub = self.create_publisher(Float32MultiArray, '/laneatt/right_lane', 10)
@@ -202,9 +202,9 @@ class LaneATTNode(Node):
         raw8 = (raw >> 2).astype(np.uint8)          # 10-bit (0-1023) -> 8-bit (0-255)
         return cv2.cvtColor(raw8, cv2.COLOR_BayerRG2BGR)
 
-    def image_callback(self, frame):
-
-        self.get_logger().info(f'Image received, type: {type(frame)}')
+    def image_callback(self, msg):
+        frame = self.bridge.imgmsg_to_cv2(msg, desired_encoding='bgr8')
+        self.get_logger().info('Image received, shape: {}'.format(frame.shape))
         lanes = self.get_inference(frame)
         self.get_logger().info(f"Detected {len(lanes)} lanes")
         left, right = self.split_left_right(lanes)

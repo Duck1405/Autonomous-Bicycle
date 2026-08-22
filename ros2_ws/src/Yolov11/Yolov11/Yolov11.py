@@ -85,6 +85,7 @@ class Yolov11(Node):
     # Your stereo camera appears to publish RG10 Bayer images
 
         self.get_logger().info(f'Image received, type: {type(frame)}')
+        
 
         objects = self.get_inference(frame)
         self.get_logger().info(f'Detected {len(objects)} objects')
