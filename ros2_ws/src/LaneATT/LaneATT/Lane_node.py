@@ -7,7 +7,6 @@ import cv2
 import numpy as np
 
 from .trt_runner import CudaRT, TrtEngine
-from .postprocess import laneatt_decode
 
 
 class LaneATTNode(Node):
@@ -28,6 +27,129 @@ class LaneATTNode(Node):
             self.trt_engine.run(self.pre_laneatt(np.zeros((360, 640, 3), dtype=np.uint8)))
 
         self.get_logger().info('LaneATT node started')
+    
+    
+    def _softmax2(self, logits):
+        """Row-wise softmax over a (N, 2) block, max-subtracted for stability."""
+        e = np.exp(logits - logits.max(axis=1, keepdims=True))
+        return e / e.sum(axis=1, keepdims=True)
+
+    def lane_nms(self, proposals, scores, overlap=50.0, top_k=2):
+        """Greedy lane NMS. Returns kept indices into `proposals`, best score first.
+
+        "Overlap" is the mean absolute horizontal distance between two lanes over the
+        vertical span where both exist; the lower-scored lane is suppressed when that
+        mean is below `overlap` (in input pixels).
+        """
+        n = proposals.shape[0]
+        if n == 0:
+            return np.zeros(0, dtype=np.int64)
+
+        n_offsets = proposals.shape[1] - 5
+        n_strips = n_offsets - 1
+        order = np.argsort(-scores, kind="stable")
+
+        # A non-positive threshold can never suppress (mean distance is >= 0 and the
+        # test is strict), so short-circuit the O(N^2) loop. Matches the fast path in
+        # lib/nms_pytorch.py.
+        if overlap <= 0:
+            return order[:min(n, int(top_k))]
+
+        boxes = proposals[order]
+        # Vertical extent in offset-index space, matching devIoU in the CUDA kernel.
+        starts = (boxes[:, 2] * n_strips + 0.5).astype(np.int64)
+        lengths = boxes[:, 4]
+        ends = ((starts.astype(np.float64) + lengths - 1 + 0.5).astype(np.int64)
+                - (lengths - 1 < 0).astype(np.int64))
+        ends = np.minimum(ends, n_offsets - 1)
+        xs = boxes[:, 5:5 + n_offsets]
+        offset_idx = np.arange(n_offsets)
+
+        removed = np.zeros(n, dtype=bool)
+        keep = []
+        for i in range(n):
+            if removed[i]:
+                continue
+            keep.append(order[i])
+            if len(keep) == int(top_k):
+                break
+            rest = slice(i + 1, n)
+            s = np.maximum(starts[i], starts[rest])
+            e = np.minimum(ends[i], ends[rest])
+            valid = (offset_idx[None, :] >= s[:, None]) & (offset_idx[None, :] <= e[:, None])
+            diff = np.abs(xs[i][None, :] - xs[rest]) * valid
+            counts = valid.sum(axis=1)
+            mean_dist = diff.sum(axis=1) / np.maximum(counts, 1)
+            suppress = (counts > 0) & (mean_dist < overlap) & (~removed[rest])
+            removed[i + 1:][suppress] = True
+
+        return np.asarray(keep, dtype=np.int64)
+
+    def proposals_to_pred(self, proposals, img_w=640):
+        """Post-NMS proposals -> [{'points': (N,2) normalized (x,y), 'conf': float}].
+
+        Mirrors laneatt.py:proposals_to_pred, including its rule that a proposal not
+        starting at the bottom of the image is extended upward only while x stays
+        inside the frame. The original's `np.bool` (removed in numpy >= 1.24) is
+        written as `bool` here.
+        """
+        if len(proposals) == 0:
+            return []
+        n_offsets = proposals.shape[1] - 5
+        n_strips = n_offsets - 1
+        anchor_ys = np.linspace(1.0, 0.0, n_offsets)
+
+        lanes = []
+        for lane in proposals:
+            lane_xs = lane[5:].astype(np.float64) / img_w
+            # Clamped: a degenerate proposal can produce start < 0, which would slice
+            # from the end of the array instead of erroring. The torch original has
+            # the same hazard; clamping only affects proposals that are already junk.
+            start = int(round(float(lane[2]) * n_strips))
+            start = max(0, min(start, n_offsets))
+            length = int(round(float(lane[4])))
+            end = max(min(start + length - 1, n_offsets - 1), -1)
+
+            head = lane_xs[:start]
+            inside = (head >= 0.0) & (head <= 1.0)
+            # Reverse cumprod: keep the run of in-frame points adjacent to `start`.
+            mask = ~(inside[::-1].cumprod()[::-1].astype(bool))
+            lane_xs[end + 1:] = -2
+            lane_xs[:start][mask] = -2
+
+            valid = lane_xs >= 0
+            if valid.sum() <= 1:
+                continue
+            pts_x = lane_xs[valid][::-1]
+            pts_y = anchor_ys[valid][::-1]
+            lanes.append({
+                "points": np.stack([pts_x, pts_y], axis=1),
+                "conf": float(lane[1]),
+                "start_x": float(lane[3]),
+                "start_y": float(lane[2]),
+            })
+        return lanes
+    
+    def laneatt_decode(self, raw, conf_threshold=0.3, nms_thres=50.0, nms_topk=2, img_w=640):
+        """Raw (1,1000,77) engine output -> list of lane dicts.
+
+        Order matters: laneatt.py:nms scores with a softmax written to a *separate*
+        tensor and slices the still-logit proposals, then decode() applies the softmax
+        to the survivors. Softmaxing twice would squash every conf toward 0.5 and
+        break the 0.5 acquire threshold downstream.
+        """
+        p = np.asarray(raw, dtype=np.float32).reshape(-1, np.shape(raw)[-1])
+        scores = self._softmax2(p[:, :2])[:, 1]
+
+        above = scores > conf_threshold
+        p, scores = p[above], scores[above]
+        if p.shape[0] == 0:
+            return []
+
+        p = p[self.lane_nms(p, scores, overlap=nms_thres, top_k=nms_topk)].copy()
+        p[:, :2] = self._softmax2(p[:, :2])
+        p[:, 4] = np.round(p[:, 4])
+        return self.proposals_to_pred(p, img_w=img_w)
 
     def pre_laneatt(self, frame):
         """BGR frame -> (1,3,360,640) /255, BGR order kept (mirrors LaneATT.frame_eval)."""
@@ -44,7 +166,7 @@ class LaneATTNode(Node):
         arr = self.pre_laneatt(frame)
         outputs = self.trt_engine.infer(arr)
         raw = next(iter(outputs.values()))
-        return laneatt_decode(raw)
+        return self.laneatt_decode(raw)
 
     @staticmethod
     def _bottom_x(lane):

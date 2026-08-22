@@ -24,6 +24,7 @@ setup(
     },
     entry_points={
         'console_scripts': [
+            'Yolov11_node = Yolov11.Yolov11:main',
         ],
     },
 )
