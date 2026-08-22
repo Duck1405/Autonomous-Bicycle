@@ -14,12 +14,13 @@ class LaneATTNode(Node):
     def __init__(self):
         super().__init__('laneAtt_node')
         self.engine = "/home/mlc/aman/Autonomous-Bicycle/LaneATT/onnxmodels/LaneATTresnet34Aug2/models/LaneATT_fb16.engine"
-        self.warmup = 20
+        self.warmup = 50
         self.CudaRT = CudaRT()
         self.trt_engine = TrtEngine(self.engine, self.CudaRT)
 
         self.bridge = CvBridge()
-        self.sub = self.create_subscription(Image, '/camera/image_raw', self.image_callback, 10)
+        self.sub = self.create_subscription(Image, '/dev/video0', self.image_callback, 10)  # Ros2: "/left/raw", "/right/raw"
+        # raw_camera left: /dev/video0, right: /dev/video1
         self.left_pub = self.create_publisher(Float32MultiArray, '/laneatt/left_lane', 10)
         self.right_pub = self.create_publisher(Float32MultiArray, '/laneatt/right_lane', 10)
 
@@ -76,6 +77,10 @@ class LaneATTNode(Node):
         frame = self.bridge.imgmsg_to_cv2(msg, desired_encoding='bgr8')
         lanes = self.get_inference(frame)
         left, right = self.split_left_right(lanes)
+        if left is not None:
+            self.get_logger().info(f"left points shape: {left['points'].shape}")
+        if right is not None:
+            self.get_logger().info(f"right points shape: {right['points'].shape}")
         self.left_pub.publish(self._to_msg(left))
         self.right_pub.publish(self._to_msg(right))
 
