@@ -6,8 +6,8 @@ from cv_bridge import CvBridge
 import cv2
 import numpy as np
 
-from trt_runner import CudaRT, TrtEngine
-from postprocess import laneatt_decode
+from .trt_runner import CudaRT, TrtEngine
+from .postprocess import laneatt_decode
 
 
 class LaneATTNode(Node):
