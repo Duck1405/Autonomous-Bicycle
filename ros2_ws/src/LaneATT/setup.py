@@ -1,6 +1,6 @@
 from setuptools import find_packages, setup
 
-package_name = 'LaneATT'
+package_name = 'laneATT'
 
 setup(
     name=package_name,

@@ -1,6 +1,6 @@
 from setuptools import find_packages, setup
 
-package_name = 'Yolov11'
+package_name = 'yolov11'
 
 setup(
     name=package_name,
