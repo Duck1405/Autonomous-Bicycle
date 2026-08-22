@@ -18,7 +18,7 @@ class Yolov11Node(Node):
         self.trt_engine = TrtEngine(self.engine, self.CudaRT)
 
         self.bridge = CvBridge()
-        self.sub = self.create_subscription(Image, '/stereo/depth/color', self.image_callback, 10)  # Ros2: "/left/raw", "/right/raw"
+        self.sub = self.create_subscription(Image, '/stereo/left/image_raw', self.image_callback, 10)  # Ros2: "/left/raw", "/right/raw"
         # raw_camera left: /dev/video0, right: /dev/video1
         self.det_pub = self.create_publisher(Float32MultiArray, '/yolov11/detections', 10)
 
@@ -85,7 +85,7 @@ class Yolov11Node(Node):
     def image_callback(self, frame):
     # Your stereo camera appears to publish RG10 Bayer images
         t0 = time.perf_counter()
-        frame = self.bridge.imgmsg_to_cv2(frame, desired_encoding='bgr8')
+        # frame = self.bridge.imgmsg_to_cv2(frame, desired_encoding='bgr8')
         t1 = time.perf_counter()
         self.get_logger().info(f'Image conversion took {t1 - t0:.4f} seconds. FPS: {1/(t1 - t0):.2f}')
         self.get_logger().info(f'Image received, type: {type(frame)}')
