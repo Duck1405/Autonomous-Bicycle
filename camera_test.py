@@ -1,11 +1,9 @@
-from trt_runner import CudaRT, TrtEngine
-from postprocess import laneatt_decode
+from jetson_tools.trt_runner import CudaRT, TrtEngine
+from jetson_tools.postprocess import laneatt_decode
 import cv2, numpy as np
 
 cuda = CudaRT()
 eng = TrtEngine("/home/mlc/aman/Autonomous-Bicycle/LaneATT/onnxmodels/LaneATTresnet34Aug2/models/LaneATT_fb16.engine", cuda)
-
-
 cap = cv2.VideoCapture(0)
 
 # Check if the camera opened successfully
