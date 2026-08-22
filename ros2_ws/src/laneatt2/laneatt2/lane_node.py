@@ -205,30 +205,31 @@ class LaneATTNode(Node):
 
     def image_callback(self, msg):
         t0 = time.perf_counter()
+
         frame = self.bridge.imgmsg_to_cv2(msg, desired_encoding='bgr8')
         t1 = time.perf_counter()
-        self.get_logger().info(f'Image conversion took {t1 - t0:.4f} seconds. FPS: {1/(t1 - t0):.2f}')
-        self.get_logger().info('Image received, shape: {}'.format(frame.shape))
-        
-        t2 = time.perf_counter()
+
         lanes = self.get_inference(frame)
-        t3 = time.perf_counter()
-        
-        self.get_logger().info(f'Image Inference took {t1 - t0:.4f} seconds. FPS: {1/(t1 - t0):.2f}')
-        self.get_logger().info(f"Detected {len(lanes)} lanes")
-        
-        
+        t2 = time.perf_counter()
+
         left, right = self.split_left_right(lanes)
-        
-        if left is not None:
-            self.get_logger().info(f"left points shape: {left['points'].shape}")
-        if right is not None:
-            self.get_logger().info(f"right points shape: {right['points'].shape}")
-        
-        self.get_logger().info(f"Total Time: {t3 - t0:.4f} seconds. FPS: {1/(t3 - t0):.2f}")   
-            
         self.left_pub.publish(self._to_msg(left))
         self.right_pub.publish(self._to_msg(right))
+        t3 = time.perf_counter()
+
+        conversion_s = t1 - t0
+        lane_pipeline_s = t2 - t1
+        callback_s = t3 - t0
+
+        self.get_logger().info(
+            f"conversion: {conversion_s * 1000:.1f} ms "
+            f"({1 / conversion_s:.2f} FPS) | "
+            f"lane pipeline: {lane_pipeline_s * 1000:.1f} ms "
+            f"({1 / lane_pipeline_s:.2f} FPS) | "
+            f"total callback: {callback_s * 1000:.1f} ms "
+            f"({1 / callback_s:.2f} FPS) | "
+            f"lanes: {len(lanes)}"
+        )
 
 
 def main(args=None):

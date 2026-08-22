@@ -42,6 +42,8 @@ def main():
     parser.add_argument("--name", default=None,
                         help="run/artifact stem (default yolo11<size>_coco4)")
     args = parser.parse_args()
+    
+    print(f"args: {args}")
 
     stem = args.name if args.name else f"yolo11{args.size}_coco4"
     models_dir = next_run_dir(Path(__file__).resolve().parent / "models" / stem)
@@ -80,13 +82,13 @@ def main():
     onnx_nms = YOLO(final_pt).export(format="onnx", imgsz=args.imgsz, opset=13,
                                      simplify=True, nms=True, conf=0.25, iou=0.45,
                                      device="cpu")
-    shutil.move(onnx_nms, models_dir / f"{stem}_nms.onnx")
+    shutil.move(onnx_nms, models_dir / f"{stem}_nms_Augest.onnx")
     # 2) Raw head output -> trtexec engine building or custom decode+NMS.
     #    Lands at models/<stem>.onnx (export writes next to the .pt).
     YOLO(final_pt).export(format="onnx", imgsz=args.imgsz, opset=13, simplify=True,
                           device="cpu")
 
-    print("artifacts:", final_pt, models_dir / f"{stem}.onnx", models_dir / f"{stem}_nms.onnx")
+    print("artifacts:", final_pt, models_dir / f"{stem}.onnx", models_dir / f"{stem}_nms_augest.onnx")
 
 
 if __name__ == "__main__":

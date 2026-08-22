@@ -1,22 +1,5 @@
-"""Compare a TensorRT engine's output against onnxruntime-CPU on the same frame.
-
-    python jetson_tools/trt_vs_onnx_parity.py --model depth \
-        --onnx LaneATT/onnxmodels/depth_onnx/depth_anything_v2_small.onnx \
-        --engine LaneATT/onnxmodels/depth_onnx/depth_anything_v2_small.engine
-
-onnxruntime on CPU runs in FP32 and is the reference. An FP16 engine will not
-match bit-for-bit — the question is whether it is close enough to trust, and
-whether anything overflowed.
-
-This matters most for the depth model: NVIDIA's forum has an unresolved report
-of Depth-Anything-V2 FP16 on Orin Nano / TensorRT 10.3 producing badly degraded
-output, the usual cause being LayerNorm overflowing in FP16 in ViT backbones. A
-fast engine that returns garbage is worse than no engine, so run this before
-believing any FPS number.
-
-Correlation is the headline metric for depth: the model is scale-ambiguous, so a
-uniform scale shift matters far less than a change in the *shape* of the depth
-map.
+"""
+python Yolov11_trt_vs_onnx_parity.py   --model yolo   --onnx /home/mlc/aman/Autonomous-Bicycle/LaneATT/onnxmodels/YoloN/yolo11n_coco4_nms.onnx   --engine /home/mlc/aman/Autonomous-Bicycle/LaneATT/onnxmodels/YoloN/YoloN_fb16.engine   --video /home/mlc/aman/Autonomous-Bicycle/Videos2/IMG_6540.MOV   --max-frames 100
 """
 import argparse
 import sys
