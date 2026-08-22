@@ -89,17 +89,26 @@ def main():
     cap = cv2.VideoCapture(str(args.video))
     cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
     
-    if not ok:
-        raise SystemExit(f"cannot read frame {args.frame} of {str(args.video)}")
+    
     while i < args.frame:
+        
         ok, frame = cap.read()
+        if not ok:
+            raise SystemExit(f"cannot read frame {args.frame} of {str(args.video)}")
         blob = PREPROCESSORS[args.model](frame)
+        print(f"{args.model}: frame {args.frame} of {args.video.name} -> input {blob.shape}")
+        sess = ort.InferenceSession(str(args.onnx), providers=["CPUExecutionProvider"])
+        print(f"sess")
+        in_name = sess.get_inputs()[0].name
+        print(f"in_name: {in_name}")
+        ref_names = [o.name for o in sess.get_outputs()]
+        print(f"ref_names: {ref_names}")
+        ref_outs = sess.run(None, {in_name: blob})
+        print(f"onnxruntime CPU (FP32 reference): {len(ref_outs)} output(s)")
+        
     
     cap.release()
-        
-
-
-
+    
     frame = load_frame(args.video, args.frame)
     blob = PREPROCESSORS[args.model](frame)
     print(f"{args.model}: frame {args.frame} of {args.video.name} -> input {blob.shape}")
@@ -108,8 +117,11 @@ def main():
     in_name = sess.get_inputs()[0].name
     ref_names = [o.name for o in sess.get_outputs()]
     ref_outs = sess.run(None, {in_name: blob})
-    print(f"onnxruntime CPU (FP32 reference): {len(ref_outs)} output(s)")
+    # print(f"onnxruntime CPU (FP32 reference): {len(ref_outs)} output(s)")
 
+    if not args.engine.exists():
+        raise SystemExit(f"{args.engine} not found")
+    
     eng = TrtEngine(args.engine)
     trt_outs = eng.infer(blob)
     print(f"tensorrt engine: {list(trt_outs)}")
