@@ -24,6 +24,7 @@ setup(
     },
     entry_points={
         'console_scripts': [
+            'Lane_node = LaneATT.Lane_node:main',
         ],
     },
 )
