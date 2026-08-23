@@ -85,7 +85,7 @@ class Yolov11Node(Node):
     def image_callback(self, frame):
     # Your stereo camera appears to publish RG10 Bayer images
         t0 = time.perf_counter()
-        # frame = self.bridge.imgmsg_to_cv2(frame, desired_encoding='bgr8')
+        frame = self.bridge.imgmsg_to_cv2(frame, desired_encoding='bgr8')
         t1 = time.perf_counter()
         self.get_logger().info(f'Image conversion took {t1 - t0:.4f} seconds. FPS: {1/(t1 - t0):.2f}')
         self.get_logger().info(f'Image received, type: {type(frame)}')
@@ -93,7 +93,7 @@ class Yolov11Node(Node):
         t2 = time.perf_counter()
         objects = self.get_inference(frame)
         t3 = time.perf_counter()
-        self.get_logger().info(f'Image Inference took {t1 - t0:.4f} seconds')
+        self.get_logger().info(f'Image Inference took {t3 - t2:.4f} seconds')
         
         self.get_logger().info(f'Detected {len(objects)} objects')
 
