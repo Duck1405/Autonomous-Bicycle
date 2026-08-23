@@ -6,6 +6,8 @@ from cv_bridge import CvBridge
 import cv2
 import numpy as np
 
+# This will be out centeral node
+
 
 class VideoTestNode(Node):
     def __init__(self):
