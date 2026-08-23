@@ -113,12 +113,7 @@ class LaneATTInference():
 
         mid_point_x = img_w / 2
 
-        # Classify each lane as a whole using ONE reference x per lane: its x at
-        # the bottom-most row (closest to the car). Splitting a single lane's own
-        # points into a left-sum/right-sum (the old approach) let a lane entirely
-        # on one side win the *opposite* slot by default, since its unused side's
-        # sum stayed at 0 -- always the minimum. Classifying by a single scalar
-        # per lane avoids that trap.
+
         left_candidates = []   # (x_bottom, lane_index), x_bottom < mid
         right_candidates = []  # (x_bottom, lane_index), x_bottom >= mid
         for i, lane in enumerate(predictions):
