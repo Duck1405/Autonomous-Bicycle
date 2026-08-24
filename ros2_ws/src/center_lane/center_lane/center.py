@@ -12,7 +12,7 @@ class CenterNode(Node):
     def __init__(self):
         super().__init__('center_node')
         self.get_split_left = self.count_subscribers(Float32MultiArray, "/laneatt/left_lane", self.lane_callback,1)
-        self.get_split_right = self.count_subscribers(Float32MultiArray, "/laneatt/right_lane", 1)
+        self.get_split_right = self.count_subscribers(Float32MultiArray, "/laneatt/right_lane", self.lane_callback,  1)
         
     def lane_callback(self, msg):
         self.get_logger().info(f'Split_left: Type {type(self.get_split_left)}')
