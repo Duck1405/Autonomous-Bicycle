@@ -1,6 +1,6 @@
 from setuptools import find_packages, setup
 
-package_name = 'yolo_visualizer'
+package_name = 'lane_visualizer'
 
 setup(
     name=package_name,
@@ -24,7 +24,7 @@ setup(
     },
     entry_points={
         'console_scripts': [
-            'visualizer_node = yolo_visualizer.visualizer_node:main',
+            'lane_visualizer_node = lane_visualizer.lane_visualizer_node:main',
         ],
     },
 )

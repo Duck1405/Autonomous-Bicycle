@@ -1,6 +1,6 @@
 from setuptools import find_packages, setup
 
-package_name = 'yolo_visualizer'
+package_name = 'object_tracker_controller'
 
 setup(
     name=package_name,
@@ -14,7 +14,7 @@ setup(
     install_requires=['setuptools'],
     zip_safe=True,
     maintainer='mlc',
-    maintainer_email='remotepc1405@gmail.com',
+    maintainer_email='amannindra@gmail.com',
     description='TODO: Package description',
     license='TODO: License declaration',
     extras_require={
@@ -24,7 +24,7 @@ setup(
     },
     entry_points={
         'console_scripts': [
-            'visualizer_node = yolo_visualizer.visualizer_node:main',
+            'controller_node = object_tracker_controller.controller_node:main',
         ],
     },
 )
