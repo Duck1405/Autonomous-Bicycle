@@ -36,7 +36,7 @@ class CenterNode(Node):
         self.get_center()
     
     def get_center(self):
-        if self.right_lane_pts and self.left_lane_pts:
+        if self.right_lane_pts is not None and self.left_lane_pts is not None:
             self.get_logger().info("Both Found")
         elif self.right_lane_pts == None:
             self.get_logger().info("Right Lane Not Found")
@@ -52,6 +52,7 @@ class CenterNode(Node):
         self.get_logger().info(f"Left: {self.get_split_left}")
         self.get_logger().info(f'Split_right: Type {type(self.get_split_right)}')
         self.get_logger().info(f"Right: {self.get_split_right}")
+    
     
         
         
