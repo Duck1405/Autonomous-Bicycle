@@ -100,6 +100,7 @@ class CenterNode(Node):
             f"Center lane: {len(mid_points)} midpoints"
             + (f" (synthesized {synthesized} edge)" if synthesized else "")
         )
+        self.get_logger().info(f"mid_points: {mid_points}")
         return mid_points
 
     def lane_callback(self, msg):
