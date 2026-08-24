@@ -1,6 +1,6 @@
 from setuptools import find_packages, setup
 
-package_name = 'center_lane2'
+package_name = 'center_lane'
 
 setup(
     name=package_name,
