@@ -13,6 +13,7 @@ class CenterNode(Node):
         super().__init__('center_node')
         self.get_split_left = self.create_subscription(Float32MultiArray, "/laneatt/left_lane", self.left_lane_callback,1)
         self.get_split_right = self.create_subscription(Float32MultiArray, "/laneatt/right_lane", self.right_lane_callback, 1)
+        self.mid_lane_pub = self.create_publisher(Float32MultiArray, "/laneatt/mid_lane", 1)
 
         self.left_lane_pts = None
         self.right_lane_pts = None
@@ -78,6 +79,7 @@ class CenterNode(Node):
                      for x, y in visible if int(y) in self.lane_width_by_y]
             if len(synth) < 2:
                 self.mid_points = None
+                self._publish_mid_lane(None)
                 return None   # too little prior overlap to trust
             synth = np.array(synth).round().astype(int)
             if left_points is not None:
@@ -86,6 +88,7 @@ class CenterNode(Node):
                 left_points, synthesized = synth, 'left'
         else:
             self.mid_points = None
+            self._publish_mid_lane(None)
             return None
 
         # Midpoints between the two ego lanes, one per shared y-row.
@@ -95,11 +98,22 @@ class CenterNode(Node):
         mid_points = np.array([[(left_by_y[y] + right_by_y[y]) / 2, y] for y in shared_ys], dtype=int)
 
         self.mid_points = mid_points
+        self._publish_mid_lane(mid_points)
         self.get_logger().info(
             f"Center lane: {len(mid_points)} midpoints"
             + (f" (synthesized {synthesized} edge)" if synthesized else "")
         )
         return mid_points
+
+    def _publish_mid_lane(self, mid_points):
+        """Publish on /laneatt/mid_lane in the same flat [x, y, x, y, ...]
+        Float32MultiArray layout as /laneatt/left_lane and /laneatt/right_lane."""
+        msg = Float32MultiArray()
+        if mid_points is not None and len(mid_points) > 0:
+            msg.data = np.asarray(mid_points, dtype=np.float32).ravel().tolist()
+        else:
+            msg.data = []
+        self.mid_lane_pub.publish(msg)
 
     def lane_callback(self, msg):
         self.get_logger().info(f'Split_left: Type {type(self.get_split_left)}')
