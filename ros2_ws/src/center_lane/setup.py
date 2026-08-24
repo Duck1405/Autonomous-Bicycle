@@ -1,6 +1,6 @@
 from setuptools import find_packages, setup
 
-package_name = 'center_lane'
+package_name = 'center_lane2'
 
 setup(
     name=package_name,
@@ -24,7 +24,7 @@ setup(
     },
     entry_points={
         'console_scripts': [
-            'center_lane_execute = center_lane.center:main'
+            'center_lane_execute = center_lane2.center:main'
         ],
     },
 )
