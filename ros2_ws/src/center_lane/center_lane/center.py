@@ -13,6 +13,7 @@ class CenterNode(Node):
         super().__init__('center_node')
         self.get_split_left = self.create_subscription(Float32MultiArray, "/laneatt/left_lane", self.left_lane_callback,1)
         self.get_split_right = self.create_subscription(Float32MultiArray, "/laneatt/right_lane", self.right_lane_callback, 1)
+        self.send_mid_points = self.create_publisher(Float32MultiArray, "/laneatt/mid_lane", 1)
 
         self.left_lane_pts = None
         self.right_lane_pts = None
