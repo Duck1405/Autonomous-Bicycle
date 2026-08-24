@@ -24,6 +24,7 @@ setup(
     },
     entry_points={
         'console_scripts': [
+            'center_lane_execute = center_lane.center:main'
         ],
     },
 )

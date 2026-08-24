@@ -18,10 +18,10 @@ class LaneATTNode(Node):
         self.trt_engine = TrtEngine(self.engine, self.CudaRT)
 
         self.bridge = CvBridge()
-        self.sub = self.create_subscription(Image, '/stereo/left/image_raw', self.image_callback, 10)  # Ros2: "/left/raw", "/right/raw"
+        self.sub = self.create_subscription(Image, '/stereo/left/image_raw', self.image_callback, 1)  # Ros2: "/left/raw", "/right/raw"
         # raw_camera left: /dev/video0, right: /dev/video1
-        self.left_pub = self.create_publisher(Float32MultiArray, '/laneatt/left_lane', 10)
-        self.right_pub = self.create_publisher(Float32MultiArray, '/laneatt/right_lane', 10)
+        self.left_pub = self.create_publisher(Float32MultiArray, '/laneatt/left_lane', 1)
+        self.right_pub = self.create_publisher(Float32MultiArray, '/laneatt/right_lane', 1)
 
         for _ in range(self.warmup):
             self.trt_engine.run(self.pre_laneatt(np.zeros((360, 640, 3), dtype=np.uint8)))

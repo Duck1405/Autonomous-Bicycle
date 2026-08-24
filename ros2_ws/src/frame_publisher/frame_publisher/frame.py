@@ -14,26 +14,26 @@ class Framepub(Node):
         super().__init__("frameNodepub")
         
         self.video_path = "/home/mlc/aman/Autonomous-Bicycle/Videos2/IMG_6893_30fps.mp4"
+        
         self.image_pub = self.create_publisher(Image, '/test_video/image_raw', 10)
 
         self.next_frame_sub = self.create_subscription(
-            Empty,
-            '/test_video/request_next_frame',
+            INT32,
+            '/test_video/frame',
             self.send_next_frame,
             10
         )
-        self.set_video_path = self.create_subscription()
-        
-        
-        
-        
+        self.set_video_path = self.create_subscription(String, "/test_video/video_path", s 10)
+  
         if not self.cap.isOpened():
             raise RuntimeError(f'Could not open: {self.video_path}')
 
-        
         self.cap = cv2.VideoCapture(self.video_path)
         self.bridge = CvBridge()
         
+    def set_video(self, video):
+        if video:
+            self.video_path = video
     def send_next_frame(self, _request):
         
         self.cap.set(cv2.CAP_PROP_POS_FRAMES, _request)
