@@ -25,9 +25,6 @@ def prune_model(config_path, model_path):
     cfg = Config(config_path)
     name = Path(model_path).stem
     model_arch = import torch
-from torch import nn
-import torch.nn.utils.prune as prune
-import torch.nn.functional as F
 
 from lib.config import Config
 from pathlib import Path
