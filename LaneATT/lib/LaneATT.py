@@ -31,7 +31,7 @@ class LaneATTInference():
         self.match_tolerance = match_tolerance
         self.prev_lane_xs = []
         
-    def 
+
 
     def load_model(self, wieghts):
         # `wieghts` is a checkpoint path; the bare architecture comes in separately
