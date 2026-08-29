@@ -27,8 +27,8 @@ def prune_model(config_path, model_path):
     model_arch= cfg.get_model()
     print(model_arch)
 
-for yaml, model in MODELSED:
-    prune_model(yaml, model)
+for info in MODELSED:
+    prune_model(info[0], info[0])
     
     
     
