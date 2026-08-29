@@ -142,8 +142,10 @@ benchmarks
 
 .claude
 
-
 /.claude
 .claude/
 claude/
+
+.claude
+/.claude
 
