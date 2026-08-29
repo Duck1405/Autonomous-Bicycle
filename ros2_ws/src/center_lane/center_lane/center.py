@@ -51,7 +51,17 @@ class CenterNode(Node):
             self.get_logger().info("Left Lane Not Found")
 
     def get_center_two(self):
-        pass
+        left_points = self.left_lane_pts
+        right_points = self.right_lane_pts
+        
+        left_by_y = {int(y): x for x, y in left_points}
+        right_by_y = {int(y): x for x, y in right_points}
+        
+        # w = right_by_y[y] - left_by_y[y]
+        
+        
+        
+        
 
     def get_center(self):
         left_points = self.left_lane_pts

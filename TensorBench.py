@@ -1,8 +1,3 @@
-
-
-
-
-# from cuda.bindings import runtime as cudart
 import sys
 
 from pathlib import Path
