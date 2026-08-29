@@ -57,9 +57,6 @@ def main(frame, model):
     engine = load_engine(runtime, model)
     context = engine.create_execution_context()
     
-    
-
-
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="A simple example script using argparse.")
 
