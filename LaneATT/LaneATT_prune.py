@@ -3,8 +3,13 @@ from torch import nn
 import torch.nn.utils.prune as prune
 import torch.nn.functional as F
 
+print("import torch done")
+
 from lib.config import Config
 from pathlib import Path
+
+print("import config done")
+
 
 
 MODELSED = [
@@ -21,14 +26,18 @@ MODELSED = [
     # ("experiments/LaneATTresnet152Aug2/config.yaml", "experiments/LaneATTresnet152Aug2/models/model_0015.pt" "/Users/amannindra/Projects/Auto/Autonomous-Bicycle/Yolov11/runs/yolo11n_coco45/weights/last.pt")
 ]
 
-def prune_model(config_path, model_path):
+def prune_model(config_path, model_path, index):
     cfg = Config(config_path)
     name = Path(model_path).stem
     model_arch= cfg.get_model()
-    print(model_arch)
-
+    if index == 0:
+        print(model_arch)
+    
+    
+index = 0
 for info in MODELSED:
-    prune_model(info[0], info[0])
+    prune_model(info[0], info[0], index)
+    index += 1
     
     
     
