@@ -85,14 +85,24 @@ from lib.video import VideoInference
 
 device =  torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 
+
+
+# Default input video(s) for a zero-argument (MacBook) run; override with --videos.
+filesed = [Path("video_input") / Path('IMG_5105.MOV'),Path("video_input") / Path('IMG_5106.MOV')]# Path("video_input") / Path('IMG_6892.MOV'), Path("video_input") / Path('IMG_6893.MOV')]
+
+for i in filesed:
+    if not i.is_file():
+        sys.exit(f"video not found: {i}")
+    else:
+        print(f"video found: {i}")
+
+
 if device == torch.device('cuda:0'):
     print("Using GPU")
 else:
     print("Using CPU")
     sys.exit("CPU is not supported for inference. Please use a GPU.")
 
-# Default input video(s) for a zero-argument (MacBook) run; override with --videos.
-filesed = [Path("video_input") / Path('IMG_6759.MOV'),]# Path("video_input") / Path('IMG_6892.MOV'), Path("video_input") / Path('IMG_6893.MOV')]
 
 # (config.yaml, checkpoint) per model. Each experiment needs its OWN config
 # because the backbone differs (resnet34 / resnet152 / resnet50).
@@ -203,7 +213,7 @@ def parse_args():
                              "(default: taken from MODELSED)")
     parser.add_argument("--frame-limit", type=int, default=500,
                         help="max frames processed per video")
-    parser.add_argument("--output-dir", type=Path, default=Path("video_output_3"),
+    parser.add_argument("--output-dir", type=Path, default=Path("video_output_4"),
                         help="root folder for annotated output videos")
     parser.add_argument("--yolo-conf", type=float, default=0.2,
                         help="YOLO confidence threshold")
