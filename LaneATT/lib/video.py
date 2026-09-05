@@ -278,20 +278,20 @@ class VideoInference():
             out_stream.release()
         print()   # end the \r progress line
         t2 = time.time()
-        self.logger.info("second: {}".format(t2-t1))
-        if i > 0 and t2 > t1:
-            self.logger.info(f"pipeline throughput: {i / (t2 - t1):.2f} FPS "
-                             f"({1000 * (t2 - t1) / i:.0f} ms/frame wall)")
-        if i > 0:
-            self.logger.info(f"inference time over {i} frames: "
-                             f"{lane_label} {lane_time:.1f}s ({1000 * lane_time / i:.0f} ms/frame), "
-                             f"YOLO {yolo_time:.1f}s ({1000 * yolo_time / i:.0f} ms/frame), "
-                             f"Depth {depth_time:.1f}s ({1000 * depth_time / i:.0f} ms/frame)")
-        if not use_lanenet:
-            self.logger.info(f"ego-lane coverage: {i - no_ego_frames}/{i} frames "
-                             f"({synth_frames} used a width-prior synthesized edge)")
-            self.logger.info(f"steering coverage: {i - no_steer_frames}/{i} frames, "
-                             f"lead vehicle selected on {lead_frames}/{i} frames")
+        # self.logger.info("second: {}".format(t2-t1))
+        # if i > 0 and t2 > t1:
+        #     self.logger.info(f"pipeline throughput: {i / (t2 - t1):.2f} FPS "
+        #                      f"({1000 * (t2 - t1) / i:.0f} ms/frame wall)")
+        # if i > 0:
+        #     self.logger.info(f"inference time over {i} frames: "
+        #                      f"{lane_label} {lane_time:.1f}s ({1000 * lane_time / i:.0f} ms/frame), "
+        #                      f"YOLO {yolo_time:.1f}s ({1000 * yolo_time / i:.0f} ms/frame), "
+        #                      f"Depth {depth_time:.1f}s ({1000 * depth_time / i:.0f} ms/frame)")
+        # if not use_lanenet:
+        #     self.logger.info(f"ego-lane coverage: {i - no_ego_frames}/{i} frames "
+        #                      f"({synth_frames} used a width-prior synthesized edge)")
+        #     self.logger.info(f"steering coverage: {i - no_steer_frames}/{i} frames, "
+        #                      f"lead vehicle selected on {lead_frames}/{i} frames")
 
     def image_eval(self, frame_number):
         """Evaluate ONE frame of self.video_path (by index, 0-based) through the

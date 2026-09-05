@@ -215,7 +215,7 @@ def parse_args():
                         help="max frames processed per video")
     parser.add_argument("--output-dir", type=Path, default=Path("video_output_4"),
                         help="root folder for annotated output videos")
-    parser.add_argument("--yolo-conf", type=float, default=0.2,
+    parser.add_argument("--yolo-conf", type=float, default=0.7,
                         help="YOLO confidence threshold")
     return parser.parse_args()
 
