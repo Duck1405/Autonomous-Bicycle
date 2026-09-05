@@ -176,7 +176,6 @@ class VideoInference():
         
         frame_location = Path(folder_path) / Path("frames")
         print(frame_location)
-        sys.exit()
 
         while i < local_frame_local:
             ret, frame = cap.read()
