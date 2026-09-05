@@ -161,7 +161,7 @@ def video_inference(MODELS, files, frame_limit = 1000, output_root = Path("video
             video.set_output_folder(output_folder)
 
         t_model = time.perf_counter()
-        print(f"len: {len(files)}, files: {files}")
+        print(f"len: {len(files)}, files: {files}-------------------------------------------")
         for i in files:
             print(f"for loop statement. We are testing the video: {str(i)}")
             video.set_video_path(str(i))
