@@ -276,7 +276,6 @@ class VideoInference():
         cap.release()
         if (self.output_folder != None):
             out_stream.release()
-        cv2.destroyAllWindows()
         print()   # end the \r progress line
         t2 = time.time()
         self.logger.info("second: {}".format(t2-t1))
