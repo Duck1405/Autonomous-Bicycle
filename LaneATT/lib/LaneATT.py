@@ -61,7 +61,7 @@ class LaneATTInference():
         
         frame = self.to_tensor(frame)
         frame = frame.unsqueeze(0).to(self.device)
-        print(f"frame output: {frame.shape}")
+        # print(f"frame output: {frame.shape}")
         # NMS runs at the LOW keep_threshold so borderline lanes reach the
         # hysteresis filter below instead of being discarded inside the model.
         output = self.model_archiecture(frame, conf_threshold=self.keep_threshold, nms_thres=self.nms_thres, nms_topk=self.nms_topk)

@@ -273,7 +273,10 @@ class VideoInference():
                                  f"Depth: {depth_time:.1f}s ({1000 * depth_time / n:.0f} ms/frame)")
 
             i += 1
-
+        cap.release()
+        if (self.output_folder != None):
+            out_stream.release()
+        cv2.destroyAllWindows()
         print()   # end the \r progress line
         t2 = time.time()
         self.logger.info("second: {}".format(t2-t1))
