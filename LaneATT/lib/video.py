@@ -181,7 +181,9 @@ class VideoInference():
             ret, frame = cap.read()
             
             if i == 2: 
-                cv2.imwrite(str(frame_location / f"frame_1.jpg"), frame)
+                image_name = "frame_1.jpg"
+                print(f"Saving {image_name}")
+                cv2.imwrite(str(frame_location / image_name), frame)
             
             if not ret:
                 break
@@ -193,7 +195,9 @@ class VideoInference():
                 evaluation = self.laneatt.frame_eval(frame)
             
             if i == 2: 
-                cv2.imwrite(str(frame_location / f"frame_2.jpg"), frame)
+                image_name = "frame_2.jpg"
+                print(f"Saving {image_name}")
+                cv2.imwrite(str(frame_location / image_name), frame)
             lane_time += time.perf_counter() - t
 
             # YOLO sees the raw frame, before any lane drawing lands on it.
@@ -256,7 +260,9 @@ class VideoInference():
                     no_ego_frames += 1
                     
                 if i == 2: 
-                    cv2.imwrite(str(frame_location / f"frame_3.jpg"), frame)
+                    image_name = "frame_3.jpg"
+                    print(f"Saving {image_name}")
+                    cv2.imwrite(str(frame_location / image_name), frame)
 
                 steering = self.angle.compute_steering(
                     mid_points, frame.shape[1], frame.shape[0],
@@ -267,11 +273,14 @@ class VideoInference():
 
                 frame = self.yolo.draw(frame, yolo_results)
                 if i == 2: 
-                    cv2.imwrite(str(frame_location / f"frame_4.jpg"), frame)
+                    image_name = "frame_4.jpg"
+                    print(f"Saving {image_name}")
+                    cv2.imwrite(str(frame_location / image_name), frame)
                 frame = self.angle.draw_overlay(frame, steering, ego_vehicle)
                 if i == 2: 
-                    
-                    cv2.imwrite(str(frame_location / f"frame_5.jpg"), frame)
+                    image_name = "frame_5.jpg"
+                    print(f"Saving {image_name}")
+                    cv2.imwrite(str(frame_location / image_name), frame)
 
             if (self.output_folder != None):
                 out_stream.write(frame)
