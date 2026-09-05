@@ -13,6 +13,7 @@ from lib.depth import DepthInference
 from lib.angle import Angle
 from PIL import Image
 import numpy as np
+import sys
 
 class VideoInference():
     """Hub of the pipeline: owns the video loop, run folders, logging and drawing.
@@ -174,8 +175,8 @@ class VideoInference():
         
         
         frame_location = Path(folder_path) / Path("frames")
-        
-        
+        print(frame_location)
+        sys.exit()
 
         while i < local_frame_local:
             ret, frame = cap.read()
@@ -270,6 +271,7 @@ class VideoInference():
                     cv2.imwrite(str(frame_location / f"frame_4.jpg"), frame)
                 frame = self.angle.draw_overlay(frame, steering, ego_vehicle)
                 if i == 2: 
+                    
                     cv2.imwrite(str(frame_location / f"frame_5.jpg"), frame)
 
             if (self.output_folder != None):
