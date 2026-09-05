@@ -162,7 +162,7 @@ def video_inference(MODELS, files, frame_limit = 1000, output_root = Path("video
 
         t_model = time.perf_counter()
         for i in files:
-            print(i)
+            print(f"for loop statement. We are testing the video: {i}")
             video.set_video_path(str(i))
             video.video_eval()
         
@@ -241,7 +241,7 @@ def main():
         sys.exit("video(s) not found: " + ", ".join(str(v) for v in missing))
 
     print(f"=== Running {len(args.videos)} video(s), print Video {args.videos}")
-    sys.exit()
+  
     
     video_inference(build_models(args), args.videos, args.frame_limit,
                     output_root=args.output_dir, yolo_conf=args.yolo_conf)
