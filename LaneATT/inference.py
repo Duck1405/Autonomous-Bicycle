@@ -17,7 +17,7 @@ import torch
 # from dataloader.data_loaders import TusimpleSet
 # from dataloader.transformers import Rescale
 # from model.lanenet.LaneNet import LaneNet
-
+import argparse
 import albumentations as A
 from albumentations.pytorch import ToTensorV2
 
@@ -85,8 +85,14 @@ from lib.video import VideoInference
 
 device =  torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 
+if device == torch.device('cuda:0'):
+    print("Using GPU")
+else:
+    print("Using CPU")
+    sys.exit("CPU is not supported for inference. Please use a GPU.")
+
 # Default input video(s) for a zero-argument (MacBook) run; override with --videos.
-filesed = [Path("video_input") / Path('IMG_6540.MOV'),]# Path("video_input") / Path('IMG_6892.MOV'), Path("video_input") / Path('IMG_6893.MOV')]
+filesed = [Path("video_input") / Path('IMG_6759.MOV'),]# Path("video_input") / Path('IMG_6892.MOV'), Path("video_input") / Path('IMG_6893.MOV')]
 
 # (config.yaml, checkpoint) per model. Each experiment needs its OWN config
 # because the backbone differs (resnet34 / resnet152 / resnet50).
@@ -103,19 +109,22 @@ filesed = [Path("video_input") / Path('IMG_6540.MOV'),]# Path("video_input") / P
 #   python inference.py --yolo /home/anindra/data/Autonomous-Bicycle/Yolov11/models/yolo11n_coco4/run7/yolo11n_coco4.pt
 MODELSED = [
     # ("experiments/LaneATTresnet18Aug2/config.yaml", "experiments/LaneATTresnet18Aug2/models/model_0019.pt"),
-    ("experiments/LaneATTresnet34Aug2/config.yaml", "experiments/LaneATTresnet34Aug2/models/model_0013.pt", "/Users/amannindra/Projects/Auto/Autonomous-Bicycle/Yolov11/runs/yolo11m_coco4_val3_new/run5/yolo11m_coco4.pt"),
-    ("experiments/LaneATTresnet34Aug2/config.yaml", "experiments/LaneATTresnet34Aug2/models/model_0013.pt", "/Users/amannindra/Projects/Auto/Autonomous-Bicycle/Yolov11/runs/yolo11n_coco4_val3_new/run7/yolo11n_coco4.pt"),
-    ("experiments/LaneATTresnet34Aug2/config.yaml", "experiments/LaneATTresnet34Aug2/models/model_0013.pt", "/Users/amannindra/Projects/Auto/Autonomous-Bicycle/Yolov11/runs/yolo11s_coco4_val3_new/run5/yolo11s_coco4.pt"),
+    # ("experiments/LaneATTresnet34Aug2/config.yaml", "experiments/LaneATTresnet34Aug2/models/model_0013.pt", "/Users/amannindra/Projects/Auto/Autonomous-Bicycle/Yolov11/runs/yolo11m_coco4_val3_new/run5/yolo11m_coco4.pt"),
+    # ("experiments/LaneATTresnet34Aug2/config.yaml", "experiments/LaneATTresnet34Aug2/models/model_0013.pt", "/Users/amannindra/Projects/Auto/Autonomous-Bicycle/Yolov11/runs/yolo11n_coco4_val3_new/run7/yolo11n_coco4.pt"),
+    # ("experiments/LaneATTresnet34Aug2/config.yaml", "experiments/LaneATTresnet34Aug2/models/model_0013.pt", "/Users/amannindra/Projects/Auto/Autonomous-Bicycle/Yolov11/runs/yolo11s_coco4_val3_new/run5/yolo11s_coco4.pt"),
     # server-side YOLO checkpoints (pass them via --yolo instead of editing this list):
     # ("experiments/LaneATTresnet34Aug2/config.yaml", "experiments/LaneATTresnet34Aug2/models/model_0013.pt", "/home/anindra/data/Autonomous-Bicycle/Yolov11/models/yolo11m_coco4/run5/yolo11m_coco4.pt"),
     # ("experiments/LaneATTresnet34Aug2/config.yaml", "experiments/LaneATTresnet34Aug2/models/model_0013.pt", "/home/anindra/data/Autonomous-Bicycle/Yolov11/models/yolo11n_coco4/run7/yolo11n_coco4.pt"),
     # ("experiments/LaneATTresnet34Aug2/config.yaml", "experiments/LaneATTresnet34Aug2/models/model_0013.pt", "/home/anindra/data/Autonomous-Bicycle/Yolov11/models/yolo11s_coco4/run5/yolo11s_coco4.pt"),
+    ("experiments/LaneATTresnet34Aug2/config.yaml", "experiments/LaneATTresnet34Aug2/models/model_0013.pt", "onnxmodels/YolloS/yolo11s_coco4.pt"), # Test on "IMG_6759.MOV"
+
+
     # ("experiments/LaneATTresnet50Aug2/config.yaml", "experiments/LaneATTresnet50Aug2/models/model_0015.pt"),
     # ("experiments/LaneATTresnet101Aug2/config.yaml", "experiments/LaneATTresnet101Aug2/models/model_0017.pt"),
     # ("experiments/LaneATTresnet152Aug2/config.yaml", "experiments/LaneATTresnet152Aug2/models/model_0015.pt" "/Users/amannindra/Projects/Auto/Autonomous-Bicycle/Yolov11/runs/yolo11n_coco45/weights/last.pt")
 ]
 
-def video_inference(MODELS, files, frame_limit = 1000, output_root = Path("video_output_3"), yolo_conf = 0.2):
+def video_inference(MODELS, files, frame_limit = 1000, output_root = Path("video_output_4"), yolo_conf = 0.2):
     video = None
     model_times = []   # (label, seconds) per model, printed at the end
     for config_path, path_model, path_yolo in MODELS:

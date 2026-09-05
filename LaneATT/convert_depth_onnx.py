@@ -29,7 +29,7 @@ from transformers import AutoModelForDepthEstimation
 DEFAULT_MODEL = "depth_model"  # local dir saved by lib/depth.py (falls back to hub)
 DEFAULT_OUT = "depth_onnx/depth_anything_v2_small.onnx"
 INPUT_SIZE = 518  # multiple of 14 (DINOv2 patch size)
-
+import onnx
 
 class DepthWrapper(nn.Module):
     """Unwrap the DepthEstimatorOutput dataclass to a single depth tensor so
@@ -74,7 +74,7 @@ def main():
     print(f"wrote {out_path} ({out_path.stat().st_size / 1e6:.1f} MB)")
 
     # Structural validity.
-    import onnx
+    
     onnx.checker.check_model(onnx.load(str(out_path)))
     print("onnx.checker: OK")
 
