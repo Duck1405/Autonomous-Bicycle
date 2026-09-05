@@ -244,8 +244,8 @@ def main():
     print(f"=== Running {len(args.videos)} video(s), print Video {args.videos}")
   
     
-    # video_inference(build_models(args), args.videos, args.frame_limit,
-    #                 output_root=args.output_dir, yolo_conf=args.yolo_conf)
+    video_inference(build_models(args), args.videos, args.frame_limit,
+                    output_root=args.output_dir, yolo_conf=args.yolo_conf)
 
 
 if __name__ == "__main__":
