@@ -92,6 +92,7 @@ class VideoInference():
         print(f"Video Selected: {self.video_path}")
         cap = cv2.VideoCapture(self.video_path)
         out_stream = None
+        folder_path = "frame_output"
         if (self.output_folder != None):
             # <output_folder>/<video_stem>/run<K>/ where K = 1 + highest existing run
             # number for THIS video (a global folder count collided across videos).
@@ -170,9 +171,18 @@ class VideoInference():
         depth_time = 0.0     # cumulative depth-model inference seconds
 
         t1 = time.time()
+        
+        
+        frame_location = Path(folder_path) / Path("frames")
+        
+        
 
         while i < local_frame_local:
             ret, frame = cap.read()
+            
+            if i == 2: 
+                cv2.imwrite(str(frame_location / f"frame_1.jpg"), frame)
+            
             if not ret:
                 break
 
@@ -181,6 +191,9 @@ class VideoInference():
                 evaluation = self.lanenet.frame_eval(frame)
             else:
                 evaluation = self.laneatt.frame_eval(frame)
+            
+            if i == 2: 
+                cv2.imwrite(str(frame_location / f"frame_2.jpg"), frame)
             lane_time += time.perf_counter() - t
 
             # YOLO sees the raw frame, before any lane drawing lands on it.
@@ -241,6 +254,9 @@ class VideoInference():
                     synth_frames += synthesized is not None
                 else:
                     no_ego_frames += 1
+                    
+                if i == 2: 
+                    cv2.imwrite(str(frame_location / f"frame_3.jpg"), frame)
 
                 steering = self.angle.compute_steering(
                     mid_points, frame.shape[1], frame.shape[0],
@@ -250,7 +266,11 @@ class VideoInference():
                 lead_frames += ego_vehicle is not None
 
                 frame = self.yolo.draw(frame, yolo_results)
+                if i == 2: 
+                    cv2.imwrite(str(frame_location / f"frame_4.jpg"), frame)
                 frame = self.angle.draw_overlay(frame, steering, ego_vehicle)
+                if i == 2: 
+                    cv2.imwrite(str(frame_location / f"frame_5.jpg"), frame)
 
             if (self.output_folder != None):
                 out_stream.write(frame)
