@@ -31,7 +31,7 @@ class YoloInference():
             print("Model is None")
             return None
         else:
-            return self.model(image, verbose=True, conf=self.conf_threshold,
+            return self.model(image, verbose=False, conf=self.conf_threshold,
                               iou=self.iou_threshold)
 
     def draw(self, frame, results):

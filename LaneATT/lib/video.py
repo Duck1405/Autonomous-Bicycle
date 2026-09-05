@@ -257,12 +257,13 @@ class VideoInference():
 
             # Live console progress: current frame / frames this run (and the
             # video's true total when frame_limit cut it short).
-            progress = f"Frame {i + 1}/{local_frame_local}"
-            if local_frame_local != total_frames:
-                progress += f" (video has {total_frames})"
             # Whole-pipeline throughput so far (all models + drawing + writing).
-            progress += f", {(i + 1) / (time.time() - t1):.2f} FPS"
-            print(f"\r{progress}", end="", flush=True)
+
+            # progress = f"Frame {i + 1}/{local_frame_local}"
+            # if local_frame_local != total_frames:
+            #     progress += f" (video has {total_frames})"
+            # progress += f", {(i + 1) / (time.time() - t1):.2f} FPS"
+            # print(f"\r{progress}", end="", flush=True)
 
             if (i) % max(1, math.floor(local_frame_local / 10)) == 0:
                 n = i + 1
