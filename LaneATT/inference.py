@@ -162,7 +162,7 @@ def video_inference(MODELS, files, frame_limit = 1000, output_root = Path("video
 
         t_model = time.perf_counter()
         for i in files:
-            print(f"for loop statement. We are testing the video: {i}")
+            print(f"for loop statement. We are testing the video: {str(i)}")
             video.set_video_path(str(i))
             video.video_eval()
         
@@ -173,23 +173,23 @@ def video_inference(MODELS, files, frame_limit = 1000, output_root = Path("video
     for label, seconds in model_times:
         print(f"{label}: {seconds:.1f} s ({seconds / 60:.1f} min)")
 
-def image_inference(MODELS, files, frame):
-   for config_path, path_model, path_yolo in MODELS:
-        if not (Path(config_path).exists() and Path(path_model).exists()):
-            print(f"SKIPPING {path_model}: config or checkpoint not found")
-            continue
+# def image_inference(MODELS, files, frame):
+#    for config_path, path_model, path_yolo in MODELS:
+#         if not (Path(config_path).exists() and Path(path_model).exists()):
+#             print(f"SKIPPING {path_model}: config or checkpoint not found")
+#             continue
 
-        cfg = Config(config_path)
-        name = Path(path_model).stem
-        model_name = Path(path_model).parent.parent.name
-        output_folder = Path("image_output_1") / model_name / name
-        print(f"=== {model_name}/{name} -> {output_folder} ===")
-        video = VideoInference(model_archiecture = cfg.get_model(), model_path=path_model, frame_limit = 1000, video_path = str(files[0]), view = True, output_folder = output_folder, device = device, yolo_path = path_yolo, yolo_conf = 0.1)
-        video.set_model(cfg.get_model(), path_model)
-        video.set_output_folder(output_folder)
-        steering, ego_vehicle = video.image_eval(frame)
-        print(f"steering: {steering}")
-        print(f"ego_vehicle: {ego_vehicle}")
+#         cfg = Config(config_path)
+#         name = Path(path_model).stem
+#         model_name = Path(path_model).parent.parent.name
+#         output_folder = Path("image_output_1") / model_name / name
+#         print(f"=== {model_name}/{name} -> {output_folder} ===")
+#         video = VideoInference(model_archiecture = cfg.get_model(), model_path=path_model, frame_limit = 1000, video_path = str(files[0]), view = True, output_folder = output_folder, device = device, yolo_path = path_yolo, yolo_conf = 0.1)
+#         video.set_model(cfg.get_model(), path_model)
+#         video.set_output_folder(output_folder)
+#         steering, ego_vehicle = video.image_eval(frame)
+#         print(f"steering: {steering}")
+#         print(f"ego_vehicle: {ego_vehicle}")
         
         
 # image_inference(MODELSED, filesed, 200)
