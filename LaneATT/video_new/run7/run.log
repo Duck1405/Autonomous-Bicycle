@@ -1,0 +1,20 @@
+2026-09-07 00:57:48,426 VideoInference INFO video: video_input/IMG_5105.mp4
+2026-09-07 00:57:48,426 VideoInference INFO model checkpoint: experiments/LaneATTresnet34Aug2/models/model_0013.pt
+2026-09-07 00:57:48,426 VideoInference INFO params: conf_threshold=0.5, nms_thres=50, nms_topk=2, keep_threshold=0.3, match_tolerance=0.05, yolo_conf=0.7, yolo_iou=0.15, frame_limit=99999
+2026-09-07 00:57:48,426 VideoInference INFO angle params: hfov=90.0, stanley_gain=1.0, nominal_speed=3.0, smoothing_alpha=0.2, hold_decay=0.85, max_extrapolation_px=60.0, vehicle_class_id=1, lane_width_m=3.7
+2026-09-07 00:57:48,426 VideoInference INFO depth model: depth-anything/Depth-Anything-V2-Small-hf (device: cuda)
+2026-09-07 00:57:48,428 VideoInference INFO Video Frame rate: 59.97
+2026-09-07 00:57:48,428 VideoInference INFO Total Frames: 7441
+2026-09-07 00:57:48,428 VideoInference INFO Video Duration: 124.0787060196765
+2026-09-07 00:57:48,428 VideoInference INFO devices: LaneATT cuda:0, YOLO cuda:0, Depth cuda
+2026-09-07 00:57:49,118 VideoInference INFO Frame: 0/7441, time: 0.689673662185669, LaneATT: 0.3s (307 ms/frame), YOLO: 0.3s (263 ms/frame), Depth: 0.0s (0 ms/frame)
+2026-09-07 00:58:21,329 VideoInference INFO Frame: 744/7441, time: 32.901182413101196, LaneATT: 13.0s (17 ms/frame), YOLO: 7.1s (9 ms/frame), Depth: 0.0s (0 ms/frame)
+2026-09-07 00:58:55,369 VideoInference INFO Frame: 1488/7441, time: 66.9405403137207, LaneATT: 27.9s (19 ms/frame), YOLO: 13.8s (9 ms/frame), Depth: 0.0s (0 ms/frame)
+2026-09-07 00:59:29,792 VideoInference INFO Frame: 2232/7441, time: 101.36438536643982, LaneATT: 43.0s (19 ms/frame), YOLO: 20.6s (9 ms/frame), Depth: 0.0s (0 ms/frame)
+2026-09-07 01:00:03,459 VideoInference INFO Frame: 2976/7441, time: 135.03119087219238, LaneATT: 56.4s (19 ms/frame), YOLO: 27.4s (9 ms/frame), Depth: 0.0s (0 ms/frame)
+2026-09-07 01:00:36,417 VideoInference INFO Frame: 3720/7441, time: 167.98864936828613, LaneATT: 70.3s (19 ms/frame), YOLO: 34.1s (9 ms/frame), Depth: 0.0s (0 ms/frame)
+2026-09-07 01:01:10,019 VideoInference INFO Frame: 4464/7441, time: 201.59137296676636, LaneATT: 85.1s (19 ms/frame), YOLO: 40.9s (9 ms/frame), Depth: 0.0s (0 ms/frame)
+2026-09-07 01:01:46,634 VideoInference INFO Frame: 5208/7441, time: 238.2062110900879, LaneATT: 101.7s (20 ms/frame), YOLO: 47.7s (9 ms/frame), Depth: 0.0s (0 ms/frame)
+2026-09-07 01:02:19,905 VideoInference INFO Frame: 5952/7441, time: 271.4768364429474, LaneATT: 115.9s (19 ms/frame), YOLO: 54.3s (9 ms/frame), Depth: 0.0s (0 ms/frame)
+2026-09-07 01:02:54,828 VideoInference INFO Frame: 6696/7441, time: 306.39971566200256, LaneATT: 132.8s (20 ms/frame), YOLO: 60.6s (9 ms/frame), Depth: 0.0s (0 ms/frame)
+2026-09-07 01:03:27,693 VideoInference INFO Frame: 7440/7441, time: 339.2655494213104, LaneATT: 147.0s (20 ms/frame), YOLO: 67.1s (9 ms/frame), Depth: 0.0s (0 ms/frame)

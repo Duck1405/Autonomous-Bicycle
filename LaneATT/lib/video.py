@@ -116,32 +116,32 @@ class VideoInference():
                 datefmt='%Y-%m-%d %H:%M:%S'))
             self.logger.addHandler(fh)
             self.logger.info(f"video: {self.video_path}")
-            if self.model_type == "laneNet":
-                self.logger.info(f"model checkpoint: {self.lanenet.model_path} "
-                                 f"(hnet: {self.lanenet.hnet_path})")
-                self.logger.info(f"params: yolo_conf={self.yolo.conf_threshold}, "
-                                 f"yolo_iou={self.yolo.iou_threshold}, "
-                                 f"frame_limit={self.frame_limit}")
-            else:
-                self.logger.info(f"model checkpoint: {self.laneatt.model_path}")
-                self.logger.info(f"params: conf_threshold={self.laneatt.conf_threshold}, "
-                                 f"nms_thres={self.laneatt.nms_thres}, nms_topk={self.laneatt.nms_topk}, "
-                                 f"keep_threshold={self.laneatt.keep_threshold}, "
-                                 f"match_tolerance={self.laneatt.match_tolerance}, "
-                                 f"yolo_conf={self.yolo.conf_threshold}, yolo_iou={self.yolo.iou_threshold}, "
-                                 f"frame_limit={self.frame_limit}")
-                self.logger.info(f"angle params: hfov={self.angle.assumed_hfov_deg}, "
-                                 f"stanley_gain={self.angle.stanley_gain}, "
-                                 f"nominal_speed={self.angle.nominal_speed}, "
-                                 f"smoothing_alpha={self.angle.smoothing_alpha}, "
-                                 f"hold_decay={self.angle.hold_decay}, "
-                                 f"max_extrapolation_px={self.angle.max_extrapolation_px}, "
-                                 f"vehicle_class_id={self.angle.vehicle_class_id}, "
-                                 f"lane_width_m={self.angle.lane_width_m}")
-            self.logger.info(f"depth model: {self.depth.checkpoint} (device: {self.depth.device})")
+            # if self.model_type == "laneNet":
+            #     self.logger.info(f"model checkpoint: {self.lanenet.model_path} "
+            #                      f"(hnet: {self.lanenet.hnet_path})")
+            #     self.logger.info(f"params: yolo_conf={self.yolo.conf_threshold}, "
+            #                      f"yolo_iou={self.yolo.iou_threshold}, "
+            #                      f"frame_limit={self.frame_limit}")
+            # else:
+            #     self.logger.info(f"model checkpoint: {self.laneatt.model_path}")
+            #     self.logger.info(f"params: conf_threshold={self.laneatt.conf_threshold}, "
+            #                      f"nms_thres={self.laneatt.nms_thres}, nms_topk={self.laneatt.nms_topk}, "
+            #                      f"keep_threshold={self.laneatt.keep_threshold}, "
+            #                      f"match_tolerance={self.laneatt.match_tolerance}, "
+            #                      f"yolo_conf={self.yolo.conf_threshold}, yolo_iou={self.yolo.iou_threshold}, "
+            #                      f"frame_limit={self.frame_limit}")
+            #     self.logger.info(f"angle params: hfov={self.angle.assumed_hfov_deg}, "
+            #                      f"stanley_gain={self.angle.stanley_gain}, "
+            #                      f"nominal_speed={self.angle.nominal_speed}, "
+            #                      f"smoothing_alpha={self.angle.smoothing_alpha}, "
+            #                      f"hold_decay={self.angle.hold_decay}, "
+            #                      f"max_extrapolation_px={self.angle.max_extrapolation_px}, "
+            #                      f"vehicle_class_id={self.angle.vehicle_class_id}, "
+            #                      f"lane_width_m={self.angle.lane_width_m}")
+            # self.logger.info(f"depth model: {self.depth.checkpoint} (device: {self.depth.device})")
             fourcc = cv2.VideoWriter_fourcc(*'mp4v')
             print(f"Output Located: {final_video_path}")
-            out_stream = cv2.VideoWriter(str(final_video_path), fourcc, 30.0, (int(cap.get(cv2.CAP_PROP_FRAME_WIDTH)), int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))))
+            out_stream = cv2.VideoWriter(str(final_video_path), fourcc, 30.0, (int(cap.get(cv2.CAP_PROP_FRAME_WIDTH)) * 2, int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))))
         i = 0
 
         fps = cap.get(cv2.CAP_PROP_FPS)
@@ -181,10 +181,10 @@ class VideoInference():
         while i < local_frame_local:
             ret, frame = cap.read()
             
-            if i == 2: 
-                image_name = "frame_1.jpg"
-                ok = cv2.imwrite(str(frame_location / image_name), frame)
-                print(f"Saved {image_name}: {ok}")
+            # if i == 2: 
+            #     image_name = "frame_1.jpg"
+            #     ok = cv2.imwrite(str(frame_location / image_name), frame)
+            #     print(f"Saved {image_name}: {ok}")
             
             if not ret:
                 break
@@ -260,10 +260,10 @@ class VideoInference():
                 else:
                     no_ego_frames += 1
                     
-                if i == 2: 
-                    image_name = "frame_3.jpg"
-                    ok = cv2.imwrite(str(frame_location / image_name), frame)
-                    print(f"Saved {image_name}: {ok}")
+                # if i == 2: 
+                #     image_name = "frame_3.jpg"
+                #     ok = cv2.imwrite(str(frame_location / image_name), frame)
+                #     print(f"Saved {image_name}: {ok}")
 
                 steering = self.angle.compute_steering(
                     mid_points, frame.shape[1], frame.shape[0],
@@ -273,14 +273,14 @@ class VideoInference():
                 lead_frames += ego_vehicle is not None
 
                 frame = self.yolo.draw(frame, yolo_results)
-                if i == 2: 
-                    image_name = "frame_4.jpg"
-                    ok = cv2.imwrite(str(frame_location / image_name), frame)
-                    print(f"Saved {image_name}: {ok}")
-                if i == 2: 
-                    image_name = "frame_5.jpg"
-                    ok = cv2.imwrite(str(frame_location / image_name), frame)
-                    print(f"Saved {image_name}: {ok}")
+                # if i == 2: 
+                #     image_name = "frame_4.jpg"
+                #     ok = cv2.imwrite(str(frame_location / image_name), frame)
+                #     print(f"Saved {image_name}: {ok}")
+                # if i == 2: 
+                #     image_name = "frame_5.jpg"
+                #     ok = cv2.imwrite(str(frame_location / image_name), frame)
+                #     print(f"Saved {image_name}: {ok}")
 
             if (self.output_folder != None):
                 out_stream.write(frame)
@@ -384,7 +384,7 @@ class VideoInference():
         yolo_time = time.perf_counter() - t0
 
         t0 = time.perf_counter()
-        depth_results = self.depth.infer(frame)
+        # depth_results = self.depth.infer(frame)
         depth_time = time.perf_counter() - t0
 
         t0 = time.perf_counter()
@@ -415,9 +415,9 @@ class VideoInference():
         self.logger.info(f"ego_vehicle: {ego_vehicle}")
         self.logger.info(f"timing: LaneATT {1000 * lane_time:.1f} ms, "
                          f"YOLO {1000 * yolo_time:.1f} ms, "
-                         f"Depth {1000 * depth_time:.1f} ms, "
+                        #  f"Depth {1000 * depth_time:.1f} ms, "
                          f"angle+draw {1000 * angle_time:.1f} ms, "
-                         f"total {1000 * (lane_time + yolo_time + depth_time + angle_time):.1f} ms")
+                         f"total {1000 * (lane_time + yolo_time + angle_time):.1f} ms")
 
         output_file = folder_path / f"{frame_number}.jpg"
         cv2.imwrite(str(output_file), frame)

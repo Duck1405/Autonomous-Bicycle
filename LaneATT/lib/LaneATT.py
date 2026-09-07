@@ -111,6 +111,13 @@ class LaneATTInference():
 
         return [smallest, second_smallest]
 
+    def get_ego_lanes2(self, img_w, predictions):
+        mid_point_x = img_w / 2
+        print(mid_point_x)
+        print(len(predictions))
+        print(len(predictions[0]))        
+        
+
     def get_ego_lanes(self, img_w, predictions):
 
         mid_point_x = img_w / 2
@@ -190,3 +197,4 @@ class LaneATTInference():
             plt.legend(loc='upper right')
 
         return left_points, right_points, mid_points
+    
