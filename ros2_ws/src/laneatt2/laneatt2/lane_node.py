@@ -8,6 +8,7 @@ import numpy as np
 import time
 
 from .trt_runner import CudaRT, TrtEngine
+from .lane import Lane
 
 class LaneATTNode(Node):
     def __init__(self):
@@ -22,9 +23,10 @@ class LaneATTNode(Node):
         # raw_camera left: /dev/video0, right: /dev/video1
         self.left_pub = self.create_publisher(Float32MultiArray, '/laneatt/left_lane', 1)
         self.right_pub = self.create_publisher(Float32MultiArray, '/laneatt/right_lane', 1)
+        self.lane_width_by_y = {}
 
         for _ in range(self.warmup):
-            self.trt_engine.run(self.pre_laneatt(np.zeros((360, 640, 3), dtype=np.uint8)))
+            self.frame_eval(np.zeros((360, 640, 3), dtype=np.uint8))
 
         self.get_logger().info('LaneATT node started')
     
@@ -34,8 +36,10 @@ class LaneATTNode(Node):
         e = np.exp(logits - logits.max(axis=1, keepdims=True))
         return e / e.sum(axis=1, keepdims=True)
 
-    def lane_nms(self, proposals, scores, overlap=50.0, top_k=2):
-        """Greedy lane NMS. Returns kept indices into `proposals`, best score first.
+    def nms(self, proposals, scores, overlap=50.0, top_k=4):
+        """TensorRT-side counterpart of the notebook model's nms method.
+
+        Returns kept indices into `proposals`, best score first.
 
         "Overlap" is the mean absolute horizontal distance between two lanes over the
         vertical span where both exist; the lower-scored lane is suppressed when that
@@ -86,7 +90,7 @@ class LaneATTNode(Node):
         return np.asarray(keep, dtype=np.int64)
 
     def proposals_to_pred(self, proposals, img_w=640):
-        """Post-NMS proposals -> [{'points': (N,2) normalized (x,y), 'conf': float}].
+        """Post-NMS proposals -> Lane objects with normalized (N,2) points.
 
         Mirrors laneatt.py:proposals_to_pred, including its rule that a proposal not
         starting at the bottom of the image is extended upward only while x stays
@@ -122,16 +126,21 @@ class LaneATTNode(Node):
                 continue
             pts_x = lane_xs[valid][::-1]
             pts_y = anchor_ys[valid][::-1]
-            lanes.append({
-                "points": np.stack([pts_x, pts_y], axis=1),
-                "conf": float(lane[1]),
-                "start_x": float(lane[3]),
-                "start_y": float(lane[2]),
-            })
+            lanes.append(Lane(
+                points=np.stack([pts_x, pts_y], axis=1),
+                metadata={
+                    "conf": float(lane[1]),
+                    "start_x": float(lane[3]),
+                    "start_y": float(lane[2]),
+                },
+            ))
         return lanes
     
-    def laneatt_decode(self, raw, conf_threshold=0.3, nms_thres=50.0, nms_topk=2, img_w=640):
-        """Raw (1,1000,77) engine output -> list of lane dicts.
+    def decode(self, raw, conf_threshold=0.3, nms_thres=50.0, nms_topk=2, img_w=640):
+        """Raw (1,1000,77) engine output -> list of Lane objects.
+
+        Named after the notebook model's decode; this TensorRT version also
+        filters confidence and runs NMS, which PyTorch runs in its forward pass.
 
         Order matters: laneatt.py:nms scores with a softmax written to a *separate*
         tensor and slices the still-logit proposals, then decode() applies the softmax
@@ -146,38 +155,35 @@ class LaneATTNode(Node):
         if p.shape[0] == 0:
             return []
 
-        p = p[self.lane_nms(p, scores, overlap=nms_thres, top_k=nms_topk)].copy()
+        p = p[self.nms(p, scores, overlap=nms_thres, top_k=nms_topk)].copy()
         p[:, :2] = self._softmax2(p[:, :2])
         p[:, 4] = np.round(p[:, 4])
         return self.proposals_to_pred(p, img_w=img_w)
 
-    def pre_laneatt(self, frame):
-        """BGR frame -> (1,3,360,640) /255, BGR order kept (mirrors LaneATT.frame_eval)."""
-        img = cv2.resize(frame, (640, 360))
-        arr = img.astype(np.float32) / 255.0
-        return np.ascontiguousarray(arr.transpose(2, 0, 1)[None])
+    def frame_eval(self, frame):
+        """Preprocess one BGR frame, run TensorRT, and return Lane objects.
 
-    def get_inference(self, frame):
-        """Run LaneATT on one BGR frame, return the decoded lane list.
-
-        proposals[1,1000,77] engine output -> up to 2 lane dicts (laneatt_decode's
-        default nms_topk), each {"points": (N,2) normalized (x,y), "conf", ...}.
+        Matches the notebook's frame_eval entry point: resize to 640x360,
+        scale to [0, 1], and arrange as (1, 3, 360, 640), keeping BGR order.
+        decode applies confidence filtering and NMS to the raw engine output.
         """
-        arr = self.pre_laneatt(frame)
-        outputs = self.trt_engine.infer(arr)
+        frame = cv2.resize(frame, (640, 360))
+        frame = frame.astype(np.float32) / 255.0
+        frame = np.ascontiguousarray(frame.transpose(2, 0, 1)[None])
+        outputs = self.trt_engine.infer(frame)
         raw = next(iter(outputs.values()))
-        return self.laneatt_decode(raw)
+        return self.decode(raw)
 
     @staticmethod
     def _bottom_x(lane):
         """Normalized x where a lane's polyline is closest to the camera (largest y)."""
-        pts = lane["points"]
+        pts = lane.points
         return float(pts[np.argmax(pts[:, 1]), 0])
 
     def split_left_right(self, lanes):
-        """lane dicts -> (left, right), ordered by bottom-row x position.
+        """Lane objects -> (left, right), ordered by bottom-row x position.
 
-        laneatt_decode keeps at most 2 lanes by default (nms_topk=2), which for
+        decode keeps at most 2 lanes by default (nms_topk=2), which for
         ego-lane detection are the left and right boundary. Missing side(s) come
         back as None rather than guessing.
         """
@@ -188,12 +194,7 @@ class LaneATTNode(Node):
             return (scored[0], None) if self._bottom_x(scored[0]) < 0.5 else (None, scored[0])
         return scored[0], scored[-1]
 
-    @staticmethod
-    def _to_msg(lane):
-        msg = Float32MultiArray()
-        if lane is not None:
-            msg.data = lane["points"].astype(np.float32).flatten().tolist()
-        return msg
+    
     
     def rg10_to_bgr(self, msg):
         """RG10 (V4L2 SRGGB10, 10-bit Bayer RGGB padded into 16-bit words) -> BGR8."""
@@ -202,34 +203,125 @@ class LaneATTNode(Node):
         raw = raw[:, :msg.width]
         raw8 = (raw >> 2).astype(np.uint8)          # 10-bit (0-1023) -> 8-bit (0-255)
         return cv2.cvtColor(raw8, cv2.COLOR_BayerRG2BGR)
+    
+    def get_ego_lanes(self, img_w, predictions):
+
+        mid_point_x = img_w / 2
+
+
+        left_candidates = []   # (x_bottom, lane_index), x_bottom < mid
+        right_candidates = []  # (x_bottom, lane_index), x_bottom >= mid
+        for i, lane in enumerate(predictions):
+            bottom_idx = np.argmax(lane[:, 1])  # largest y = nearest the car
+            x_bottom = lane[bottom_idx, 0]
+            if x_bottom < mid_point_x:
+                left_candidates.append((x_bottom, i))
+            else:
+                right_candidates.append((x_bottom, i))
+
+        if not left_candidates and not right_candidates:
+            return None, None, None, None
+
+        # Closest lane to center on each side: largest x on the left, smallest x on the right.
+        left_points = right_points = None
+        if left_candidates:
+            left_points = predictions[max(left_candidates, key=lambda t: t[0])[1]]
+        if right_candidates:
+            right_points = predictions[min(right_candidates, key=lambda t: t[0])[1]]
+
+        # `synthesized` names the edge ('left'/'right') that was inferred from the
+        # width prior instead of detected, or None when both edges are real.
+        synthesized = None
+        if left_points is not None and right_points is not None:
+            # Both edges visible: learn the per-row lane width (EMA, alpha=0.2).
+            left_by_y = {int(y): x for x, y in left_points}
+            right_by_y = {int(y): x for x, y in right_points}
+            for y in set(left_by_y) & set(right_by_y):
+                w = right_by_y[y] - left_by_y[y]
+                if w <= 0:
+                    continue
+                old = self.lane_width_by_y.get(y)
+                self.lane_width_by_y[y] = w if old is None else 0.8 * old + 0.2 * w
+        elif self.lane_width_by_y:
+            # One edge missing: synthesize it by offsetting the visible edge by
+            # the learned width, at rows where both a point and a width exist.
+            visible = left_points if left_points is not None else right_points
+            sign = 1 if left_points is not None else -1   # left visible -> right = x + w
+            synth = [[x + sign * self.lane_width_by_y[int(y)], y]
+                     for x, y in visible if int(y) in self.lane_width_by_y]
+            if len(synth) < 2:
+                return None, None, None, None   # too little prior overlap to trust
+            synth = np.array(synth).round().astype(int)
+            if left_points is not None:
+                right_points, synthesized = synth, 'right'
+            else:
+                left_points, synthesized = synth, 'left'
+        else:
+            return None, None, None, None
+
+        # Midpoints between the two ego lanes, one per shared y-row.
+        left_by_y = {int(y): x for x, y in left_points}
+        right_by_y = {int(y): x for x, y in right_points}
+        shared_ys = sorted(set(left_by_y) & set(right_by_y))
+        mid_points = np.array([[(left_by_y[y] + right_by_y[y]) / 2, y] for y in shared_ys], dtype=int)
+
+        return left_points, right_points, mid_points, synthesized
+
+    @staticmethod
+    def lanes_to_px(lanes, w, h):
+        """Convert normalized Lane points to rounded image pixel coordinates."""
+        return [(lane.points * np.array([w, h])).round().astype(int)
+                for lane in lanes]
+
+    @staticmethod
+    def points_to_lane(points, img_w, img_h, synthesized=False):
+        """Convert an ego boundary in pixels to a normalized Lane, or None.
+
+        Pixel rounding can repeat y rows. Keep the first point per row and
+        sort top-to-bottom so Lane's spline has strictly increasing y values.
+        No model confidence is assigned to reconstructed geometry.
+        """
+        if points is None:
+            return None
+        if img_w <= 0 or img_h <= 0:
+            raise ValueError("Image width and height must be positive")
+        points = np.asarray(points, dtype=np.float64)
+        if points.size == 0:
+            return None
+        if points.ndim != 2 or points.shape[1] != 2:
+            raise ValueError("Expected pixel points with shape (N, 2)")
+        if not np.isfinite(points).all():
+            raise ValueError("Lane points must be finite")
+        _, indices = np.unique(points[:, 1], return_index=True)
+        points = points[indices]
+        if len(points) < 2:
+            return None
+        return Lane(points=points / np.array([img_w, img_h]),
+                    metadata={"synthesized": bool(synthesized)})
+
+    @staticmethod
+    def _to_msg(lane):
+        msg = Float32MultiArray()
+        if lane is not None:
+            msg.data = lane.points.astype(np.float32).flatten().tolist()
+        return msg
 
     def image_callback(self, msg):
-        t0 = time.perf_counter()
-
         frame = self.bridge.imgmsg_to_cv2(msg, desired_encoding='bgr8')
-        t1 = time.perf_counter()
-
-        lanes = self.get_inference(frame)
-        t2 = time.perf_counter()
-
-        left, right = self.split_left_right(lanes)
+        
+        width = frame.shape[1]
+        height = frame.shape[0]
+        
+        evaluation = self.frame_eval(frame)
+        
+        pts_all = self.lanes_to_px(evaluation, width, height)
+        left_points, right_points, mid_points, synthesized = self.get_ego_lanes(width, pts_all)
+        left = self.points_to_lane(left_points, width, height,
+                                   synthesized=synthesized == 'left')
+        right = self.points_to_lane(right_points, width, height,
+                                    synthesized=synthesized == 'right')
         self.left_pub.publish(self._to_msg(left))
         self.right_pub.publish(self._to_msg(right))
-        t3 = time.perf_counter()
-
-        conversion_s = t1 - t0
-        lane_pipeline_s = t2 - t1
-        callback_s = t3 - t0
-
-        self.get_logger().info(
-            f"conversion: {conversion_s * 1000:.1f} ms "
-            f"({1 / conversion_s:.2f} FPS) | "
-            f"lane pipeline: {lane_pipeline_s * 1000:.1f} ms "
-            f"({1 / lane_pipeline_s:.2f} FPS) | "
-            f"total callback: {callback_s * 1000:.1f} ms "
-            f"({1 / callback_s:.2f} FPS) | "
-            f"lanes: {len(lanes)}"
-        )
 
 
 def main(args=None):

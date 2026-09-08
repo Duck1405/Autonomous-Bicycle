@@ -11,7 +11,7 @@ setup(
             ['resource/' + package_name]),
         ('share/' + package_name, ['package.xml']),
     ],
-    install_requires=['setuptools'],
+    install_requires=['setuptools', 'scipy'],
     zip_safe=True,
     maintainer='mlc',
     maintainer_email='amannindra@gmail.com',
