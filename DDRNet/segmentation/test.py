@@ -16,7 +16,7 @@ model.eval()
 model.to(device)
 iterations = None
 # sys.exit()
-video_path = "/Users/amannindra/Projects/Auto/Autonomous-Bicycle/LaneATT/video_input/IMG_5105.mp4"
+video_path = "/home/anindra/data/Autonomous-Bicycle/LaneATT/video_input/IMG_5105.mp4"
 output_folder = Path("output")
 output_name = Path("output.mp4")
 final_video_path = output_folder / output_name
@@ -25,16 +25,19 @@ fourcc = cv2.VideoWriter_fourcc(*'mp4v')
 
 out_stream = cv2.VideoWriter(str(final_video_path), fourcc, 30.0, (int(cap.get(cv2.CAP_PROP_FRAME_WIDTH)) * 2, int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))))
 
-
 input = torch.randn(1, 3, 1024, 2048).cuda()
 with torch.no_grad():
     i = 0 
+    
+    print("Start")
     while i < 10:
         ret, frame = cap.read()
         if not ret:
+            print("ret failed")    
             break
         
         output = model(frame)
+        
         print(type(output), output) 
         i +=1
     
