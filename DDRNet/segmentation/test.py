@@ -4,7 +4,7 @@ import torch
 from DDRNet_23_slim_eval_speed import DualResNet_imagenet, DualResNet, BasicBlock
 from pathlib import Path
 
-device = torch.device('cuda')
+device =  torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 #torch.backends.cudnn.enabled = True
 #torch.backends.cudnn.benchmark = True
 
@@ -25,7 +25,7 @@ fourcc = cv2.VideoWriter_fourcc(*'mp4v')
 
 out_stream = cv2.VideoWriter(str(final_video_path), fourcc, 30.0, (int(cap.get(cv2.CAP_PROP_FRAME_WIDTH)) * 2, int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))))
 
-input = torch.randn(1, 3, 1024, 2048).cuda()
+# input = torch.randn(1, 3, 1024, 2048).cuda()
 with torch.no_grad():
     i = 0 
     
@@ -33,10 +33,10 @@ with torch.no_grad():
     while i < 10:
         ret, frame = cap.read()
         resized_image = cv2.resize(frame, (1024, 2048), interpolation=cv2.INTER_LINEAR)
-
-        if not ret:
-            print("ret failed")    
-            break
+        print(type(resized_image), resized_image)
+        # if not ret:
+        #     print("ret failed")    
+        #     break
         
         output = model(input)
         
