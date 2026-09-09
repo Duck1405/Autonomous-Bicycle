@@ -33,7 +33,7 @@ with torch.no_grad():
     while i < 10:
         ret, frame = cap.read()
         resized_image = cv2.resize(frame, (1024, 2048), interpolation=cv2.INTER_LINEAR)
-        print(type(resized_image), resized_image)
+        print(type(resized_image), resized_image.shape , resized_image)
         # if not ret:
         #     print("ret failed")    
         #     break
