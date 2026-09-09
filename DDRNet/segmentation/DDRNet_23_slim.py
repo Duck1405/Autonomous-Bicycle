@@ -5,7 +5,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch.nn import init
 from collections import OrderedDict
-
+from pathlib import Path
 BatchNorm2d = nn.SyncBatchNorm
 bn_mom = 0.1
 
@@ -341,10 +341,15 @@ class DualResNet(nn.Module):
         else:
             return x_      
 
+
 def DualResNet_imagenet(pretrained=False):
-    model = DualResNet(BasicBlock, [2, 2, 2, 2], num_classes=19, planes=32, spp_planes=128, head_planes=64, augment=False)
+    model = DualResNet(BasicBlock, [2, 2, 2, 2], num_classes=19, planes=32, spp_planes=128, head_planes=64, augment=True)
     if pretrained:
-        checkpoint = torch.load('/home/user1/hyd/HRNet/' + "DDRNet23s_imagenet.pth", map_location='cpu') 
+        model_location = Path("models") /  Path("best_val.pth")
+        
+        device = "cuda" if torch.cuda.is_available() else "cpu"
+        
+        checkpoint = torch.load(model_location, map_location=device) 
         '''      
         new_state_dict = OrderedDict()
         for k, v in checkpoint['state_dict'].items():
@@ -353,7 +358,7 @@ def DualResNet_imagenet(pretrained=False):
         #model_dict.update(new_state_dict)
         #model.load_state_dict(model_dict)
         '''
-        model.load_state_dict(new_state_dict, strict = False)
+        model.load_state_dict(checkpoint, strict = True)
     return model
 
 def get_seg_model(cfg, **kwargs):

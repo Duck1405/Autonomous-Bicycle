@@ -1,0 +1,593 @@
+{
+  "video": "/Users/amannindra/Projects/Auto/Autonomous-Bicycle/LaneATT/video_input/IMG_5105.mp4",
+  "source_fps": 59.97,
+  "source_frames": 7441,
+  "source_size": [
+    1080,
+    1920
+  ],
+  "device": "cpu",
+  "preprocessing": "RGB / 255, ImageNet mean/std",
+  "label_mapping": "Standard Cityscapes train IDs; names not embedded in checkpoints",
+  "checkpoints": {
+    "DDRNet23s_imagenet.pth": {
+      "architecture": "classification/DDRNet_23_slim.py",
+      "strict_load": true,
+      "video_frame_output_shape": [
+        1,
+        1000
+      ],
+      "purpose": "ImageNet classification; no road mask"
+    },
+    "best_val_smaller.pth": {
+      "architecture": "segmentation/DDRNet_23_slim.py",
+      "strict_load": true,
+      "excluded_training_keys": [
+        "model.seghead_extra.bn1.weight",
+        "model.seghead_extra.bn1.bias",
+        "model.seghead_extra.bn1.running_mean",
+        "model.seghead_extra.bn1.running_var",
+        "model.seghead_extra.bn1.num_batches_tracked",
+        "model.seghead_extra.conv1.weight",
+        "model.seghead_extra.bn2.weight",
+        "model.seghead_extra.bn2.bias",
+        "model.seghead_extra.bn2.running_mean",
+        "model.seghead_extra.bn2.running_var",
+        "model.seghead_extra.bn2.num_batches_tracked",
+        "model.seghead_extra.conv2.weight",
+        "model.seghead_extra.conv2.bias",
+        "loss.criterion.weight"
+      ],
+      "purpose": "19-class semantic segmentation"
+    },
+    "DDRNet23_imagenet.pth": {
+      "architecture": "classification/DDRNet_23.py",
+      "strict_load": true,
+      "video_frame_output_shape": [
+        1,
+        1000
+      ],
+      "purpose": "ImageNet classification; no road mask"
+    },
+    "best_val.pth": {
+      "architecture": "segmentation/DDRNet_23.py",
+      "strict_load": true,
+      "excluded_training_keys": [
+        "model.seghead_extra.bn1.weight",
+        "model.seghead_extra.bn1.bias",
+        "model.seghead_extra.bn1.running_mean",
+        "model.seghead_extra.bn1.running_var",
+        "model.seghead_extra.bn1.num_batches_tracked",
+        "model.seghead_extra.conv1.weight",
+        "model.seghead_extra.bn2.weight",
+        "model.seghead_extra.bn2.bias",
+        "model.seghead_extra.bn2.running_mean",
+        "model.seghead_extra.bn2.running_var",
+        "model.seghead_extra.bn2.num_batches_tracked",
+        "model.seghead_extra.conv2.weight",
+        "model.seghead_extra.conv2.bias",
+        "loss.criterion.weight"
+      ],
+      "purpose": "19-class semantic segmentation"
+    }
+  },
+  "clip": {
+    "frames": 180,
+    "inference_size": [
+      512,
+      1024
+    ],
+    "duration_seconds": 3.001500750375188,
+    "mean_inference_and_postprocess_seconds": {
+      "DDRNet_23_slim": 0.13041363029866868,
+      "DDRNet_23": 0.2437914259162628
+    }
+  },
+  "samples": [
+    {
+      "frame": 0,
+      "seconds": 0.0,
+      "inference_size": [
+        1024,
+        2048
+      ],
+      "DDRNet_23_slim": {
+        "seconds": 0.63886704199831,
+        "logit_range": [
+          -6.002516269683838,
+          12.394917488098145
+        ],
+        "road_fraction": 0.4557366371154785,
+        "classes": [
+          "road",
+          "sidewalk",
+          "building",
+          "wall",
+          "fence",
+          "pole",
+          "vegetation",
+          "terrain",
+          "sky",
+          "person",
+          "car",
+          "motorcycle",
+          "bicycle"
+        ]
+      },
+      "DDRNet_23": {
+        "seconds": 1.2727100000192877,
+        "logit_range": [
+          -7.4207539558410645,
+          12.813417434692383
+        ],
+        "road_fraction": 0.43270015716552734,
+        "classes": [
+          "road",
+          "sidewalk",
+          "building",
+          "wall",
+          "fence",
+          "pole",
+          "traffic light",
+          "vegetation",
+          "terrain",
+          "sky",
+          "person",
+          "rider",
+          "car",
+          "bicycle"
+        ]
+      }
+    },
+    {
+      "frame": 930,
+      "seconds": 15.50775387693847,
+      "inference_size": [
+        1024,
+        2048
+      ],
+      "DDRNet_23_slim": {
+        "seconds": 0.6477226249990053,
+        "logit_range": [
+          -6.114309310913086,
+          14.385498046875
+        ],
+        "road_fraction": 0.29366064071655273,
+        "classes": [
+          "road",
+          "sidewalk",
+          "building",
+          "fence",
+          "pole",
+          "traffic light",
+          "traffic sign",
+          "vegetation",
+          "terrain",
+          "sky",
+          "person",
+          "car",
+          "bicycle"
+        ]
+      },
+      "DDRNet_23": {
+        "seconds": 1.2675613339815754,
+        "logit_range": [
+          -6.475203037261963,
+          15.284296035766602
+        ],
+        "road_fraction": 0.30171728134155273,
+        "classes": [
+          "road",
+          "sidewalk",
+          "building",
+          "wall",
+          "pole",
+          "traffic light",
+          "traffic sign",
+          "vegetation",
+          "terrain",
+          "sky",
+          "person",
+          "rider",
+          "car",
+          "bicycle"
+        ]
+      }
+    },
+    {
+      "frame": 1860,
+      "seconds": 31.01550775387694,
+      "inference_size": [
+        1024,
+        2048
+      ],
+      "DDRNet_23_slim": {
+        "seconds": 0.5807077499921434,
+        "logit_range": [
+          -6.122353553771973,
+          11.779953002929688
+        ],
+        "road_fraction": 0.3345818519592285,
+        "classes": [
+          "road",
+          "sidewalk",
+          "building",
+          "wall",
+          "fence",
+          "pole",
+          "traffic light",
+          "traffic sign",
+          "vegetation",
+          "sky",
+          "person",
+          "rider",
+          "car",
+          "bicycle"
+        ]
+      },
+      "DDRNet_23": {
+        "seconds": 1.197909541981062,
+        "logit_range": [
+          -9.283390045166016,
+          13.155755043029785
+        ],
+        "road_fraction": 0.32796525955200195,
+        "classes": [
+          "road",
+          "sidewalk",
+          "building",
+          "wall",
+          "fence",
+          "pole",
+          "traffic sign",
+          "vegetation",
+          "terrain",
+          "sky",
+          "person",
+          "rider",
+          "car",
+          "motorcycle",
+          "bicycle"
+        ]
+      }
+    },
+    {
+      "frame": 2790,
+      "seconds": 46.52326163081541,
+      "inference_size": [
+        1024,
+        2048
+      ],
+      "DDRNet_23_slim": {
+        "seconds": 0.6185296250041574,
+        "logit_range": [
+          -5.910572528839111,
+          12.201759338378906
+        ],
+        "road_fraction": 0.3572659492492676,
+        "classes": [
+          "road",
+          "sidewalk",
+          "building",
+          "fence",
+          "pole",
+          "traffic sign",
+          "vegetation",
+          "terrain",
+          "sky",
+          "person",
+          "car",
+          "truck",
+          "motorcycle",
+          "bicycle"
+        ]
+      },
+      "DDRNet_23": {
+        "seconds": 1.2011996670044027,
+        "logit_range": [
+          -8.061929702758789,
+          12.57371997833252
+        ],
+        "road_fraction": 0.36611366271972656,
+        "classes": [
+          "road",
+          "sidewalk",
+          "building",
+          "wall",
+          "fence",
+          "pole",
+          "traffic light",
+          "traffic sign",
+          "vegetation",
+          "terrain",
+          "sky",
+          "person",
+          "rider",
+          "car",
+          "truck",
+          "bicycle"
+        ]
+      }
+    },
+    {
+      "frame": 3720,
+      "seconds": 62.03101550775388,
+      "inference_size": [
+        1024,
+        2048
+      ],
+      "DDRNet_23_slim": {
+        "seconds": 0.5778724160045385,
+        "logit_range": [
+          -6.084367752075195,
+          11.63999080657959
+        ],
+        "road_fraction": 0.2029871940612793,
+        "classes": [
+          "road",
+          "sidewalk",
+          "building",
+          "wall",
+          "fence",
+          "pole",
+          "traffic light",
+          "traffic sign",
+          "vegetation",
+          "terrain",
+          "sky",
+          "person",
+          "car",
+          "truck"
+        ]
+      },
+      "DDRNet_23": {
+        "seconds": 1.142572749988176,
+        "logit_range": [
+          -8.687948226928711,
+          13.817707061767578
+        ],
+        "road_fraction": 0.1554422378540039,
+        "classes": [
+          "road",
+          "sidewalk",
+          "building",
+          "wall",
+          "fence",
+          "pole",
+          "traffic light",
+          "traffic sign",
+          "vegetation",
+          "terrain",
+          "sky",
+          "car",
+          "truck",
+          "bicycle"
+        ]
+      }
+    },
+    {
+      "frame": 4650,
+      "seconds": 77.53876938469234,
+      "inference_size": [
+        1024,
+        2048
+      ],
+      "DDRNet_23_slim": {
+        "seconds": 0.631615457998123,
+        "logit_range": [
+          -6.15890645980835,
+          12.725988388061523
+        ],
+        "road_fraction": 0.28275442123413086,
+        "classes": [
+          "road",
+          "sidewalk",
+          "building",
+          "wall",
+          "fence",
+          "pole",
+          "traffic light",
+          "traffic sign",
+          "vegetation",
+          "terrain",
+          "sky",
+          "person",
+          "car",
+          "bicycle"
+        ]
+      },
+      "DDRNet_23": {
+        "seconds": 1.179036207991885,
+        "logit_range": [
+          -8.2902193069458,
+          13.966453552246094
+        ],
+        "road_fraction": 0.2540760040283203,
+        "classes": [
+          "road",
+          "sidewalk",
+          "building",
+          "wall",
+          "fence",
+          "pole",
+          "traffic sign",
+          "vegetation",
+          "terrain",
+          "sky",
+          "car",
+          "bicycle"
+        ]
+      }
+    },
+    {
+      "frame": 5580,
+      "seconds": 93.04652326163082,
+      "inference_size": [
+        1024,
+        2048
+      ],
+      "DDRNet_23_slim": {
+        "seconds": 0.6034797499887645,
+        "logit_range": [
+          -6.168799877166748,
+          12.328224182128906
+        ],
+        "road_fraction": 0.24220848083496094,
+        "classes": [
+          "road",
+          "sidewalk",
+          "building",
+          "wall",
+          "fence",
+          "pole",
+          "traffic sign",
+          "vegetation",
+          "terrain",
+          "sky",
+          "person",
+          "rider",
+          "car",
+          "truck",
+          "bus"
+        ]
+      },
+      "DDRNet_23": {
+        "seconds": 1.1738326670019887,
+        "logit_range": [
+          -6.769171714782715,
+          12.639196395874023
+        ],
+        "road_fraction": 0.21627569198608398,
+        "classes": [
+          "road",
+          "sidewalk",
+          "building",
+          "wall",
+          "fence",
+          "pole",
+          "traffic light",
+          "traffic sign",
+          "vegetation",
+          "terrain",
+          "sky",
+          "person",
+          "car",
+          "bus",
+          "bicycle"
+        ]
+      }
+    },
+    {
+      "frame": 6510,
+      "seconds": 108.55427713856929,
+      "inference_size": [
+        1024,
+        2048
+      ],
+      "DDRNet_23_slim": {
+        "seconds": 0.6228225410159212,
+        "logit_range": [
+          -4.989352703094482,
+          11.321521759033203
+        ],
+        "road_fraction": 0.028027057647705078,
+        "classes": [
+          "road",
+          "sidewalk",
+          "building",
+          "fence",
+          "pole",
+          "traffic sign",
+          "vegetation",
+          "terrain",
+          "sky",
+          "person",
+          "car",
+          "bus"
+        ]
+      },
+      "DDRNet_23": {
+        "seconds": 1.172855165990768,
+        "logit_range": [
+          -6.251715660095215,
+          10.892303466796875
+        ],
+        "road_fraction": 0.013011932373046875,
+        "classes": [
+          "road",
+          "sidewalk",
+          "building",
+          "wall",
+          "fence",
+          "pole",
+          "traffic light",
+          "vegetation",
+          "terrain",
+          "sky",
+          "car",
+          "train",
+          "bicycle"
+        ]
+      }
+    },
+    {
+      "frame": 7440,
+      "seconds": 124.06203101550776,
+      "inference_size": [
+        1024,
+        2048
+      ],
+      "DDRNet_23_slim": {
+        "seconds": 0.5945200830174144,
+        "logit_range": [
+          -5.923559665679932,
+          11.46129035949707
+        ],
+        "road_fraction": 0.15396785736083984,
+        "classes": [
+          "road",
+          "sidewalk",
+          "building",
+          "wall",
+          "fence",
+          "pole",
+          "traffic light",
+          "traffic sign",
+          "vegetation",
+          "terrain",
+          "sky",
+          "person",
+          "car",
+          "truck",
+          "bus",
+          "bicycle"
+        ]
+      },
+      "DDRNet_23": {
+        "seconds": 1.196674416976748,
+        "logit_range": [
+          -6.922482490539551,
+          13.936115264892578
+        ],
+        "road_fraction": 0.17615175247192383,
+        "classes": [
+          "road",
+          "sidewalk",
+          "building",
+          "wall",
+          "pole",
+          "traffic sign",
+          "vegetation",
+          "terrain",
+          "sky",
+          "person",
+          "rider",
+          "car",
+          "bus",
+          "bicycle"
+        ]
+      }
+    }
+  ],
+  "output_video_decoded_frames": 180
+}

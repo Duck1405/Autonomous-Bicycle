@@ -352,9 +352,9 @@ def DualResNet_imagenet(pretrained=False):
     if pretrained:
         model_location = Path("models") /  Path("best_val_smaller.pth")
         
+        device = "cuda" if torch.cuda.is_available() else "cpu"
         
-        
-        checkpoint = torch.load(model_location, map_location='cpu') 
+        checkpoint = torch.load(model_location, map_location=device) 
         '''      
         new_state_dict = OrderedDict()
         for k, v in checkpoint['state_dict'].items():

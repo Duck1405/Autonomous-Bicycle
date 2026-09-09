@@ -105,7 +105,7 @@ else:
 
 
 # (config.yaml, checkpoint) per model. Each experiment needs its OWN config
-# because the backbone differs (resnet34 / resnet152 / resnet50).
+# because the bac                       kbone differs (resnet34 / resnet152 / resnet50).
 # NEWEST_MODELS = [
 #     ("experiments/LaneATTresnet18Aug2/config.yaml", "experiments/LaneATTresnet18Aug2/models/model_0020.pt"),
 #     ("experiments/LaneATTresnet34Aug2/config.yaml", "experiments/LaneATTresnet34Aug2/models/model_0020.pt"),

@@ -1,7 +1,7 @@
 import cv2
 import time
 import torch
-from DDRNet_23_slim_eval_speed import DualResNet_imagenet, DualResNet, BasicBlock
+from DDRNet_23_slim import DualResNet_imagenet, DualResNet, BasicBlock
 from pathlib import Path
 
 device =  torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
@@ -11,12 +11,13 @@ device =  torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 
 model = DualResNet_imagenet(pretrained=True)
 
-model = DualResNet(BasicBlock, [2, 2, 2, 2], num_classes=19, planes=32, spp_planes=128, head_planes=64)
+# model = DualResNet(BasicBlock, [2, 2, 2, 2], num_classes=19, planes=32, spp_planes=128, head_planes=64)
 model.eval()
 model.to(device)
 iterations = None
 # sys.exit()
 video_path = "/home/anindra/data/Autonomous-Bicycle/LaneATT/video_input/IMG_5105.mp4"
+video_path = "/Users/amannindra/Projects/Auto/Autonomous-Bicycle/LaneATT/video_input/IMG_5105.mp4"
 output_folder = Path("output")
 output_name = Path("output.mp4")
 final_video_path = output_folder / output_name
@@ -25,26 +26,36 @@ fourcc = cv2.VideoWriter_fourcc(*'mp4v')
 
 out_stream = cv2.VideoWriter(str(final_video_path), fourcc, 30.0, (int(cap.get(cv2.CAP_PROP_FRAME_WIDTH)) * 2, int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))))
 
-# input = torch.randn(1, 3, 1024, 2048).cuda()
+input = torch.randn(1, 3, 1024, 2048)
+print(f"input shape: {input}")
+
 with torch.no_grad():
     i = 0 
     
     print("Start")
-    while i < 10:
+    while i < 1:
         ret, frame = cap.read()
-        resized_image = cv2.resize(frame, (1024, 2048), interpolation=cv2.INTER_LINEAR)
-        print(type(resized_image), resized_image.shape , resized_image)
-        # if not ret:
-        #     print("ret failed")    
-        #     break
+        resized_image = cv2.resize(
+            frame,
+            (2048, 1024),  # width, height
+            interpolation=cv2.INTER_LINEAR
+        )
+        resized_image = cv2.cvtColor(resized_image, cv2.COLOR_BGR2RGB)
         
-        output = model(input)
+        input_tensor = torch.from_numpy(resized_image)
+
+        input_tensor = input_tensor.permute(2, 0, 1)
+
+        input_tensor = input_tensor.unsqueeze(0).float()       
+        output = model(input_tensor)
         
-        print(type(output), output) 
+        print(type(output))
+        print(len(output), len(output[0])) 
+        print(output)
         i +=1
     
 
-#     if iterations is None:
+#     if iterations is None:    
 #         elapsed_time = 0
 #         iterations = 100
 #         while elapsed_time < 1:
