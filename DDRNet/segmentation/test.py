@@ -32,6 +32,8 @@ with torch.no_grad():
     print("Start")
     while i < 10:
         ret, frame = cap.read()
+        resized_image = cv2.resize(frame, (1024, 2048), interpolation=cv2.INTER_LINEAR)
+
         if not ret:
             print("ret failed")    
             break
