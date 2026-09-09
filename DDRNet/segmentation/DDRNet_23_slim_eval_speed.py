@@ -6,7 +6,7 @@ import torch.nn.functional as F
 from torch.nn import init
 from collections import OrderedDict
 from pathlib import Path
-
+import cv2
 import warnings
 warnings.filterwarnings('ignore')
 
@@ -387,6 +387,10 @@ if __name__ == '__main__':
     model.to(device)
     iterations = None
     # sys.exit()
+    video_path = "/Users/amannindra/Projects/Auto/Autonomous-Bicycle/LaneATT/video_input/IMG_5105.mp4"
+    
+    
+    
 
     input = torch.randn(1, 3, 1024, 2048).cuda()
     with torch.no_grad():
