@@ -375,7 +375,7 @@ if __name__ == '__main__':
 
 
     import time
-    device = torch.device('cpu')
+    device = torch.device('cuda')
     #torch.backends.cudnn.enabled = True
     #torch.backends.cudnn.benchmark = True
     
