@@ -38,7 +38,7 @@ with torch.no_grad():
             print("ret failed")    
             break
         
-        output = model(frame)
+        output = model(input)
         
         print(type(output), output) 
         i +=1
