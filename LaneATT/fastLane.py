@@ -503,9 +503,6 @@ class VideoInference():
 
 
 
-MODELSED = ("experiments/LaneATTresnet34Aug2/config.yaml", "experiments/LaneATTresnet34Aug2/models/model_0013.pt", "onnxmodels/YolloS/yolo11s_coco4.pt")
-
-device =  torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 
     
 
@@ -623,6 +620,11 @@ else:
     print("Video Not exists")
 
 output_folder = Path("video_inference")
+
+MODELSED = ("experiments/LaneATTresnet34Aug2/config.yaml", "experiments/LaneATTresnet34Aug2/models/model_0013.pt", "onnxmodels/YolloS/yolo11s_coco4.pt")
+
+device =  torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
+
 
 print(f"build Model: {[MODELSED]}")
 print(f"args.videos: {video_example}")
