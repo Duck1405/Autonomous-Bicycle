@@ -24,6 +24,11 @@ class LaneATTInference():
         self.conf_threshold = conf_threshold
         self.nms_thres = nms_thres
         self.nms_topk = nms_topk
+        
+        print(f"self.conf_threshold: {self.conf_threshold}")
+        print(f"nms_thres: {nms_thres}")
+        print(f"nms_topk: {nms_topk}")
+        
         # Hysteresis: conf_threshold acquires a NEW lane; a lane matched (by
         # bottom-row x, within match_tolerance in normalized coords) to one
         # accepted in the previous frame survives down to keep_threshold.
@@ -121,7 +126,6 @@ class LaneATTInference():
     def get_ego_lanes(self, img_w, predictions):
 
         mid_point_x = img_w / 2
-
 
         left_candidates = []   # (x_bottom, lane_index), x_bottom < mid
         right_candidates = []  # (x_bottom, lane_index), x_bottom >= mid

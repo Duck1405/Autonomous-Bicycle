@@ -111,6 +111,7 @@ LaneATT/experiments
 LaneATT/logs
 LaneATT/video_output
 LaneATT/video_output_2
+LaneATT/all_video_output
 
 yolov12/dataset
 Yolov11/dataset
