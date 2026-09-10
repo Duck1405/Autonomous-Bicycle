@@ -100,21 +100,19 @@ class VideoInference():
         for handler in list(self.logger.handlers):
             self.logger.removeHandler(handler)
             handler.close()
+
             
-        self.nms_topk = nms_topk
-        self.nms_thres = nms_thres
-        self.keep_threshold = keep_threshold
-        self.match_tolerance = match_tolerance
-        self.yolo_iou = yolo_iou
-        self.model_archiecture = model_archiecture
-        self.model_path = model_path
-        self.device = device 
-        self.conf_threshold = conf_threshold
+  
         
-        self.yolo_path = yolo_path
-        self.yolo_conf = yolo_conf
-        self.yolo_iou = yolo_iou
-            
+      
+        
+    def update_laneATT(self):
+        self.laneatt = LaneATTInference(self.model_archiecture,  self.model_path, device=self.device,
+                                            conf_threshold=self.conf_threshold, nms_thres=self.nms_thres,
+                                            nms_topk=self.nms_topk, keep_threshold=self.keep_threshold,
+                                            match_tolerance=self.match_tolerance)
+    
+    def start_logger_details(self):
         self.logger.info(f"nms_topk: {nms_topk}")
         self.logger.info(f"nms_thres: {nms_topk}")
         self.logger.info(f"keep_threshold: {keep_threshold}")
@@ -125,14 +123,6 @@ class VideoInference():
         self.logger.info(f"conf_threshold: {conf_threshold}")
         self.logger.info(f"yolo_path: {yolo_path}")
         self.logger.info(f"yolo_iou: {yolo_iou}")
-        
-      
-        
-    def update_laneATT(self):
-        self.laneatt = LaneATTInference(self.model_archiecture,  self.model_path, device=self.device,
-                                            conf_threshold=self.conf_threshold, nms_thres=self.nms_thres,
-                                            nms_topk=self.nms_topk, keep_threshold=self.keep_threshold,
-                                            match_tolerance=self.match_tolerance)
     def update_yolo(self):
         self.yolo = YoloInference(self.yolo_path, conf_threshold=self.yolo_conf, iou_threshold=self.yolo_iou,device=self.device)
         
@@ -270,6 +260,7 @@ class VideoInference():
         frame_location = Path(folder_path) / Path("frames")
         frame_location.mkdir(parents=True, exist_ok=True)
         print(frame_location)
+        self.start_logger_details()
 
         while i < local_frame_local:
             ret, frame = cap.read()
@@ -684,7 +675,7 @@ print(f"args.yolo_conf: {0.7}")
 
 
 nms_thres = 50
-nms_topk=2
+nms_topk=8
 conf_threshold = 0.5
 keep_threshold = 0.3
 
