@@ -12,3 +12,4 @@
 2026-09-09 21:02:46,765 VideoInference INFO Frame: 5346/8912, time: 1429.8286700248718, LaneATT: 803.8s (150 ms/frame), YOLO: 502.4s (94 ms/frame), Depth: 0.0s (0 ms/frame)
 2026-09-09 21:06:45,761 VideoInference INFO Frame: 6237/8912, time: 1668.8247961997986, LaneATT: 936.9s (150 ms/frame), YOLO: 588.2s (94 ms/frame), Depth: 0.0s (0 ms/frame)
 2026-09-09 21:10:45,064 VideoInference INFO Frame: 7128/8912, time: 1908.1279292106628, LaneATT: 1070.4s (150 ms/frame), YOLO: 674.6s (95 ms/frame), Depth: 0.0s (0 ms/frame)
+2026-09-09 21:14:57,177 VideoInference INFO Frame: 8019/8912, time: 2160.241059064865, LaneATT: 1211.3s (151 ms/frame), YOLO: 764.0s (95 ms/frame), Depth: 0.0s (0 ms/frame)

@@ -116,13 +116,13 @@ class VideoInference():
         self.logger.info(f"nms_topk: {nms_topk}")
         self.logger.info(f"nms_thres: {nms_topk}")
         self.logger.info(f"keep_threshold: {keep_threshold}")
-        self.logger.info(f"match_tolerance: {match_tolerance}")
-        self.logger.info(f"yolo_iou: {yolo_iou}")
-        self.logger.info(f"model_archiecture: {model_archiecture}")
+        self.logger.info(f"match_tolerance: {self.match_tolerance}")
+        self.logger.info(f"yolo_iou: {self.yolo_iou}")
+        self.logger.info(f"model_archiecture: {self.model_archiecture}")
         self.logger.info(f"device: {device}")
         self.logger.info(f"conf_threshold: {conf_threshold}")
-        self.logger.info(f"yolo_path: {yolo_path}")
-        self.logger.info(f"yolo_iou: {yolo_iou}")
+        self.logger.info(f"yolo_path: {self.yolo_path}")
+        self.logger.info(f"yolo_iou: {self.yolo_iou}")
     def update_yolo(self):
         self.yolo = YoloInference(self.yolo_path, conf_threshold=self.yolo_conf, iou_threshold=self.yolo_iou,device=self.device)
         
