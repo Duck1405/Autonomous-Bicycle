@@ -119,15 +119,14 @@ class LaneATTInference():
     
 
     def get_ego_lanes2(self, img_w, predictions):
-        print('dasdadsadas')
         if predictions is None or len(predictions) < 2:
             return None, None, None, None
 
 
         mid_point = img_w / 2
-        print(f"predictions: {predictions}")
+        # print(f"predictions: {predictions}")
         length = len(predictions)
-        print(f"length: {length}")
+        # print(f"length: {length}")
         y_min = np.zeros(length)
         y_max = np.zeros(length)
 
@@ -285,8 +284,10 @@ class LaneATTInference():
         height = self.image_size[1]
         width = self.image_size[0]
         
-        y_max = np.zeros(predictions)
-        y_min = np.zeros(predictions)
+        length = len(predictions)
+        
+        y_max = np.zeros(length)
+        y_min = np.zeros(length)
         
         
 
@@ -299,8 +300,8 @@ class LaneATTInference():
         length = len(predictions)
         
         
-        slope = np.zeros(length)
-        intercept = np.zeros(length)
+        slope = np.zeros(length,  dtype=np.float64)
+        intercept = np.zeros(length,  dtype=np.float64)
         
         for i in range(length):
             example = predictions[i]
@@ -313,10 +314,14 @@ class LaneATTInference():
             y_min[i] = y[0]
             y_max[i] = y[-1]
             
-            s, i = np.polyfit(x, y, 1)
+            
+            s, b = np.polyfit(x, y, 1)
+            
+            print(f'type(s): {type(s)}, s: {s}')
+            print(f'type(b): {type(b)}, b: {b}')
             
             slope[i] = s
-            intercept[i] = i
+            intercept[i] = b
         
         lowest_max = np.min(y_max)
         highest_max = np.min(y_min)

@@ -147,7 +147,7 @@ class VideoInference():
     
         return
     
-    def get_frame(self, frame):
+    def get_frame(self, frame, split):
 
         t0 = time.perf_counter()
         evaluation = self.laneatt.frame_eval(frame)
@@ -168,12 +168,13 @@ class VideoInference():
         #         cv2.line(frame, tuple(p0), tuple(p1), (0, 255, 0), 3)
                 
   
-        
-        
-        left_points, right_points, mid_points, synthesized = self.laneatt.get_ego_lanes2(frame.shape[1], pts_all)
-        print(f"left_points: {left_points}")
-        print(f"right_points: {right_points}")
-        print(f"mid_points: {mid_points}")
+        if split == "base":
+            left_points, right_points, mid_points, synthesized = self.laneatt.get_ego_lanes(frame.shape[1], pts_all)
+        elif split == "new":
+            left_points, right_points, mid_points, synthesized = self.laneatt.get_ego_lanes2(frame.shape[1], pts_all)
+        # print(f"left_points: {left_points}")
+        # print(f"right_points: {right_points}")
+        # print(f"mid_points: {mid_points}")
         
         if left_points is not None and right_points is not None and mid_points is not None:
             left_color = (255, 0,0) 
@@ -234,7 +235,7 @@ class VideoInference():
         
         fourcc = cv2.VideoWriter_fourcc(*'mp4v')
         print(f"Output Located: {final_video_path}")
-        out_stream = cv2.VideoWriter(str(final_video_path), fourcc, 30.0, (int(cap.get(cv2.CAP_PROP_FRAME_WIDTH)) * 2, int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))))
+        out_stream = cv2.VideoWriter(str(final_video_path), fourcc, 30.0, (int(cap.get(cv2.CAP_PROP_FRAME_WIDTH)) * 3, int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))))
         
         
         i = 0
@@ -271,13 +272,16 @@ class VideoInference():
         while i < local_frame_local:
             ret, frame = cap.read()
             
+            frame2 = frame.copy()
             base_frame = frame.copy()
+            
            
             if not ret:
                 break
             
-            frame = self.get_frame(frame)
-            frame = cv2.hconcat([base_frame, frame])
+            frame = self.get_frame(frame, "base")
+            frame2 = self.get_frame(frame2, "nmew")
+            frame = cv2.hconcat([base_frame, frame, frame2])
            
             if (self.output_folder != None):
                out_stream.write(frame)
