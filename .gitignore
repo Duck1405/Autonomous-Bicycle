@@ -48,6 +48,8 @@ LaneNet/TUSimple
 /Send/numpy_output
 
 
+LaneATT/inference
+
 
 Useless/HybridNets_Jetson/onnx
 *.onnx

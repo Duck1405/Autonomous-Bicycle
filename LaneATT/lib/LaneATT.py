@@ -35,6 +35,7 @@ class LaneATTInference():
         self.keep_threshold = keep_threshold
         self.match_tolerance = match_tolerance
         self.prev_lane_xs = []
+        self.image_size = (640, 360)
         
 
 
@@ -62,7 +63,7 @@ class LaneATTInference():
         self.prev_lane_xs = []
 
     def frame_eval(self, frame):
-        frame = cv2.resize(frame, (640, 360))
+        frame = cv2.resize(frame, self.image_size)
         
         frame = self.to_tensor(frame)
         frame = frame.unsqueeze(0).to(self.device)
@@ -115,27 +116,238 @@ class LaneATTInference():
                 second_smallest = num
 
         return [smallest, second_smallest]
+    
 
     def get_ego_lanes2(self, img_w, predictions):
-        mid_point_x = img_w / 2
-        print(mid_point_x)
-        print(len(predictions))
-        print(len(predictions[0]))        
+        print('dasdadsadas')
+        if predictions is None or len(predictions) < 2:
+            return None, None, None, None
+
+
+        mid_point = img_w / 2
+        print(f"predictions: {predictions}")
+        length = len(predictions)
+        print(f"length: {length}")
+        y_min = np.zeros(length)
+        y_max = np.zeros(length)
+
+        for i, lane in enumerate(predictions):
+
+            if lane is None or len(lane) < 3:
+                return None, None, None, None
+
+            y = lane[:, 1]
+
+            y_min[i] = np.min(y)
+            y_max[i] = np.max(y)
+
+        highest_min = np.max(y_min)
+        lowest_max = np.min(y_max)
+
+
+        if highest_min >= lowest_max:
+            return None, None, None, None
+
+
+        y_values = np.linspace(
+            highest_min,
+            lowest_max,
+            100
+        )
+
+
+        left_candidates = []
+        right_candidates = []
+
+        for lane_index, lane in enumerate(predictions):
+
+            x = lane[:, 0]
+            y = lane[:, 1]
+            mask = (
+                (y >= highest_min) &
+                (y <= lowest_max)
+            )
+
+            filtered_lane = lane[mask]
+
+
+            if len(filtered_lane) < 3:
+                continue
+
+
+            filtered_x = filtered_lane[:, 0]
+            filtered_y = filtered_lane[:, 1]
+
+
+            # x = f(y)
+            coefficients = np.polyfit(
+                filtered_y,
+                filtered_x,
+                2
+            )
+            x_values = np.polyval(
+                coefficients,
+                y_values
+            )
+
+
+            resampled_lane = np.column_stack((
+                x_values,
+                y_values
+            ))
+            
+            x_difference = (
+                x_values - mid_point
+            )
+
+
+            signed_average = np.mean(
+                x_difference
+            )
+            average_distance = np.mean(
+                np.abs(x_difference)
+            )
+
+
+            candidate = {
+                "index": lane_index,
+                "distance": average_distance,
+                "signed_average": signed_average,
+                "points": resampled_lane,
+                "coefficients": coefficients
+            }
+
+
+            if signed_average < 0:
+                left_candidates.append(candidate)
+
+            else:
+                right_candidates.append(candidate)
+
+
+        if not left_candidates or not right_candidates:
+            return None, None, None, None
+
+
         
+        closest_left = min(
+            left_candidates,
+            key=lambda lane: lane["distance"]
+        )
+
+        closest_right = min(
+            right_candidates,
+            key=lambda lane: lane["distance"]
+        )
+
+
+        left_points = closest_left["points"]
+        right_points = closest_right["points"]
+
+        middle_x = (
+            left_points[:, 0]
+            + right_points[:, 0]
+        ) / 2
+
+
+        mid_points = np.column_stack((
+            middle_x,
+            y_values
+        ))
+
+
+        synthesized = None
+
+        left_points = np.round(
+            left_points
+        ).astype(int)
+
+        right_points = np.round(
+            right_points
+        ).astype(int)
+
+        mid_points = np.round(
+            mid_points
+        ).astype(int)
+
+
+        return (
+            left_points,
+            right_points,
+            mid_points,
+            synthesized
+        )
 
     def get_ego_lanes(self, img_w, predictions):
 
         mid_point_x = img_w / 2
+        
+        height = self.image_size[1]
+        width = self.image_size[0]
+        
+        y_max = np.zeros(predictions)
+        y_min = np.zeros(predictions)
+        
+        
 
         left_candidates = []   # (x_bottom, lane_index), x_bottom < mid
         right_candidates = []  # (x_bottom, lane_index), x_bottom >= mid
-        for i, lane in enumerate(predictions):
-            bottom_idx = np.argmax(lane[:, 1])  # largest y = nearest the car
-            x_bottom = lane[bottom_idx, 0]
-            if x_bottom < mid_point_x:
-                left_candidates.append((x_bottom, i))
-            else:
-                right_candidates.append((x_bottom, i))
+        print(f"mid: {mid_point_x}")
+        print(f"predictions type: {type(predictions)}")
+        print(f"predictions: {predictions}")
+        
+        length = len(predictions)
+        
+        
+        slope = np.zeros(length)
+        intercept = np.zeros(length)
+        
+        for i in range(length):
+            example = predictions[i]
+            y = example[:, 1]
+            x = example[:, 0]
+            
+            print(f"x: {x}")
+            print(f"y: {y}")
+            
+            y_min[i] = y[0]
+            y_max[i] = y[-1]
+            
+            s, i = np.polyfit(x, y, 1)
+            
+            slope[i] = s
+            intercept[i] = i
+        
+        lowest_max = np.min(y_max)
+        highest_max = np.min(y_min)
+        
+        array = np.linspace(lowest_max, highest_max, 150)
+        
+        
+        
+        
+        # for i, lane in enumerate(predictions):
+        #     num = lane[:, 1]
+        #     print(f"num type: {type(num)}, {num}")
+        #     bottom_idx = np.argmax(num)  # largest y = nearest the car
+        #     print(f"bottom_idx: {bottom_idx}")
+        #     x_bottom = lane[bottom_idx, 0]
+        #     if x_bottom < mid_point_x:
+        #         print(f"{x_bottom} < {mid_point_x}")
+        #         left_candidates.append((x_bottom, i))
+        #     else:
+        #         print(f"{x_bottom} > {mid_point_x}")
+        #         right_candidates.append((x_bottom, i))
+                
+        # print(f"left_candidates: {left_candidates}")
+        # print(f"right_candidates: {right_candidates}")
+        
+        # print(f"left_candidates[0] type : {type(left_candidates[0])}")
+        # print(f"left_candidates[0] : {left_candidates[0]}")
+        # print(f"left_candidates[0] : {left_candidates[0][0]}")
+        
+        
+        
 
         if not left_candidates and not right_candidates:
             return None, None, None, None
@@ -201,4 +413,5 @@ class LaneATTInference():
             plt.legend(loc='upper right')
 
         return left_points, right_points, mid_points
+    
     
