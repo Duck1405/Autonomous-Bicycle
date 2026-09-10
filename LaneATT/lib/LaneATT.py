@@ -296,9 +296,9 @@ class LaneATTInference():
 
         left_candidates = []   # (x_bottom, lane_index), x_bottom < mid
         right_candidates = []  # (x_bottom, lane_index), x_bottom >= mid
-        print(f"mid: {mid_point_x}")
-        print(f"predictions type: {type(predictions)}")
-        print(f"predictions: {predictions}")
+        # print(f"mid: {mid_point_x}")
+        # print(f"predictions type: {type(predictions)}")
+        # print(f"predictions: {predictions}")
         
         length = len(predictions)
         
@@ -311,8 +311,8 @@ class LaneATTInference():
             y = example[:, 1]
             x = example[:, 0]
             
-            print(f"x: {x}")
-            print(f"y: {y}")
+            # print(f"x: {x}")
+            # print(f"y: {y}")
             
             y_min[i] = y[0]
             y_max[i] = y[-1]
