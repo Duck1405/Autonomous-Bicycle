@@ -1,0 +1,7 @@
+2026-09-09 20:38:56,933 VideoInference INFO video: video_input/IMG_5106.mp4
+2026-09-09 20:38:56,936 VideoInference INFO Video Frame rate: 30.0
+2026-09-09 20:38:56,936 VideoInference INFO Total Frames: 8912
+2026-09-09 20:38:56,936 VideoInference INFO Video Duration: 297.06666666666666
+2026-09-09 20:38:56,936 VideoInference INFO devices: LaneATT cpu, YOLO cpu
+2026-09-09 20:38:57,302 VideoInference INFO Frame: 0/8912, time: 0.36613011360168457, LaneATT: 0.2s (182 ms/frame), YOLO: 0.1s (142 ms/frame), Depth: 0.0s (0 ms/frame)
+2026-09-09 20:42:41,271 VideoInference INFO Frame: 891/8912, time: 224.33429098129272, LaneATT: 127.7s (143 ms/frame), YOLO: 79.0s (89 ms/frame), Depth: 0.0s (0 ms/frame)

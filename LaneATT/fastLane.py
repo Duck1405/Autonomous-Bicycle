@@ -70,6 +70,9 @@ class VideoInference():
         self.yolo_iou = yolo_iou
         
         
+        
+        
+        
         print(f"conf_threshold: {conf_threshold}")
         print(f"nms_thres: {nms_thres}")
         print(f"nmms topK: {nms_topk}")
@@ -97,6 +100,33 @@ class VideoInference():
         for handler in list(self.logger.handlers):
             self.logger.removeHandler(handler)
             handler.close()
+            
+        self.nms_topk = nms_topk
+        self.nms_thres = nms_thres
+        self.keep_threshold = keep_threshold
+        self.match_tolerance = match_tolerance
+        self.yolo_iou = yolo_iou
+        self.model_archiecture = model_archiecture
+        self.model_path = model_path
+        self.device = device 
+        self.conf_threshold = conf_threshold
+        
+        self.yolo_path = yolo_path
+        self.yolo_conf = yolo_conf
+        self.yolo_iou = yolo_iou
+            
+        self.logger.info(f"nms_topk: {nms_topk}")
+        self.logger.info(f"nms_thres: {nms_topk}")
+        self.logger.info(f"keep_threshold: {keep_threshold}")
+        self.logger.info(f"match_tolerance: {match_tolerance}")
+        self.logger.info(f"yolo_iou: {yolo_iou}")
+        self.logger.info(f"model_archiecture: {model_archiecture}")
+        self.logger.info(f"device: {device}")
+        self.logger.info(f"conf_threshold: {conf_threshold}")
+        self.logger.info(f"yolo_path: {yolo_path}")
+        self.logger.info(f"yolo_iou: {yolo_iou}")
+        
+      
         
     def update_laneATT(self):
         self.laneatt = LaneATTInference(self.model_archiecture,  self.model_path, device=self.device,
@@ -202,7 +232,7 @@ class VideoInference():
         # self.logger.info(f"depth model: {self.depth.checkpoint} (device: {self.depth.device})")
         fourcc = cv2.VideoWriter_fourcc(*'mp4v')
         print(f"Output Located: {final_video_path}")
-        out_stream = cv2.VideoWriter(str(final_video_path), fourcc, 30.0, (int(cap.get(cv2.CAP_PROP_FRAME_WIDTH)) * 2, int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))))
+        out_stream = cv2.VideoWriter(str(final_video_path), fourcc, 60, (int(cap.get(cv2.CAP_PROP_FRAME_WIDTH)) * 2, int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))))
         
         
         i = 0
@@ -635,16 +665,26 @@ print(f"args.yolo_conf: {0.7}")
 
 
 
+# nms_thres = 50
+# nms_topk=4
+# conf_threshold = 0.3
+# keep_threshold = 0.3
+
+# video_inference([MODELSED], video_example, 999999, output_folder, 0.7, nms_thres,  nms_topk, conf_threshold, keep_threshold)
+
+
+# nms_thres = 50
+# nms_topk=4
+# conf_threshold = 0.5
+# keep_threshold = 0.3
+
+# video_inference([MODELSED], video_example, 999999, output_folder, 0.7, nms_thres,  nms_topk, conf_threshold, keep_threshold)
+
+# output_folder = Path("image_inference")
+
+
 nms_thres = 50
-nms_topk=4
-conf_threshold = 0.3
-keep_threshold = 0.3
-
-video_inference([MODELSED], video_example, 999999, output_folder, 0.7, nms_thres,  nms_topk, conf_threshold, keep_threshold)
-
-
-nms_thres = 50
-nms_topk=4
+nms_topk=2
 conf_threshold = 0.5
 keep_threshold = 0.3
 
