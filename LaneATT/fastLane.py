@@ -280,7 +280,7 @@ class VideoInference():
                 break
             
             frame = self.get_frame(frame, "base")
-            frame2 = self.get_frame(frame2, "nmew")
+            frame2 = self.get_frame(frame2, "new")
             frame = cv2.hconcat([base_frame, frame, frame2])
            
             if (self.output_folder != None):
