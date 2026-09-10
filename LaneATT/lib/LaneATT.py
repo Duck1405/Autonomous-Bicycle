@@ -279,6 +279,9 @@ class LaneATTInference():
 
     def get_ego_lanes(self, img_w, predictions):
 
+        if len(predictions) == 0:
+            return None, None, None, None
+
         mid_point_x = img_w / 2
         
         height = self.image_size[1]
@@ -317,9 +320,8 @@ class LaneATTInference():
             
             s, b = np.polyfit(x, y, 1)
             
-            print(f'type(s): {type(s)}, s: {s}')
-            print(f'type(b): {type(b)}, b: {b}')
-            
+  
+
             slope[i] = s
             intercept[i] = b
         
