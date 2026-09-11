@@ -133,12 +133,10 @@ class Runner:
                         continue
                     cv2.imshow('pred', img)
                     cv2.waitKey(0)
-                    print(f"i: {i}")
-                    if (i > 5):
-                        cv2.destroyAllWindows()
-                        break
                     i += 1
 
+        if self.view:
+            cv2.destroyAllWindows()
         if save_predictions:
             with open('predictions.pkl', 'wb') as handle:
                 pickle.dump(predictions, handle, protocol=pickle.HIGHEST_PROTOCOL)
@@ -206,7 +204,12 @@ class Runner:
         if not path_video.is_dir():
             self.logger.warning('Video input folder %s not found — skipping video inference', path_video)
             return
-        files = [x for x in sorted(path_video.iterdir()) if x.is_file() and x.name != ".DS_Store"]
+        files = [x for x in sorted(path_video.iterdir())
+                 if x.is_file() and x.suffix.lower() in
+                 {'.mp4', '.mov', '.avi', '.mkv', '.m4v', '.webm'}]
+        if not files:
+            self.logger.warning('No input videos found in %s', path_video)
+            return
 
         # video_output/<exp_name>/model_<NNNN>/ — same layout inference.py uses;
         # VideoInference adds <video>/run<K>/ per video.

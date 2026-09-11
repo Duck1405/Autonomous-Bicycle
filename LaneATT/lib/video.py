@@ -135,14 +135,17 @@ class VideoInference():
     
         return
     
-    def get_frame(self, frame, split):
+    def get_frame(self, frame, split="base", evaluation=None, yolo_results=None):
 
         t0 = time.perf_counter()
-        evaluation = self.laneatt.frame_eval(frame)
+        if evaluation is None:
+            with torch.no_grad():
+                evaluation = self.laneatt.frame_eval(frame)
         lane_time = time.perf_counter() - t0
 
         t0 = time.perf_counter()
-        yolo_results = self.yolo.infer(frame)
+        if yolo_results is None:
+            yolo_results = self.yolo.infer(frame)
         yolo_time = time.perf_counter() - t0
 
         t0 = time.perf_counter()
@@ -185,6 +188,12 @@ class VideoInference():
         
         print(f"Video Selected: {self.video_path}")
         cap = cv2.VideoCapture(self.video_path)
+        if not cap.isOpened():
+            cap.release()
+            raise RuntimeError(f"Cannot open video: {self.video_path}")
+        if self.output_folder is None:
+            cap.release()
+            raise ValueError("video_eval requires an output_folder")
         out_stream = None
         # folder_path = "frame_output"
         # if (self.output_folder != None):
@@ -204,6 +213,7 @@ class VideoInference():
         for h in list(self.logger.handlers):
             if isinstance(h, logging.FileHandler):
                 self.logger.removeHandler(h)
+                h.close()
         fh = logging.FileHandler(log_path)
         fh.setFormatter(logging.Formatter(
             '%(asctime)s,%(msecs)03d %(name)s %(levelname)s %(message)s',
@@ -223,7 +233,13 @@ class VideoInference():
         
         fourcc = cv2.VideoWriter_fourcc(*'mp4v')
         print(f"Output Located: {final_video_path}")
-        out_stream = cv2.VideoWriter(str(final_video_path), fourcc, 30.0, (int(cap.get(cv2.CAP_PROP_FRAME_WIDTH)) * 3, int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))))
+        fps = cap.get(cv2.CAP_PROP_FPS)
+        output_fps = fps if math.isfinite(fps) and fps > 0 else 30.0
+        out_stream = cv2.VideoWriter(str(final_video_path), fourcc, output_fps, (int(cap.get(cv2.CAP_PROP_FRAME_WIDTH)) * 2, int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))))
+        if not out_stream.isOpened():
+            cap.release()
+            out_stream.release()
+            raise RuntimeError(f"Cannot open video writer: {final_video_path}")
         
         
         i = 0
@@ -257,37 +273,43 @@ class VideoInference():
         frame_location.mkdir(parents=True, exist_ok=True)
         print(frame_location)
 
-        while i < local_frame_local:
-            ret, frame = cap.read()
-            
-            frame2 = frame.copy()
-            base_frame = frame.copy()
-            
+        try:
+            while i < local_frame_local:
+                ret, frame = cap.read()
+                if not ret:
+                    if i == 0:
+                        raise RuntimeError(f"Cannot decode video: {self.video_path}")
+                    break
+                base_frame = frame.copy()
+                t0 = time.perf_counter()
+                with torch.no_grad():
+                    evaluation = self.laneatt.frame_eval(frame)
+                lane_time += time.perf_counter() - t0
+                t0 = time.perf_counter()
+                yolo_results = self.yolo.infer(frame)
+                yolo_time += time.perf_counter() - t0
+                frame = self.get_frame(frame, "base", evaluation, yolo_results)
+                frame = cv2.hconcat([base_frame, frame])
            
-            if not ret:
-                break
-            
-            frame = self.get_frame(frame, "base")
-            frame2 = self.get_frame(frame2, "new")
-            frame = cv2.hconcat([base_frame, frame, frame2])
-           
-            if (self.output_folder != None):
-               out_stream.write(frame)
+                if (self.output_folder != None):
+                   out_stream.write(frame)
 
-            if (i) % max(1, math.floor(local_frame_local / 50)) == 0:
-                n = i + 1
+                if (i) % max(1, math.floor(local_frame_local / 50)) == 0:
+                    n = i + 1
                 
-                print(f"Frame: {i}/{local_frame_local}")
+                    print(f"Frame: {i}/{local_frame_local}")
             
-                self.logger.info(f"Frame: {i}/{local_frame_local}, time: {str(time.time() - t1)}, "
-                                    f"LaneATT: {lane_time:.1f}s ({1000 * lane_time / n:.0f} ms/frame), "
-                                    f"YOLO: {yolo_time:.1f}s ({1000 * yolo_time / n:.0f} ms/frame), "
-                                    f"Depth: {depth_time:.1f}s ({1000 * depth_time / n:.0f} ms/frame)")
+                    self.logger.info(f"Frame: {i}/{local_frame_local}, time: {str(time.time() - t1)}, "
+                                        f"LaneATT: {lane_time:.1f}s ({1000 * lane_time / n:.0f} ms/frame), "
+                                        f"YOLO: {yolo_time:.1f}s ({1000 * yolo_time / n:.0f} ms/frame), "
+                                        f"Depth: {depth_time:.1f}s ({1000 * depth_time / n:.0f} ms/frame)")
 
-            i += 1
-        cap.release()
-        if (self.output_folder != None):
+                i += 1
+        finally:
+            cap.release()
             out_stream.release()
+            self.logger.removeHandler(fh)
+            fh.close()
   
    
     def image_eval(self, frame_number):
@@ -312,6 +334,7 @@ class VideoInference():
         for h in list(self.logger.handlers):
             if isinstance(h, logging.FileHandler):
                 self.logger.removeHandler(h)
+                h.close()
         fh = logging.FileHandler(image_folder / "run.log")
         fh.setFormatter(logging.Formatter(
             '%(asctime)s,%(msecs)03d %(name)s %(levelname)s %(message)s',
@@ -335,7 +358,6 @@ class VideoInference():
             raise ValueError(f"frame {frame_number} out of range (video has {total_frames} frames)")
         cap.set(cv2.CAP_PROP_POS_FRAMES, frame_number)
         ret, frame = cap.read()
-        base_frame = frame.copy()
         cap.release()
         convert = np.array(frame)
         # print(f"Get Image numpy: {convert}")
@@ -344,6 +366,7 @@ class VideoInference():
         if not ret:
             raise RuntimeError(f"Could not decode frame {frame_number} of {self.video_path}")
 
+        base_frame = frame.copy()
         frame = self.get_frame(frame) 
         frame = cv2.hconcat([base_frame, frame])
 

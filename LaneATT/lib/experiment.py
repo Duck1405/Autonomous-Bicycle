@@ -136,7 +136,7 @@ class Experiment:
                      epoch_evaluated, dataset.split,
                      metrics['F1'], metrics['Precision'], metrics['Recall'],
                         metrics['TP'], metrics['FP'], metrics['FN'])
-        if metrics['F1'] > self.best_f1:
+        if dataset.split == 'val' and metrics['F1'] > self.best_f1:
             self.best_f1, self.best_epoch = metrics['F1'], epoch_evaluated
             self.logger.info('*** New best F1: %.4f (epoch %d) ***', self.best_f1, self.best_epoch)
         else:
