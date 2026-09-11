@@ -108,9 +108,9 @@ class Experiment:
             ['{}: {:.5f}'.format(component, loss_components[component]) for component in loss_components])
         self.logger.debug(line)
         overall_iter = (epoch * max_iter) + iter_nb
-        self.tensorboard_writer.add_scalar('loss/total_loss', loss, overall_iter)
-        for key in loss_components:
-            self.tensorboard_writer.add_scalar('loss/{}'.format(key), loss_components[key], overall_iter)
+        # self.tensorboard_writer.add_scalar('loss/total_loss', loss, overall_iter)
+        # for key in loss_components:
+        #     self.tensorboard_writer.add_scalar('loss/{}'.format(key), loss_components[key], overall_iter)
 
     def epoch_start_callback(self, epoch, max_epochs):
         self.logger.debug('Epoch [%d/%d] starting.', epoch, max_epochs)
