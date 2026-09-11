@@ -2,7 +2,7 @@
 val_every: 2
 model_checkpoint_interval: 1
 seed: 0
-num_workers: 28
+num_workers: 38
 model:
   name: LaneATT
   model_id: LaneATTresnet34
@@ -18,7 +18,7 @@ epochs: 20
 loss_parameters: {}
 train_parameters:
   conf_threshold:
-  nms_thres: 15.
+  nms_thres: 50.
   nms_topk: 3000
 test_parameters:
   conf_threshold: 0.5
