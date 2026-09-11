@@ -12,7 +12,7 @@ import torch.distributed as dist
 from torch.utils.data import DataLoader
 from torch.optim import AdamW
 import torch.nn.functional as F
-from torch.utils.tensorboard import SummaryWriter
+# from torch.utils.tensorboard import SummaryWriter
 
 from dataset.hypersim import Hypersim
 from dataset.kitti import KITTI
@@ -53,7 +53,7 @@ def main():
     if rank == 0:
         all_args = {**vars(args), 'ngpus': world_size}
         logger.info('{}\n'.format(pprint.pformat(all_args)))
-        writer = SummaryWriter(args.save_path)
+        # writer = SummaryWriter(args.save_path)
     
     cudnn.enabled = True
     cudnn.benchmark = True

@@ -70,7 +70,7 @@ def main():
         try:
             runner.train()
         except KeyboardInterrupt:
-            logging.info('Training interrupted.')
+           logging.info('Training interrupted.')
     runner.eval(epoch=args.epoch or exp.get_last_checkpoint_epoch(), save_predictions=args.save_predictions)
     
     conf_threshold = 0.5

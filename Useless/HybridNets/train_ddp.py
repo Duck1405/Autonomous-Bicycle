@@ -141,8 +141,8 @@ def train(rank, opt):
         print('[Info] freezed segmentation head')
 
     writer = None
-    if rank == 0:
-        writer = SummaryWriter(opt.log_path + f'/{datetime.datetime.now().strftime("%Y%m%d-%H%M%S")}/')
+    # if rank == 0:
+    #     writer = SummaryWriter(opt.log_path + f'/{datetime.datetime.now().strftime("%Y%m%d-%H%M%S")}/')
 
     # wrap the model with loss function, to reduce the memory usage on gpu0 and speedup
     setup(rank, opt.num_gpus)
