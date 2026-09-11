@@ -258,9 +258,9 @@ class VideoInference():
         self.laneatt.reset_video_state()
         self.angle.reset_video_state()
     
-        lane_time = 0.0      # cumulative lane-model inference seconds
-        yolo_time = 0.0      # cumulative YOLO inference seconds
-        depth_time = 0.0     # cumulative depth-model inference seconds
+        lane_time = 0.0      
+        yolo_time = 0.0      
+        depth_time = 0.0     
 
         t1 = time.time()
         
@@ -286,7 +286,7 @@ class VideoInference():
             if (self.output_folder != None):
                out_stream.write(frame)
 
-            if (i) % max(1, math.floor(local_frame_local / 10)) == 0:
+            if (i) % max(1, math.floor(local_frame_local / 50)) == 0:
                 n = i + 1
                 
                 print(f"Frame: {i}/{local_frame_local}")
@@ -493,6 +493,8 @@ print(f"args.videos: {video_example}")
 print(f"args.frame_limit: {500}")
 print(f"args.output_dir: {output_folder}")
 print(f"args.yolo_conf: {0.7}")
+
+
 
 
 nms_thres = 50
