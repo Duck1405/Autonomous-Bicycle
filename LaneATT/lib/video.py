@@ -135,7 +135,7 @@ class VideoInference():
     
         return
     
-    def get_frame(self, frame, split="base", evaluation=None, yolo_results=None):
+    def get_frame(self, frame, split="new", evaluation=None, yolo_results=None):
 
         t0 = time.perf_counter()
         if evaluation is None:
@@ -163,6 +163,8 @@ class VideoInference():
             left_points, right_points, mid_points, synthesized = self.laneatt.get_ego_lanes(frame.shape[1], pts_all)
         elif split == "new":
             left_points, right_points, mid_points, synthesized = self.laneatt.get_ego_lanes2(frame.shape[1], pts_all)
+        else:
+            raise ValueError(f"Unknown split: {split!r}; expected base or new")
         # print(f"left_points: {left_points}")
         # print(f"right_points: {right_points}")
         # print(f"mid_points: {mid_points}")
@@ -288,7 +290,7 @@ class VideoInference():
                 t0 = time.perf_counter()
                 yolo_results = self.yolo.infer(frame)
                 yolo_time += time.perf_counter() - t0
-                frame = self.get_frame(frame, "base", evaluation, yolo_results)
+                frame = self.get_frame(frame, "new", evaluation, yolo_results)
                 frame = cv2.hconcat([base_frame, frame])
            
                 if (self.output_folder != None):

@@ -64,10 +64,7 @@ def main():
     
         
     runner = Runner(cfg, exp, device, view=args.view, resume=args.resume, deterministic=args.deterministic)
-    
 
-    
-    
     if args.mode == 'train':
         try:
             runner.train()
@@ -88,8 +85,6 @@ def main():
     path_video = VIDEO_DIR
     output_folder = OUTPUT_DIR
     runner.get_video_inference(conf_threshold = conf_threshold,  nms_thres = nms_thres, nms_topk = nms_topk, path_video = path_video, output_folder = output_folder)
-    
-
 
 if __name__ == '__main__':
     main()
