@@ -92,8 +92,8 @@ class Runner:
             self.exp.epoch_end_callback(epoch, max_epochs, model, optimizer, scheduler)
 
             # Validate
-            if (epoch + 1) % self.cfg['val_every'] == 0:
-                self.eval(epoch, on_val=True)
+            # if (epoch + 1) % self.cfg['val_every'] == 0:
+            self.eval(epoch, on_val=True)
         self.exp.train_end_callback()
 
     def eval(self, epoch, on_val=False, save_predictions=False):
