@@ -3,6 +3,8 @@ import re
 import json
 import logging
 import subprocess
+import math
+from pathlib import Path
 
 import torch
 from torch.utils.tensorboard import SummaryWriter
@@ -75,6 +77,25 @@ class Experiment:
                     last_epoch = epoch
 
         return last_epoch
+
+    def get_best_validation_epoch(self):
+        """Select the highest recorded validation F1 with an existing checkpoint.
+
+        Read persisted metrics so resumed runs include earlier validation epochs.
+        """
+        candidates = []
+        for path in Path(self.results_dirpath).glob('epoch_*/val_metrics.json'):
+            try:
+                epoch = int(path.parent.name.removeprefix('epoch_'))
+                score = float(json.loads(path.read_text())['F1'])
+            except (ValueError, KeyError, TypeError):
+                continue
+            if math.isfinite(score) and Path(self.get_checkpoint_path(epoch)).is_file():
+                candidates.append((score, epoch))
+        if not candidates:
+            return None
+        self.best_f1, self.best_epoch = max(candidates)
+        return self.best_epoch
 
     def get_checkpoint_path(self, epoch):
         return os.path.join(self.models_dirpath, 'model_{:04d}.pt'.format(epoch))

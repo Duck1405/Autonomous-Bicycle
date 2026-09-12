@@ -7,6 +7,7 @@ import torch
 import numpy as np
 from tqdm import tqdm, trange
 import time
+from pathlib import Path
 from lib.video import VideoInference
 
 
@@ -192,10 +193,16 @@ class Runner:
                                                  worker_init_fn=self._worker_init_fn_)
         return val_loader
     
-    def get_video_inference(self,conf_threshold,nms_thres, nms_topk, path_video, output_folder):
+    def get_video_inference(self,conf_threshold,nms_thres, nms_topk, path_video, output_folder, epoch=None):
+        path_video, output_folder = Path(path_video), Path(output_folder)
+        if epoch is None:
+            self.exp.get_best_validation_epoch()
         # Prefer the best-F1 checkpoint from this training session's validations;
         # fall back to the last checkpoint (e.g. training ran with no val passes).
-        if self.exp.best_epoch > 0:
+        if epoch is not None:
+            num = epoch
+            self.logger.info('Video inference with requested checkpoint: epoch %d', num)
+        elif self.exp.best_epoch > 0:
             num = self.exp.best_epoch
             self.logger.info('Video inference with best model: epoch %d (F1 %.4f)', num, self.exp.best_f1)
         else:
@@ -211,9 +218,8 @@ class Runner:
             self.logger.warning('No input videos found in %s', path_video)
             return
 
-        # video_output/<exp_name>/model_<NNNN>/ — same layout inference.py uses;
-        # VideoInference adds <video>/run<K>/ per video.
-        output_folder = output_folder / self.exp.name / f"model_{num:04d}"
+        # The caller supplies this experiment's results/video_inference folder.
+        output_folder = output_folder / f"model_{num:04d}"
         video = VideoInference(model_archiecture=self.cfg.get_model(), model_path=self.exp.get_checkpoint_path(num), frame_limit = 99999, video_path = None, view = True, output_folder = output_folder, device = self.device, conf_threshold = conf_threshold, nms_thres = nms_thres, nms_topk = nms_topk)
         for i in files: 
             video_test = str(i)

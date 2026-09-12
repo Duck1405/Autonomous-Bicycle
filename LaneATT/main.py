@@ -17,7 +17,7 @@ def parse_args():
     parser.add_argument("--exp_name", help="Experiment name", required=True)
     parser.add_argument("--cfg", help="Config file")
     parser.add_argument("--resume", action="store_true", help="Resume training")
-    parser.add_argument("--epoch", type=int, help="Epoch to test the model on")
+    parser.add_argument("--epoch", type=int, help="Explicit checkpoint epoch for evaluation/video inference")
     parser.add_argument("--cpu", action="store_true", help="Force CPU instead of GPU")
     parser.add_argument("--save_predictions", action="store_true", help="Save predictions to pickle file")
     parser.add_argument("--view", choices=["all", "mistakes"], help="Show predictions")
@@ -41,6 +41,7 @@ def parse_args():
 
 python main.py train --exp_name Testing --cfg /Users/amannindra/Projects/Auto/Autonomous-Bicycle/LaneATT/cfgs/laneatt_culane_resnet18_laptop.yml
 python main.py train --exp_name LaneATTresnet34Aug2Test --cfg /Users/amannindra/Projects/Auto/Autonomous-Bicycle/LaneATT/cfgs/laneatt_culane_resnet34_test.yml --epoch 1 --cpu 28 --view all
+python main.py train --exp_name LaneATTresnet34Final --cfg /Users/amannindra/Projects/Auto/Autonomous-Bicycle/LaneATT/cfgs/laneatt_culane_resnet34_new.yml --view all
 
 '''
 def main():
@@ -70,21 +71,29 @@ def main():
             runner.train()
         except KeyboardInterrupt:
            logging.info('Training interrupted.')
-    runner.eval(epoch=args.epoch or exp.get_last_checkpoint_epoch(), save_predictions=args.save_predictions)
+    if args.mode == 'test':
+        runner.eval(epoch=args.epoch or exp.get_last_checkpoint_epoch(), save_predictions=args.save_predictions)
     
     conf_threshold = 0.5
     nms_thres = 50
     nms_topk = 4
+    match_tolerance = 0.05
+    keep_threshold = 0.3
     
-    PROJECT_ROOT = Path(__file__).resolve().parent   # main.py lives at LaneATT/
-    VIDEO_DIR = PROJECT_ROOT / "video_input"          # folder; runner picks 1/2/3.mp4
-    OUTPUT_DIR = PROJECT_ROOT / "video_output"   # runner nests <model_arch>/epoch_<N>/<video>/run<K>/ inside
+    VIDEO_DIR = Path("/home/anindra/data/Autonomous-Bicycle/LaneATT/video_input")
+    OUTPUT_DIR = Path(exp.results_dirpath) / "video_inference"
     
     Path(OUTPUT_DIR).mkdir(parents=True, exist_ok=True)
     
     path_video = VIDEO_DIR
     output_folder = OUTPUT_DIR
-    runner.get_video_inference(conf_threshold = conf_threshold,  nms_thres = nms_thres, nms_topk = nms_topk, path_video = path_video, output_folder = output_folder)
+    # After training, always select by validation F1 rather than --epoch.
+    if args.mode == 'train' and exp.get_best_validation_epoch() is None:
+        last_epoch = exp.get_last_checkpoint_epoch()
+        if last_epoch < 1:
+            raise RuntimeError('No saved checkpoint is available for video inference')
+        runner.eval(last_epoch, on_val=True)
+    runner.get_video_inference(conf_threshold = conf_threshold,  nms_thres = nms_thres, nms_topk = nms_topk, path_video = path_video, output_folder = output_folder, epoch=args.epoch if args.mode == 'test' else None)
 
 if __name__ == '__main__':
     main()
