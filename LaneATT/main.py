@@ -41,7 +41,7 @@ def parse_args():
 
 python main.py train --exp_name Testing --cfg /Users/amannindra/Projects/Auto/Autonomous-Bicycle/LaneATT/cfgs/laneatt_culane_resnet18_laptop.yml
 python main.py train --exp_name LaneATTresnet34Aug2Test --cfg /Users/amannindra/Projects/Auto/Autonomous-Bicycle/LaneATT/cfgs/laneatt_culane_resnet34_test.yml --epoch 1 --cpu 28 --view all
-python main.py train --exp_name LaneATTresnet34Final --cfg /Users/amannindra/Projects/Auto/Autonomous-Bicycle/LaneATT/cfgs/laneatt_culane_resnet34_new.yml --view all
+python main.py train --exp_name LaneATTresnet34Final --cfg /Users/amannindra/Projects/Auto/Autonomous-Bicycle/LaneATT/cfgs/laneatt_culane_resnet34_new.yml
 
 '''
 def main():

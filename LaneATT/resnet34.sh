@@ -19,4 +19,4 @@ echo "=== GPU preflight on $(hostname) ==="
 nvidia-smi || exit 1
 python -c "import torch; assert torch.cuda.is_available(), 'torch cannot initialize CUDA'; print('CUDA OK:', torch.cuda.get_device_name(0))" || exit 1
 
-python main.py train --exp_name LaneATTresnet34Aug2Test --cfg /home/anindra/data/Autonomous-Bicycle/LaneATT/cfgs/laneatt_culane_resnet34_test.yml  --view all
+python main.py train --exp_name LaneATTresnet34Final --cfg /Users/amannindra/Projects/Auto/Autonomous-Bicycle/LaneATT/cfgs/laneatt_culane_resnet34_new.yml
