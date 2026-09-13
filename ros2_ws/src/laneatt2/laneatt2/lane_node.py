@@ -137,7 +137,7 @@ class LaneATTNode(Node):
             ))
         return lanes
     
-    def decode(self, raw, conf_threshold=0.3, nms_thres=50.0, nms_topk=2, img_w=640):
+    def decode(self, raw, conf_threshold=0.5, nms_thres=50.0, nms_topk=4, img_w=640):
         """Raw (1,1000,77) engine output -> list of Lane objects.
 
         Named after the notebook model's decode; this TensorRT version also
@@ -173,7 +173,7 @@ class LaneATTNode(Node):
         frame = np.ascontiguousarray(frame.transpose(2, 0, 1)[None])
         outputs = self.trt_engine.infer(frame)
         raw = next(iter(outputs.values()))
-        return self.decode(raw)
+        return self.decode(raw, )
 
     @staticmethod
     def _bottom_x(lane):
