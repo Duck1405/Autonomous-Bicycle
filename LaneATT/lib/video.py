@@ -305,7 +305,6 @@ class VideoInference():
                                         f"LaneATT: {lane_time:.1f}s ({1000 * lane_time / n:.0f} ms/frame), "
                                         f"YOLO: {yolo_time:.1f}s ({1000 * yolo_time / n:.0f} ms/frame), "
                                         f"Depth: {depth_time:.1f}s ({1000 * depth_time / n:.0f} ms/frame)")
-
                 i += 1
         finally:
             cap.release()
