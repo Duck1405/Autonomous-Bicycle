@@ -1,22 +1,4 @@
-"""Verify the exported ONNX depth model matches the PyTorch model.
 
-Two checks, from strict to end-to-end:
-
-  1. GRAPH FIDELITY  — f17
-     model and to onnxruntime; the depth tensors must match to ~1e-5. This
-     proves the ONNX graph *is* the model, independent of any preprocessing.
-
-  2. END-TO-END      — run the full transformers pipeline (DepthInference) and
-     the ONNX path (DepthInferenceONNX) on the same real frame and compare the
-     0-255 depth maps. These differ slightly on purpose: the pipeline resizes
-     keep-aspect-ratio while the ONNX path uses a fixed 518x518 square, so we
-     report correlation / mean abs error rather than exact equality, and save a
-     side-by-side image.
-
-Usage (from the LaneATT folder):
-    python test_depth_onnx.py
-    python test_depth_onnx.py --video video_input/1.mp4 --frame 100
-"""
 import argparse
 from pathlib import Path
 
@@ -40,7 +22,7 @@ def get_frame(video, frame_idx):
     cap.release()
     if not ok:
         raise RuntimeError(f"could not read frame {frame_idx} from {video}")
-    return frame  # BGR
+    return frame  #
 
 
 def main():
@@ -56,7 +38,6 @@ def main():
 
     onnx = DepthInferenceONNX(onnx_path=args.onnx, providers=["CPUExecutionProvider"])
 
-    # ---- 1. GRAPH FIDELITY: identical pixel_values -> torch vs onnxruntime ----
     pix = onnx._preprocess(frame)  # (1,3,518,518) float32, exactly what ORT sees
     torch_model = AutoModelForDepthEstimation.from_pretrained("depth_model").eval()
     with torch.no_grad():
@@ -74,7 +55,6 @@ def main():
     print(f"[2] end-to-end (0-255 depth): corr = {corr:.4f}, "
           f"mean|Δ| = {mae:.2f} / 255")
 
-    # Side-by-side: pipeline | onnx | abs diff, all INFERNO-colored.
     def color(d):
         return cv2.applyColorMap(d.astype(np.uint8), cv2.COLORMAP_INFERNO)
     diff = np.abs(pipe_depth - onnx_depth)

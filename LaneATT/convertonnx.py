@@ -11,6 +11,7 @@ softmax -> conf threshold -> nms_pytorch -> model.decode in Python.
 Input must match frame_eval's preprocessing: cv2.resize to 640x360, to_tensor.
 """
 import argparse
+import numpy as np
 import torch
 import onnxruntime as ort
 from lib.config import Config
@@ -30,6 +31,8 @@ def main():
                     help="experiment config.yaml (defines the architecture)")
     ap.add_argument("--out", default=DEFAULT_OUT,
                     help="output .onnx path")
+    ap.add_argument("--verify-only", action="store_true",
+                    help="verify the existing --out model against the checkpoint without exporting")
     args = ap.parse_args()
     MODEL, YAML_PATH, OUT = args.model, args.yaml, args.out
 
@@ -40,24 +43,28 @@ def main():
 
     model.nms = lambda proposals, *args, **kwargs: proposals
 
-    x = torch.randn(1, 3, 360, 640)
+    x = torch.rand(1, 3, 360, 640, generator=torch.Generator().manual_seed(0))
     
     
-    dir_path = Path(OUT).parent
-    print(f"Path: {dir_path}")
-    dir_path.mkdir(parents=True, exist_ok=True)
-    torch.onnx.export(model, (x,), OUT, input_names=["image"],
-                      output_names=["proposals"], opset_version=17)
-    print(f"wrote {OUT}")
+    if not args.verify_only:
+        dir_path = Path(OUT).parent
+        dir_path.mkdir(parents=True, exist_ok=True)
+        torch.onnx.export(model, (x,), OUT, input_names=["image"],
+                          output_names=["proposals"], opset_version=17)
+        print(f"wrote {OUT}")
 
     # Sanity check: onnxruntime output must match torch on the same input.
     
-    # with torch.no_grad():
-    #     torch_out = model(x)
-    # sess = ort.InferenceSession(OUT, providers=["CPUExecutionProvider"])
-    # (ort_out,) = sess.run(None, {"image": x.numpy()})
-    # diff = (torch_out - torch.from_numpy(ort_out)).abs().max().item()
-    # print(f"output shape: {ort_out.shape}, max |torch - ort| = {diff:.2e}")
+    with torch.no_grad():
+        torch_out = model(x).numpy()
+    sess = ort.InferenceSession(OUT, providers=["CPUExecutionProvider"])
+    (ort_out,) = sess.run(None, {"image": x.numpy()})
+    if not np.isfinite(torch_out).all() or not np.isfinite(ort_out).all():
+        raise RuntimeError("Non-finite values in PyTorch or ONNX Runtime output")
+    np.testing.assert_allclose(ort_out, torch_out, rtol=1e-4, atol=1e-3)
+    diff = np.abs(torch_out - ort_out).max()
+    print(f"Verified with ONNX Runtime {ort.__version__}: {sess.get_providers()}")
+    print(f"output shape: {ort_out.shape}, max |torch - ort| = {diff:.2e}")
 
 
 if __name__ == "__main__":
