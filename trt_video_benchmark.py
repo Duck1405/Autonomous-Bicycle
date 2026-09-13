@@ -28,10 +28,11 @@ import time
 from pathlib import Path
 
 import cv2
+import numpy as np
 import tensorrt as trt
 
 from jetson_tools.postprocess import (LaneHysteresis, depth_colorize, draw_boxes,  # noqa: E402
-                         draw_lanes, laneatt_decode, yolo_decode)
+                         lanes_to_px, laneatt_decode, yolo_decode)
 from jetson_tools.preprocess import pre_depth, pre_laneatt, pre_yolo_meta  # noqa: E402
 from jetson_tools.trt_runner import CudaRT, TrtEngine  # noqa: E402
 
@@ -99,8 +100,7 @@ def parse_args():
                         help="fourcc for --render; avc1 has no encoder on the "
                              "Jetson, MJPG with a .avi path is the fallback")
     parser.add_argument("--no-hysteresis", action="store_true",
-                        help="draw every lane the model NMS returns instead of "
-                             "the two-threshold filtered set")
+                        help="skip two-threshold hysteresis before selecting the ego lanes")
     parser.add_argument("--json", type=Path, default="Benchmark",
                         help="also write the results here as JSON")
     return parser.parse_args()
@@ -112,6 +112,167 @@ def fourcc(code):
     return fn(*code)
 
 
+# NumPy-only port of LaneATTInference.get_ego_lanes2, used by video.py
+# with split="new". Keep selection math identical without importing torch.
+def get_ego_lanes2(img_w, predictions):
+    if predictions is None or len(predictions) < 2:
+        return None, None, None, None
+
+
+    mid_point = img_w / 2
+    # print(f"predictions: {predictions}")
+    length = len(predictions)
+    # print(f"length: {length}")
+    y_min = np.zeros(length)
+    y_max = np.zeros(length)
+
+    for i, lane in enumerate(predictions):
+
+        if lane is None or len(lane) < 3:
+            return None, None, None, None
+
+        y = lane[:, 1]
+
+        y_min[i] = np.min(y)
+        y_max[i] = np.max(y)
+
+    highest_min = np.max(y_min)
+    lowest_max = np.min(y_max)
+
+
+    if highest_min >= lowest_max:
+        return None, None, None, None
+
+
+    y_values = np.linspace(
+        highest_min,
+        lowest_max,
+        100
+    )
+
+
+    left_candidates = []
+    right_candidates = []
+
+    for lane_index, lane in enumerate(predictions):
+
+        x = lane[:, 0]
+        y = lane[:, 1]
+        mask = (
+            (y >= highest_min) &
+            (y <= lowest_max)
+        )
+
+        filtered_lane = lane[mask]
+
+
+        if len(filtered_lane) < 3:
+            continue
+
+
+        filtered_x = filtered_lane[:, 0]
+        filtered_y = filtered_lane[:, 1]
+
+
+        # x = f(y)
+        coefficients = np.polyfit(
+            filtered_y,
+            filtered_x,
+            2
+        )
+        x_values = np.polyval(
+            coefficients,
+            y_values
+        )
+
+
+        resampled_lane = np.column_stack((
+            x_values,
+            y_values
+        ))
+
+        x_difference = (
+            x_values - mid_point
+        )
+
+
+        signed_average = np.mean(
+            x_difference
+        )
+        average_distance = np.mean(
+            np.abs(x_difference)
+        )
+
+
+        candidate = {
+            "index": lane_index,
+            "distance": average_distance,
+            "signed_average": signed_average,
+            "points": resampled_lane,
+            "coefficients": coefficients
+        }
+
+
+        if signed_average < 0:
+            left_candidates.append(candidate)
+
+        else:
+            right_candidates.append(candidate)
+
+
+    if not left_candidates or not right_candidates:
+        return None, None, None, None
+
+
+
+    closest_left = min(
+        left_candidates,
+        key=lambda lane: lane["distance"]
+    )
+
+    closest_right = min(
+        right_candidates,
+        key=lambda lane: lane["distance"]
+    )
+
+
+    left_points = closest_left["points"]
+    right_points = closest_right["points"]
+
+    middle_x = (
+        left_points[:, 0]
+        + right_points[:, 0]
+    ) / 2
+
+
+    mid_points = np.column_stack((
+        middle_x,
+        y_values
+    ))
+
+
+    synthesized = None
+
+    left_points = np.round(
+        left_points
+    ).astype(int)
+
+    right_points = np.round(
+        right_points
+    ).astype(int)
+
+    mid_points = np.round(
+        mid_points
+    ).astype(int)
+
+
+    return (
+        left_points,
+        right_points,
+        mid_points,
+        synthesized
+    )
+
 def compose(frame, raw, hysteresis):
     """Engine outputs for one frame -> the image to write.
 
@@ -121,8 +282,20 @@ def compose(frame, raw, hysteresis):
     h, w = frame.shape[:2]
     canvas = depth_colorize(raw["depth"][0], w, h) if "depth" in raw else frame
     if "laneatt" in raw:
-        lanes = laneatt_decode(raw["laneatt"][0])
-        draw_lanes(canvas, hysteresis(lanes) if hysteresis else lanes)
+        lanes = laneatt_decode(raw["laneatt"][0], conf_threshold=0.3,
+                               nms_thres=50.0, nms_topk=4)
+        lanes = hysteresis(lanes) if hysteresis else lanes
+        left_points, right_points, mid_points, _ = get_ego_lanes2(
+            w, lanes_to_px(lanes, w, h))
+        # Match video.py's split="new" overlay: blue left, red right,
+        # and red midpoint circles. No pair means no ego-lane overlay.
+        if left_points is not None and right_points is not None and mid_points is not None:
+            for points, color in ((left_points, (255, 0, 0)),
+                                  (right_points, (0, 0, 255))):
+                for p0, p1 in zip(points[:-1], points[1:]):
+                    cv2.line(canvas, tuple(p0), tuple(p1), color, 4)
+            for x, y in mid_points:
+                cv2.circle(canvas, (int(x), int(y)), 4, (0, 0, 255), -1)
     if "yolo" in raw:
         out, (r, dx, dy) = raw["yolo"]
         draw_boxes(canvas, yolo_decode(out, r, dx, dy))
