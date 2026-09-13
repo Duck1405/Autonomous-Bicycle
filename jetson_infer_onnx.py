@@ -43,7 +43,6 @@ def make_session(model_path):
     print("providers in use:", session.get_providers())
     return session
 
-
 def letterbox(img, size):
     """Resize keeping aspect ratio, pad to size x size with gray. Returns
     (canvas, scale, x_offset, y_offset) so boxes can be mapped back."""

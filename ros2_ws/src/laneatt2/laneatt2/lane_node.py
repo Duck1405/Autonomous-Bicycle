@@ -13,7 +13,7 @@ from .lane import Lane
 class LaneATTNode(Node):
     def __init__(self):
         super().__init__('laneatt_node')
-        self.engine = "/home/mlc/aman/Autonomous-Bicycle/LaneATT/onnxmodels/LaneATTresnet34Aug2/models/LaneATT_fb16.engine"
+        self.engine = "/home/mlc/aman/Autonomous-Bicycle/LaneATT/newLaneATTresnet34Sep10/model_0013_fp16.engine"
         self.warmup = 50
         self.CudaRT = CudaRT()
         self.trt_engine = TrtEngine(self.engine, self.CudaRT)
