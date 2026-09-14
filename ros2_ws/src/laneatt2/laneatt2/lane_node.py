@@ -138,7 +138,7 @@ class LaneATTNode(Node):
             ))
         return lanes
     
-    def decode(self, raw, conf_threshold=0.5, nms_thres=50.0, nms_topk=4, img_w=640):
+    def decode(self, raw, conf_threshold=0.3, nms_thres=50.0, nms_topk=4, img_w=640):
         """Raw (1,1000,77) engine output -> list of Lane objects.
 
         Named after the notebook model's decode; this TensorRT version also
@@ -162,7 +162,7 @@ class LaneATTNode(Node):
         p[:, 4] = np.round(p[:, 4])
         return self.proposals_to_pred(p, img_w=img_w)
 
-    def frame_eval(self, frame):
+    def frame_eval(self, frame, conf_threshold = 0.3 , nms_thres = 50, nms_topk =4):
         """Preprocess one BGR frame, run TensorRT, and return Lane objects.
 
         Matches the notebook's frame_eval entry point: resize to 640x360,
@@ -174,7 +174,7 @@ class LaneATTNode(Node):
         frame = np.ascontiguousarray(frame.transpose(2, 0, 1)[None])
         outputs = self.trt_engine.infer(frame)
         raw = next(iter(outputs.values()))
-        return self.decode(raw, )
+        return self.decode(raw, conf_threshold = conf_threshold, nms_thres = nms_thres, nms_topk = nms_topk)
 
     @staticmethod
     def _bottom_x(lane):
@@ -247,25 +247,17 @@ class LaneATTNode(Node):
         right_candidates = []
 
         for lane_index, lane in enumerate(predictions):
-
             x = lane[:, 0]
             y = lane[:, 1]
             mask = (
                 (y >= highest_min) &
                 (y <= lowest_max)
             )
-
             filtered_lane = lane[mask]
-
-
             if len(filtered_lane) < 3:
                 continue
-
-
             filtered_x = filtered_lane[:, 0]
             filtered_y = filtered_lane[:, 1]
-
-
             # x = f(y)
             coefficients = np.polyfit(
                 filtered_y,
@@ -276,26 +268,19 @@ class LaneATTNode(Node):
                 coefficients,
                 y_values
             )
-
-
             resampled_lane = np.column_stack((
                 x_values,
                 y_values
-            ))
-            
+            ))     
             x_difference = (
                 x_values - mid_point
             )
-
-
             signed_average = np.mean(
                 x_difference
             )
             average_distance = np.mean(
                 np.abs(x_difference)
             )
-
-
             candidate = {
                 "index": lane_index,
                 "distance": average_distance,
@@ -303,61 +288,41 @@ class LaneATTNode(Node):
                 "points": resampled_lane,
                 "coefficients": coefficients
             }
-
-
             if signed_average < 0:
                 left_candidates.append(candidate)
 
             else:
                 right_candidates.append(candidate)
-
-
         if not left_candidates or not right_candidates:
             return None, None, None, None
-
-
-        
         closest_left = min(
             left_candidates,
             key=lambda lane: lane["distance"]
         )
-
         closest_right = min(
             right_candidates,
             key=lambda lane: lane["distance"]
         )
-
-
         left_points = closest_left["points"]
         right_points = closest_right["points"]
-
         middle_x = (
             left_points[:, 0]
             + right_points[:, 0]
         ) / 2
-
-
         mid_points = np.column_stack((
             middle_x,
             y_values
         ))
-
-
         synthesized = None
-
         left_points = np.round(
             left_points
         ).astype(int)
-
         right_points = np.round(
             right_points
         ).astype(int)
-
         mid_points = np.round(
             mid_points
         ).astype(int)
-
-
         return (
             left_points,
             right_points,
@@ -478,7 +443,7 @@ class LaneATTNode(Node):
         height = frame.shape[0]
         
         t2 = time.perf_counter()
-        evaluation = self.frame_eval(frame)
+        evaluation = self.frame_eval(frame, conf_threshold = 0.3, nms_thres = 50, nms_topk =4)
         t3 = time.perf_counter()
         self.get_logger().info(f'Image inference and decode took {t3 - t2:.4f} seconds')
         self.get_logger().info(f'Detected {len(evaluation)} lanes after confidence filtering and NMS')
