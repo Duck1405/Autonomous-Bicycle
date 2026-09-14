@@ -27,7 +27,7 @@ class Yolov11Node(Node):
 
         self.get_logger().info('Yolov11 node started')
     
-    def yolo_decode(self, raw, r, dx, dy, conf_threshold=0.35):
+    def yolo_decode(self, raw, r, dx, dy, conf_threshold=0.7):
         """(1,300,6) engine output -> [(p1, p2, conf, cls)] in original frame coords.
 
         NMS is already inside the graph; rows are [x1,y1,x2,y2,conf,cls] in

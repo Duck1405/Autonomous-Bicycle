@@ -6,6 +6,7 @@ from cv_bridge import CvBridge
 import cv2
 import numpy as np
 import time
+import time
 
 from .trt_runner import CudaRT, TrtEngine
 from .lane import Lane
@@ -467,12 +468,25 @@ class LaneATTNode(Node):
         return msg
 
     def image_callback(self, msg):
+        t0 = time.perf_counter()
         frame = self.bridge.imgmsg_to_cv2(msg, desired_encoding='bgr8')
+        t1 = time.perf_counter()
+        self.get_logger().info(f'Image conversion took {t1 - t0:.4f} seconds')
+        self.get_logger().info(f'Image received, type: {type(frame)}, shape: {frame.shape}')
         
         width = frame.shape[1]
         height = frame.shape[0]
         
+        t2 = time.perf_counter()
         evaluation = self.frame_eval(frame)
+        t3 = time.perf_counter()
+        self.get_logger().info(f'Image inference and decode took {t3 - t2:.4f} seconds')
+        self.get_logger().info(f'Detected {len(evaluation)} lanes after confidence filtering and NMS')
+        for i, lane in enumerate(evaluation, start=1):
+            self.get_logger().info(
+                f'  Lane {i}: confidence={float(lane.metadata["conf"]):.2f}, '
+                f'points={len(lane.points)}, normalized (x, y)={lane.points.tolist()}'
+            )
         
         pts_all = self.lanes_to_px(evaluation, width, height)
         left_points, right_points, mid_points, synthesized = self.get_ego_lanes2(width, pts_all)
@@ -484,6 +498,12 @@ class LaneATTNode(Node):
         self.left_pub.publish(self._to_msg(left))
         self.right_pub.publish(self._to_msg(right))
         self.mid_pub.publish(self._to_msg(mid))
+        for name, lane in (('left', left), ('right', right), ('mid', mid)):
+            points = lane.points.tolist() if lane is not None else []
+            self.get_logger().info(f'Published {name} lane: normalized (x, y)={points}')
+        elapsed = time.perf_counter() - t0
+        fps = 1.0 / elapsed if elapsed > 0 else 0.0
+        self.get_logger().info(f'Total callback time: {elapsed:.4f} seconds. FPS: {fps:.2f}')
 
 
 def main(args=None):
