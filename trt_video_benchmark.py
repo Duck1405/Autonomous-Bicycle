@@ -31,14 +31,14 @@ import cv2
 from types import SimpleNamespace
 import tensorrt as trt
 
-from jetson_tools.postprocess import (LaneHysteresis, depth_colorize, draw_boxes,  # noqa: E402
+from jetson_tools.postprocess import (LaneHysteresis, depth_colorize,  # noqa: E402
                          laneatt_decode, yolo_decode)
 from jetson_tools.preprocess import pre_depth, pre_laneatt, pre_yolo_meta  # noqa: E402
 from jetson_tools.trt_runner import CudaRT, TrtEngine  # noqa: E402
 
 # Use the same VideoInference as LaneATT/inference.py, regardless of cwd.
 sys.path.insert(0, str(Path(__file__).resolve().parent / "LaneATT"))
-from lib.video import VideoInference
+from lib.video import DecodedYoloDrawing, VideoInference
 
 LABELS = ("laneatt", "yolo", "depth")
 
@@ -110,14 +110,6 @@ def parse_args():
     return parser.parse_args()
 
 
-class TensorRTYoloDrawing:
-    """Adapt already-decoded TensorRT boxes to VideoInference's drawing interface."""
-
-    def draw(self, frame, results):
-        draw_boxes(frame, results)
-        return frame
-
-
 def main():
     args = parse_args()
     if args.frames <= 0 or args.start_frame < 0 or args.warmup < 0:
@@ -155,7 +147,7 @@ def main():
                                   device="TensorRT", model_path=args.laneatt_engine,
                                   initialize_models=False)
         if any(label == "yolo" for label, _, _ in models):
-            pipeline.yolo = TensorRTYoloDrawing()
+            pipeline.yolo = DecodedYoloDrawing()
         hysteresis = None if args.no_hysteresis else LaneHysteresis()
         t_pre = {label: 0.0 for label, _, _ in models}
         t_eng = dict(t_pre)

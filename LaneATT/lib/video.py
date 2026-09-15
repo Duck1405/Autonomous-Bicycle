@@ -10,6 +10,24 @@ from .ego_lanes import get_ego_lanes2
 from .angle import Angle
 import numpy as np
 import sys
+
+
+class DecodedYoloDrawing:
+    """Draw decoded ONNX/TensorRT detections without importing Ultralytics."""
+
+    names = ("person", "vehicle", "traffic-light", "stop-sign")
+    colors = ((0, 255, 0), (255, 160, 0), (0, 215, 255), (0, 0, 255))
+
+    def draw(self, frame, results):
+        for p1, p2, conf, cls in results:
+            color = self.colors[cls % len(self.colors)]
+            name = self.names[cls] if 0 <= cls < len(self.names) else str(cls)
+            cv2.rectangle(frame, p1, p2, color, 2)
+            cv2.putText(frame, f"{name} {conf:.2f}", (p1[0], max(p1[1] - 5, 12)),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.55, color, 2)
+        return frame
+
+
 class VideoInference():
     """Hub of the pipeline: owns the video loop, run folders, logging and drawing.
     model_type picks the lane model: "laneATT" -> LaneATT.py (LaneATTInference),
