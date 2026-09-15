@@ -175,7 +175,8 @@ class BDD100K(LaneDatasetLoader):
                 handle.write(json.dumps(record) + '\n')
         precision = tp / (tp + fp) if tp + fp else 0.
         recall = tp / (tp + fn) if tp + fn else 0.
-        return {'Precision': precision, 'Recall': recall,
+        return {'TP': int(tp), 'FP': int(fp), 'FN': int(fn),
+                'Precision': precision, 'Recall': recall,
                 'F1': 2*tp / (2*tp + fp + fn) if 2*tp + fp + fn else 0.}
 
 

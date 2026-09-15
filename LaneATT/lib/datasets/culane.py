@@ -89,7 +89,8 @@ class CULane(LaneDatasetLoader):
         self.annotations = []
         with open(self.list, 'r') as list_file:
             files = [line.strip() for line in list_file if line.strip()]
-        for file in files:
+        for file in tqdm(files, desc=f'Indexing CULane {self.split} annotations',
+                         unit='image', dynamic_ncols=True):
             file = file[1:] if file.startswith('/') else file  # strip leading `/` if present
             self.annotations.append({'path': os.path.join(self.root, file), 'org_path': file})
         self.logger.info('%d annotations indexed.', len(self.annotations))
@@ -111,6 +112,8 @@ class CULane(LaneDatasetLoader):
         return '\n'.join(out)
 
     def eval_predictions(self, predictions, output_basedir):
+        if len(predictions) != len(self):
+            raise ValueError('Expected one prediction per dataset image')
         print('Generating prediction output...')
         for idx, pred in enumerate(tqdm(predictions)):
             output_dir = os.path.join(output_basedir, os.path.dirname(self.annotations[idx]['org_path']))
