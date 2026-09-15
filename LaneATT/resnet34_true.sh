@@ -1,0 +1,25 @@
+#!/bin/bash
+#SBATCH --job-name=LaneATTresnet34
+#SBATCH --partition=cenvalarc.gpu
+#SBATCH --gres=gpu:l40s:1
+#SBATCH --cpus-per-task=32
+#SBATCH --mem=64G
+#SBATCH --time=2-00:00:00
+#SBATCH --output=logs/%x-%j.out
+#SBATCH --error=logs/%x-%j.err
+
+module load anaconda3
+source ~/.bashrc
+source activate /home/anindra/data/conda/envs/LaneNet310
+
+# GPU preflight: fail fast (job -> FAILED) if this node can't give us CUDA,
+# e.g. the broken MPS daemon (CUDA error 805) that killed jobs 170777/170778.
+unset CUDA_MPS_PIPE_DIRECTORY CUDA_MPS_LOG_DIRECTORY
+echo "=== GPU preflight on $(hostname) ==="
+nvidia-smi || exit 1
+python -c "import torch; assert torch.cuda.is_available(), 'torch cannot initialize CUDA'; print('CUDA OK:', torch.cuda.get_device_name(0))" || exit 1
+
+# python main.py train --exp_name LaneATTresnet34Final --cfg /cfgs/laneatt_culane_resnet34_new.yml
+python main.py train --exp_name LaneATTresnet34Bdd100k_False --cfg /cfgs/laneatt_bdd100k_resnet34_true.yml # (LaneNet310) [anindra@gnode021 LaneATT]$ sbatch resnet34.sh Submitted batch job 340868 FALSE
+# python main.py train --exp_name LaneATTresnet34Bdd100k_True --cfg /cfgs/laneatt_bdd100k_resnet34.yml 
+
