@@ -304,6 +304,8 @@ def compose(frame, raw, hysteresis):
 
 def main():
     args = parse_args()
+    if args.frames <= 0 or args.start_frame < 0:
+        raise SystemExit("--frames must be positive and --start-frame must be non-negative")
     if args.no_render:
         args.render = None
     wanted = [m.strip() for m in args.models.split(",") if m.strip()]
@@ -392,11 +394,14 @@ def main():
           f"timing {args.frames} frames from frame {args.start_frame} "
           f"after {args.warmup} warmup")
 
-    available = total_frames - args.start_frame
-    if args.frames > available:
-        print(f"WARNING: requested {args.frames} frames, but video only has {available}. "
-              f"Will process {available} frames instead.")
-        args.frames = available
+    if total_frames > 0:
+        available = max(0, total_frames - args.start_frame)
+        if args.frames > available:
+            print(f"WARNING: requested {args.frames} frames, but video only has {available}. "
+                  f"Will process {available} frames instead.")
+            args.frames = available
+    else:
+        print(f"Frame count unavailable; reading up to {args.frames} frames or end of video.")
     
     print(f"Models used: {models}")
     
@@ -433,6 +438,11 @@ def main():
     cap.release()
     if writer is not None:
         writer.release()
+
+    if done == 0:
+        for _, eng, _ in models:
+            eng.close()
+        raise SystemExit(f"No frames processed from {args.video} at frame {args.start_frame}")
 
     def ms(s):
         return 1000.0 * s / max(done, 1)
