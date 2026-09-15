@@ -10,6 +10,7 @@ from scipy.interpolate import InterpolatedUnivariateSpline
 from lib.lane import Lane
 
 from .culane import CULane
+from .bdd100k import BDD100K
 from .tusimple import TuSimple
 from .llamas import LLAMAS
 from .nolabel_dataset import NoLabelDataset
@@ -36,6 +37,8 @@ class LaneDataset(Dataset):
             self.dataset = TuSimple(**kwargs)
         elif dataset == 'culane':
             self.dataset = CULane(**kwargs)
+        elif dataset == 'bdd100k':
+            self.dataset = BDD100K(**kwargs)
         elif dataset == 'llamas':
             self.dataset = LLAMAS(**kwargs)
         elif dataset == 'nolabel_dataset':
