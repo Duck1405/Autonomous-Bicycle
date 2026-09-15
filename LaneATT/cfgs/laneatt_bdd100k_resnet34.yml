@@ -15,7 +15,7 @@ model:
     img_h: &img_h 360
     img_w: &img_w 640
 batch_size: 16
-epochs: 1
+epochs: 20
 loss_parameters: {}
 train_parameters:
   conf_threshold:
