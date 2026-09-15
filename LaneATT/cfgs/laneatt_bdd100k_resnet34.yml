@@ -8,7 +8,7 @@ model:
   model_id: LaneATTresnet34
   parameters:
     backbone: resnet34
-    multilabel: false  # All seven BDD lane categories except crosswalk; plus solid/dashed style.
+    multilabel: true  # All seven BDD lane categories except crosswalk; plus solid/dashed style.
     S: &S 72
     topk_anchors: 1000
     anchors_freq_path: 'data/culane_anchors_freq.pt'
