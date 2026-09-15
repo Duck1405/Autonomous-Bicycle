@@ -8,6 +8,7 @@ from torch.utils.data.dataset import Dataset
 from scipy.interpolate import InterpolatedUnivariateSpline
 
 from lib.lane import Lane
+from lib.lane_attributes import NUM_ATTRIBUTES
 
 from .culane import CULane
 from .bdd100k import BDD100K
@@ -31,14 +32,16 @@ class LaneDataset(Dataset):
                  img_size=(360, 640),
                  aug_chance=1.,
                  max_samples=None,
+                 multilabel=False,
                  **kwargs):
         super(LaneDataset, self).__init__()
+        self.multilabel = multilabel
         if dataset == 'tusimple':
             self.dataset = TuSimple(**kwargs)
         elif dataset == 'culane':
             self.dataset = CULane(**kwargs)
         elif dataset == 'bdd100k':
-            self.dataset = BDD100K(**kwargs)
+            self.dataset = BDD100K(multilabel=multilabel, **kwargs)
         elif dataset == 'llamas':
             self.dataset = LLAMAS(**kwargs)
         elif dataset == 'nolabel_dataset':
@@ -112,6 +115,8 @@ class LaneDataset(Dataset):
             img_w, img_h = img_wh
 
         old_lanes = anno['lanes']
+        attributes = anno.get('lane_attributes', [np.full(NUM_ATTRIBUTES, -1)] * len(old_lanes))
+        attributes = [a for lane, a in zip(old_lanes, attributes) if len(lane) > 1]
 
         # removing lanes with less than 2 points
         old_lanes = filter(lambda x: len(x) > 1, old_lanes)
@@ -123,11 +128,13 @@ class LaneDataset(Dataset):
         old_lanes = [[[x * self.img_w / float(img_w), y * self.img_h / float(img_h)] for x, y in lane]
                      for lane in old_lanes]
         # create tranformed annotations
-        lanes = np.ones((self.dataset.max_lanes, 2 + 1 + 1 + 1 + self.n_offsets),
+        lanes = np.ones((self.dataset.max_lanes, 2 + 1 + 1 + 1 + self.n_offsets + (NUM_ATTRIBUTES if self.multilabel else 0)),
                         dtype=np.float32) * -1e5  # 2 scores, 1 start_y, 1 start_x, 1 length, S+1 coordinates
         # lanes are invalid by default
         lanes[:, 0] = 1
         lanes[:, 1] = 0
+        if self.multilabel:
+            lanes[:, 5 + self.n_offsets:] = -1
         for lane_idx, lane in enumerate(old_lanes):
             try:
                 xs_outside_image, xs_inside_image = self.sample_lane(lane, self.offsets_ys)
@@ -136,6 +143,8 @@ class LaneDataset(Dataset):
             if len(xs_inside_image) == 0:
                 continue
             all_xs = np.hstack((xs_outside_image, xs_inside_image))
+            if self.multilabel:
+                lanes[lane_idx, 5 + self.n_offsets:] = attributes[lane_idx]
             lanes[lane_idx, 0] = 0
             lanes[lane_idx, 1] = 1
             lanes[lane_idx, 2] = len(xs_outside_image) / self.n_strips
@@ -181,7 +190,7 @@ class LaneDataset(Dataset):
         for l in label:
             if l[1] == 0:
                 continue
-            xs = l[5:] / self.img_w
+            xs = l[5:5 + self.n_offsets] / self.img_w
             ys = self.offsets_ys / self.img_h
             start = int(round(l[2] * self.n_strips))
             length = int(round(l[4]))
@@ -296,7 +305,7 @@ class LaneDataset(Dataset):
         for (x, y), lane_idx in zip(keypoints, lane_ids):
             lanes[int(lane_idx)].append((x, y))
 
-        return [np.array(lane) for lane in lanes if len(lane) > 0]
+        return [np.array(lane) for lane in lanes]  # preserve lane identity through cropping
 
     def __getitem__(self, idx):
         item = self.dataset[idx]
@@ -308,6 +317,8 @@ class LaneDataset(Dataset):
             img = transformed['image']
             lanes = self.keypoints_to_lanes(transformed['keypoints'], transformed['lane_ids'], len(org_lanes))
             new_anno = {'path': item['path'], 'lanes': lanes}
+            if 'lane_attributes' in item:
+                new_anno['lane_attributes'] = item['lane_attributes']
             try:
                 label = self.transform_annotation(new_anno, img_wh=(self.img_w, self.img_h))['label']
                 break

@@ -11,15 +11,17 @@ from pathlib import Path
 import numpy as np
 
 from .lane_dataset_loader import LaneDatasetLoader
+from lib.lane_attributes import encode_attributes
 
 
 class BDD100K(LaneDatasetLoader):
     def __init__(self, max_lanes=None, split='train', root=None,
-                 annotations_root=None, official_metric=True):
+                 annotations_root=None, official_metric=True, multilabel=False):
         if root is None:
             raise ValueError('Please specify the BDD100K root directory')
         if split not in ('train', 'val', 'test'):
             raise ValueError('BDD100K split must be train, val, or test')
+        self.multilabel = multilabel
         self.split = split
         root = Path(root)
         self.root = root / '100k_images' if (root / '100k_images').is_dir() else root
@@ -65,15 +67,18 @@ class BDD100K(LaneDatasetLoader):
             points.extend(map(tuple, samples))
         return points
 
-    def load_annotation(self, annotation_path):
+    def load_annotation(self, annotation_path, with_attributes=False):
         with open(annotation_path) as handle:
             data = json.load(handle)
         frames = data.get('frames', [])
         if len(frames) != 1 or 'objects' not in frames[0]:
             raise ValueError(f'Expected one labeled frame in {annotation_path}')
         lanes = []
+        lane_attributes = []
         for obj in frames[0]['objects']:
             if not obj.get('category', '').startswith('lane/'):
+                continue
+            if self.multilabel and obj['category'] == 'lane/crosswalk':
                 continue
             if obj.get('attributes', {}).get('direction') == 'vertical':
                 continue  # cross-road markings are not longitudinal lane boundaries
@@ -87,7 +92,8 @@ class BDD100K(LaneDatasetLoader):
             lane = [(x, y) for y, x in sorted(by_y.items())]
             if len(lane) >= 2 and lane[-1][1] - lane[0][1] >= 1:
                 lanes.append(lane)
-        return lanes
+                lane_attributes.append(encode_attributes(obj['category'], obj.get('attributes', {})))
+        return (lanes, lane_attributes) if with_attributes else lanes
 
     def load_annotations(self):
         image_dir = self.root / self.split
@@ -112,6 +118,9 @@ class BDD100K(LaneDatasetLoader):
         anno = self.annotations[idx]
         if 'lanes' in anno:
             return anno
+        if self.multilabel:
+            lanes, attributes = self.load_annotation(anno['annotation_path'], with_attributes=True)
+            return dict(anno, lanes=lanes, lane_attributes=attributes)
         return dict(anno, lanes=self.load_annotation(anno['annotation_path']))
 
     def __len__(self):
@@ -152,8 +161,15 @@ class BDD100K(LaneDatasetLoader):
                 tp += int(matches.sum())
                 fp += image_fp
                 fn += image_fn
-                handle.write(json.dumps({'raw_file': self.annotations[idx]['org_path'],
-                                         'lanes': self._prediction_points(pred)}) + '\n')
+                record = {'raw_file': self.annotations[idx]['org_path'],
+                          'lanes': self._prediction_points(pred)}
+                if self.multilabel:
+                    keys = ('lane_category', 'lane_color', 'lane_style',
+                            'image_side', 'attribute_scores')
+                    record['lane_attributes'] = [
+                        {key: lane.metadata[key] for key in keys if key in lane.metadata}
+                        for lane in pred]
+                handle.write(json.dumps(record) + '\n')
         precision = tp / (tp + fp) if tp + fp else 0.
         recall = tp / (tp + fn) if tp + fn else 0.
         return {'Precision': precision, 'Recall': recall,

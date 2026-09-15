@@ -13,6 +13,7 @@ try:
 except:
     from ..nms_pytorch import nms
 from lib.lane import Lane
+from lib.lane_attributes import NUM_ATTRIBUTES, decode_attributes
 from lib.focal_loss import FocalLoss
 
 from .resnet import resnet122 as resnet122_cifar
@@ -28,8 +29,12 @@ class LaneATT(nn.Module):
                  img_h=360,
                  anchors_freq_path=None,
                  topk_anchors=None,
-                 anchor_feat_channels=64):
+                 anchor_feat_channels=64,
+                 multilabel=False):
         super(LaneATT, self).__init__()
+        if not isinstance(multilabel, bool):
+            raise ValueError("multilabel must be a YAML boolean (true/false or yes/no)")
+        self.multilabel = multilabel
         # Some definitions
         self.feature_extractor, backbone_nb_channels, self.stride = get_backbone(backbone, pretrained_backbone)
         self.img_w = img_w
@@ -71,6 +76,9 @@ class LaneATT(nn.Module):
         self.initialize_layer(self.conv1)
         self.initialize_layer(self.cls_layer)
         self.initialize_layer(self.reg_layer)
+        if self.multilabel:
+            self.attribute_layer = nn.Linear(2 * self.anchor_feat_channels * self.fmap_h, NUM_ATTRIBUTES)
+            self.initialize_layer(self.attribute_layer)
 
     def forward(self, x, conf_threshold=None, nms_thres=0, nms_topk=3000):
         batch_features = self.feature_extractor(x)
@@ -112,44 +120,46 @@ class LaneATT(nn.Module):
         # Apply nms
         proposals_list = self.nms(reg_proposals, attention_matrix, nms_thres, nms_topk, conf_threshold)
 
+        if self.multilabel:
+            attribute_logits = self.attribute_layer(batch_anchor_features).reshape(x.shape[0], -1, NUM_ATTRIBUTES)
+            proposals_list = [(*entry, logits[entry[3]] if entry[3] is not None else logits[:0])
+                              for entry, logits in zip(proposals_list, attribute_logits)]
         return proposals_list
 
     def nms(self, batch_proposals, batch_attention_matrix, nms_thres, nms_topk, conf_threshold):
-        softmax = nn.Softmax(dim=1)
         proposals_list = []
         for proposals, attention_matrix in zip(batch_proposals, batch_attention_matrix):
-            anchor_inds = torch.arange(batch_proposals.shape[1], device=proposals.device)
-            # The gradients do not have to (and can't) be calculated for the NMS procedure
+            # Select indices without gradients, then index the original tensors WITH
+            # gradients so confidence filtering cannot detach the training graph.
             with torch.no_grad():
-                scores = softmax(proposals[:, :2])[:, 1]
+                scores = proposals[:, :2].softmax(dim=1)[:, 1]
+                anchor_inds = torch.arange(len(proposals), device=proposals.device)
                 if conf_threshold is not None:
-                    # apply confidence threshold
-                    above_threshold = scores > conf_threshold
-                    proposals = proposals[above_threshold]
-                    scores = scores[above_threshold]
-                    anchor_inds = anchor_inds[above_threshold]
-                if proposals.shape[0] == 0:
-                    proposals_list.append((proposals[[]], self.anchors[[]], attention_matrix[[]], None))
-                    continue
-                keep, num_to_keep, _ = nms(proposals, scores, overlap=nms_thres, top_k=nms_topk)
-                keep = keep[:num_to_keep]
-            proposals = proposals[keep]
-            anchor_inds = anchor_inds[keep]
-            attention_matrix = attention_matrix[anchor_inds]
-            proposals_list.append((proposals, self.anchors[keep], attention_matrix, anchor_inds))
-
+                    anchor_inds = anchor_inds[scores > conf_threshold]
+                if len(anchor_inds):
+                    keep, num_to_keep, _ = nms(proposals[anchor_inds], scores[anchor_inds],
+                                               overlap=nms_thres, top_k=nms_topk)
+                    anchor_inds = anchor_inds[keep[:num_to_keep]]
+            proposals_list.append((proposals[anchor_inds], self.anchors[anchor_inds],
+                                   attention_matrix[anchor_inds], anchor_inds))
         return proposals_list
 
-    def loss(self, proposals_list, targets, cls_loss_weight=10):
+    def loss(self, proposals_list, targets, cls_loss_weight=10, attribute_loss_weight=1):
         focal_loss = FocalLoss(alpha=0.25, gamma=2.)
         smooth_l1_loss = nn.SmoothL1Loss()
-        cls_loss = 0
-        reg_loss = 0
+        cls_loss = self.cls_layer.weight.sum() * 0
+        reg_loss = self.reg_layer.weight.sum() * 0
+        attribute_loss = self.attribute_layer.weight.sum() * 0 if self.multilabel else 0
         valid_imgs = len(targets)
         total_positives = 0
-        for (proposals, anchors, _, _), target in zip(proposals_list, targets):
+        for entry, target in zip(proposals_list, targets):
+            proposals, anchors = entry[:2]
             # Filter lanes that do not exist (confidence == 0)
             target = target[target[:, 1] == 1]
+            attribute_targets = target[:, 5 + self.n_offsets:]
+            target = target[:, :5 + self.n_offsets]
+            if len(proposals) == 0:
+                continue
             if len(target) == 0:
                 # If there are no targets, all proposals have to be negatives (i.e., 0 confidence)
                 cls_target = proposals.new_zeros(len(proposals)).long()
@@ -173,6 +183,15 @@ class LaneATT(nn.Module):
                 cls_pred = proposals[:, :2]
                 cls_loss += focal_loss(cls_pred, cls_target).sum()
                 continue
+
+            if self.multilabel and attribute_targets.shape[1]:
+                if attribute_targets.shape[1] != NUM_ATTRIBUTES:
+                    raise ValueError('Wrong lane attribute target width')
+                matched_attributes = attribute_targets[target_positives_indices]
+                known = matched_attributes >= 0
+                if known.any():
+                    attribute_loss += nn.functional.binary_cross_entropy_with_logits(
+                        entry[4][positives_mask][known], matched_attributes[known])
 
             # Get classification targets
             all_proposals = torch.cat([positives, negatives], 0)
@@ -208,7 +227,12 @@ class LaneATT(nn.Module):
         reg_loss /= valid_imgs
 
         loss = cls_loss_weight * cls_loss + reg_loss
-        return loss, {'cls_loss': cls_loss, 'reg_loss': reg_loss, 'batch_positives': total_positives}
+        metrics = {'cls_loss': cls_loss, 'reg_loss': reg_loss, 'batch_positives': total_positives}
+        if self.multilabel:
+            attribute_loss = attribute_loss / valid_imgs
+            loss = loss + attribute_loss_weight * attribute_loss
+            metrics['attribute_loss'] = attribute_loss
+        return loss, metrics
 
     def compute_anchor_cut_indices(self, n_fmaps, fmaps_w, fmaps_h):
         # definitions
@@ -311,11 +335,11 @@ class LaneATT(nn.Module):
             if layer.bias is not None:
                 torch.nn.init.constant_(layer.bias, 0)
 
-    def proposals_to_pred(self, proposals):
+    def proposals_to_pred(self, proposals, attribute_probabilities=None):
         self.anchor_ys = self.anchor_ys.to(proposals.device)
         self.anchor_ys = self.anchor_ys.double()
         lanes = []
-        for lane in proposals:
+        for lane_idx, lane in enumerate(proposals):
             lane_xs = lane[5:] / self.img_w
             start = int(round(lane[2].item() * self.n_strips))
             length = int(round(lane[4].item()))
@@ -325,7 +349,7 @@ class LaneATT(nn.Module):
             # if the proposal does not start at the bottom of the image,
             # extend its proposal until the x is outside the image
             mask = ~((((lane_xs[:start] >= 0.) &
-                       (lane_xs[:start] <= 1.)).cpu().numpy()[::-1].cumprod()[::-1]).astype(np.bool))
+                       (lane_xs[:start] <= 1.)).cpu().numpy()[::-1].cumprod()[::-1]).astype(bool))
             lane_xs[end + 1:] = -2
             lane_xs[:start][mask] = -2
             lane_ys = self.anchor_ys[lane_xs >= 0]
@@ -341,20 +365,25 @@ class LaneATT(nn.Module):
                             'start_y': lane[2],
                             'conf': lane[1]
                         })
+            if attribute_probabilities is not None:
+                lane.metadata.update(decode_attributes(
+                    attribute_probabilities[lane_idx].detach().cpu().numpy(), lane.points))
             lanes.append(lane)
         return lanes
 
     def decode(self, proposals_list, as_lanes=False):
         softmax = nn.Softmax(dim=1)
         decoded = []
-        for proposals, _, _, _ in proposals_list:
+        for entry in proposals_list:
+            proposals = entry[0].clone()
+            attribute_probabilities = entry[4].sigmoid() if self.multilabel else None
             proposals[:, :2] = softmax(proposals[:, :2])
             proposals[:, 4] = torch.round(proposals[:, 4])
             if proposals.shape[0] == 0:
                 decoded.append([])
                 continue
             if as_lanes:
-                pred = self.proposals_to_pred(proposals)
+                pred = self.proposals_to_pred(proposals, attribute_probabilities)
             else:
                 pred = proposals
             decoded.append(pred)

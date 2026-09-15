@@ -8,14 +8,14 @@ model:
   model_id: LaneATTresnet34
   parameters:
     backbone: resnet34
-    multilabel: true  # All seven BDD lane categories except crosswalk; plus solid/dashed style.
+    multilabel: false  # CULane has geometry labels only; use binary lane/background detection.
     S: &S 72
     topk_anchors: 1000
     anchors_freq_path: 'data/culane_anchors_freq.pt'
     img_h: &img_h 360
     img_w: &img_w 640
 batch_size: 16
-epochs: 1
+epochs: 20
 loss_parameters: {}
 train_parameters:
   conf_threshold:
@@ -32,7 +32,7 @@ optimizer:
 lr_scheduler:
   name: CosineAnnealingLR
   parameters:
-    T_max: 4375 #  
+    T_max: 111100 #  
 
 # Dataset settings
 datasets:
@@ -96,10 +96,10 @@ datasets:
     type: LaneDataset
     parameters:
       S: *S
-      dataset: bdd100k
+      dataset: culane
       split: train
       img_size: [*img_h, *img_w]
-      max_lanes: 42  # Target capacity; independent of NMS output limit
+      max_lanes: *max_lanes
       normalize: false
       aug_chance: 1.0
       augmentations:
@@ -122,9 +122,8 @@ datasets:
           brightness_limit: !!python/tuple [-0.2, 0.50]
           contrast_limit: !!python/tuple [-0.2, 0.5]
           p: 0.7
-      # Preserve white/yellow identity when training lane attributes.
       - name: HueSaturationValue
-        parameters: { hue_shift_limit: 0, sat_shift_limit: 0, val_shift_limit: 20, p: 0.4 }
+        parameters: { hue_shift_limit: 20, sat_shift_limit: 35, val_shift_limit: 20, p: 0.4 }
       - name: RandomGamma
         parameters: { gamma_limit: !!python/tuple [60, 140], p: 0.3 }
       - name: RandomShadow
@@ -148,13 +147,12 @@ datasets:
           fill: 0
           p: 1
   
-      root: "/home/anindra/data/ObjectDetection/Bdd100k/bdd100k_images/100k"
-      annotations_root: "/home/anindra/data/ObjectDetection/Bdd100k/bdd100k_labels/100k"
+      root: "/home/anindra/data/CULane"
   train_test2:
     type: LaneDataset
     parameters:
       S: *S
-      dataset: bdd100k
+      dataset: culane
       split: train
       img_size: [*img_h, *img_w]
       max_lanes: *max_lanes
@@ -216,7 +214,7 @@ datasets:
       dataset: culane
       split: test
       img_size: [*img_h, *img_w]
-      max_lanes: 4  # CULane ground-truth capacity
+      max_lanes: *max_lanes
       normalize: false
       aug_chance: 0
       augmentations:
@@ -226,15 +224,14 @@ datasets:
     type: LaneDataset
     parameters:
       S: *S
-      dataset: bdd100k
+      dataset: culane
       split: val
       img_size: [360, 640]
-      max_lanes: 42  # Target capacity; independent of NMS output limit
+      max_lanes: *max_lanes
       normalize: false
       aug_chance: 0
       augmentations:
-      root: "/home/anindra/data/ObjectDetection/Bdd100k/bdd100k_images/100k"
-      annotations_root: "/home/anindra/data/ObjectDetection/Bdd100k/bdd100k_labels/100k"
+      root: "/home/anindra/data/CULane"
   test2:
     type: LaneDataset
     parameters:

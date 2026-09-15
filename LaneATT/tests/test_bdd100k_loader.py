@@ -7,6 +7,7 @@ import unittest
 import numpy as np
 from lib.datasets.bdd100k import BDD100K
 from lib.datasets.lane_dataset_loader import LaneDatasetLoader
+from lib.lane_attributes import CATEGORIES
 
 
 class BDD100KTests(unittest.TestCase):
@@ -44,6 +45,19 @@ class BDD100KTests(unittest.TestCase):
         np.testing.assert_allclose(p[0], [0, 0])
         np.testing.assert_allclose(p[-1], [100, 200])
         np.testing.assert_allclose(p[16], [50, 100])
+
+    def test_all_lane_categories_except_crosswalk(self):
+        categories = ['lane/' + category for category in CATEGORIES]
+        objects = [
+            {'category': category, 'attributes': {'direction': 'parallel', 'style': 'solid'},
+             'poly2d': [[100 + i * 50, 100, 'L'], [100 + i * 50, 600, 'L']]}
+            for i, category in enumerate(categories + ['lane/crosswalk'])]
+        self.label.write_text(json.dumps({'frames': [{'objects': objects}]}))
+        dataset = BDD100K(root=self.root, multilabel=True)
+        sample = dataset[0]
+        self.assertEqual(len(sample['lanes']), 7)
+        np.testing.assert_array_equal(
+            np.array(sample['lane_attributes'])[:, :7], np.eye(7))
 
     def test_missing_labels_fail(self):
         self.label.unlink()

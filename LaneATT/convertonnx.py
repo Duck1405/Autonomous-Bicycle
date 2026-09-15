@@ -37,6 +37,9 @@ def main():
     MODEL, YAML_PATH, OUT = args.model, args.yaml, args.out
 
     cfg = Config(YAML_PATH)
+    if cfg["model"]["parameters"].get("multilabel", False):
+        raise ValueError("This legacy exporter only supports multilabel: false. "
+                         "Attribute outputs require an updated ONNX/TensorRT consumer; use PyTorch inference.")
     model = cfg.get_model()
     model.load_state_dict(torch.load(MODEL, map_location="cpu")["model"])
     model.eval()

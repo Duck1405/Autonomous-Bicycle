@@ -20,8 +20,11 @@ class Config:
 
     def get_dataset(self, split):
         print("self.config['datasets'][split]['type']", self.config['datasets'][split]['type'])
-        return getattr(datasets,
-                       self.config['datasets'][split]['type'])(**self.config['datasets'][split]['parameters'])
+        entry = self.config['datasets'][split]
+        parameters = dict(entry['parameters'])
+        if entry['type'] == 'LaneDataset':
+            parameters['multilabel'] = self.config['model']['parameters'].get('multilabel', False)
+        return getattr(datasets, entry['type'])(**parameters)
 
     def get_model(self, **kwargs):
         name = self.config['model']['name']
