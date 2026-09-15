@@ -145,7 +145,13 @@ def main():
             raise ValueError("No models enabled")
         pipeline = VideoInference(video_path=str(args.video), frame_limit=args.frames,
                                   device="TensorRT", model_path=args.laneatt_engine,
-                                  initialize_models=False)
+                                  initialize_models=False, 
+                                        conf_threshold=0.3,
+                                        keep_threshold=0.3,
+                                        nms_thres=50,
+                                        nms_topk=4,
+                                        match_tolerance=0.05,
+                                  )
         if any(label == "yolo" for label, _, _ in models):
             pipeline.yolo = DecodedYoloDrawing()
         hysteresis = None if args.no_hysteresis else LaneHysteresis()
