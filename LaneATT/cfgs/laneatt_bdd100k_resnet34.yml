@@ -14,7 +14,7 @@ model:
     anchors_freq_path: 'data/culane_anchors_freq.pt'
     img_h: &img_h 360
     img_w: &img_w 640
-batch_size: 16
+batch_size: 64
 epochs: 1
 loss_parameters: {}
 train_parameters:

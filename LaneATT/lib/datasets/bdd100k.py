@@ -9,6 +9,7 @@ import logging
 from pathlib import Path
 
 import numpy as np
+from tqdm.auto import tqdm
 
 from .lane_dataset_loader import LaneDatasetLoader
 from lib.lane_attributes import encode_attributes
@@ -102,7 +103,9 @@ class BDD100K(LaneDatasetLoader):
             raise FileNotFoundError(f'Missing split directories: {image_dir}, {label_dir}')
         self.annotations = []
         self.max_lanes = 1
-        for path in sorted(image_dir.glob('*.jpg')):
+        image_paths = sorted(image_dir.glob('*.jpg'))
+        for path in tqdm(image_paths, desc=f'Indexing BDD100K {self.split} JSONs',
+                         unit='json', dynamic_ncols=True):
             label = label_dir / (path.stem + '.json')
             if not label.is_file():
                 raise FileNotFoundError(f'Missing annotation for {path}: {label}')
