@@ -1,4 +1,3 @@
-from .ego_lanes import get_ego_lanes2
 
 import cv2
 import numpy as np
