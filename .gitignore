@@ -151,7 +151,8 @@ claude/
 
 .claude
 /.claude
+/newLaneATTresnet34Sep10
 
-
+newLaneATTresnet34Sep10
 # Local trained LaneATT artifacts
 /LaneATT/newLaneATTresnet34Sep10/
