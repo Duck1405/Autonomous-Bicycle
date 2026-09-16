@@ -4,7 +4,7 @@ import numpy as np
 import torch
 import matplotlib.pyplot as plt
 from torchvision.transforms import ToTensor
-from ego_lanes import get_ego_lanes2 as get_ego
+from .ego_lanes import get_ego_lanes2 as get_ego
 
 class LaneATTInference():
     """LaneATT lane inference: model loading, per-frame eval with confidence
