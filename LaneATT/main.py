@@ -39,6 +39,46 @@ def parse_args():
 
 '''
 
+(LaneNet310) [anindra@gnode021 LaneATT]$ sbatch resnet34_true.sh
+Submitted batch job 340875
+(LaneNet310) [anindra@gnode021 LaneATT]$ (LaneNet310) [anindra@gnode021 LaneATT]$ sbatch resnet34.sh
+Submitted batch job 340873
+(LaneNet310) [anindra@gnode021 LaneATT]$ git pull
+Enter passphrase for key '/home/anindra/.ssh/id_ed25519': 
+remote: Enumerating objects: 8, done.
+remote: Counting objects: 100% (8/8), done.
+remote: Compressing objects: 100% (2/2), done.
+remote: Total 5 (delta 3), reused 5 (delta 3), pack-reused 0 (from 0) 
+Unpacking objects: 100% (5/5), 1014 bytes | 12.00 KiB/s, done.
+From github.com:Duck1405/Autonomous-Bicycle
+   a28d08e..2643afb  main       -> origin/main
+Updating a28d08e..2643afb
+Fast-forward
+ .../cfgs/laneatt_bdd100k_resnet34_true.yml   | 249 ++++++++++++++++
+ LaneATT/resnet34_true.sh                     |  25 ++
+ 2 files changed, 274 insertions(+)
+ create mode 100644 LaneATT/cfgs/laneatt_bdd100k_resnet34_true.yml
+ create mode 100644 LaneATT/resnet34_true.sh
+(LaneNet310) [anindra@gnode021 LaneATT]$ ls
+2010.12035v2.pdf            docs              resnet18.sh
+DATASETS.md                 experiments       resnet34.sh
+LICENSE                     fastLane.py       resnet34_true.sh
+LaneATT_debug.ipynb         inference.ipynb   resnet50.sh
+LaneATT_prune.py            inference.py      runs
+README.md                   lane_utils.py     tensorboard
+__pycache__                 lib               test_depth_onnx.py
+augmentation_testing.ipynb  logs              tests
+cfgs                        main.py           utils
+convert_depth_onnx.py       model             video_inference
+convertonnx.py              new_model_video   video_input
+data                        onnxmodels        video_output
+depthInference.py           requirements.txt  video_output_2
+depth_model                 resnet101.sh      video_output_3
+depth_output2               resnet152.sh      video_output_4
+(LaneNet310) [anindra@gnode021 LaneATT]$ sbatch resnet34_true.sh
+Submitted batch job 340875
+(LaneNet310) [anindra@gnode021 LaneATT]$ 
+
 python main.py train --exp_name Testing --cfg /Users/amannindra/Projects/Auto/Autonomous-Bicycle/LaneATT/cfgs/laneatt_culane_resnet18_laptop.yml
 python main.py train --exp_name LaneATTresnet34Aug2Test --cfg /Users/amannindra/Projects/Auto/Autonomous-Bicycle/LaneATT/cfgs/laneatt_culane_resnet34_test.yml --epoch 1 --cpu 28 --view all
 python main.py train --exp_name LaneATTresnet34Final --cfg /Users/amannindra/Projects/Auto/Autonomous-Bicycle/LaneATT/cfgs/laneatt_culane_resnet34_new.yml
