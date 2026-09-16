@@ -102,7 +102,6 @@ def main():
         # scheduler marks a job that never trained as COMPLETED.
         sys.exit(f"ERROR: no usable GPU (torch.cuda.is_available() is False), device would be '{device}'. "
                  "Check nvidia-smi / the node's MPS daemon, or pass --cpu to run on CPU deliberately.")
-    
         
     runner = Runner(cfg, exp, device, view=args.view, resume=args.resume, deterministic=args.deterministic)
 

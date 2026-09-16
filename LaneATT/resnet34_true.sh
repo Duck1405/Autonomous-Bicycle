@@ -20,6 +20,15 @@ nvidia-smi || exit 1
 python -c "import torch; assert torch.cuda.is_available(), 'torch cannot initialize CUDA'; print('CUDA OK:', torch.cuda.get_device_name(0))" || exit 1
 
 # python main.py train --exp_name LaneATTresnet34Final --cfg /cfgs/laneatt_culane_resnet34_new.yml
-python main.py train --exp_name LaneATTresnet34Bdd100k_False --cfg /cfgs/laneatt_bdd100k_resnet34_true.yml # (LaneNet310) [anindra@gnode021 LaneATT]$ sbatch resnet34.sh Submitted batch job 340868 FALSE
+
+YAML_FILE=cfgs/laneatt_bdd100k_resnet34_true.yml
+
+if [ -f "$YAML_FILE" ]; then
+    echo "The file exists."
+else
+    echo "The file does not exist."
+fi
+
+python main.py train --exp_name LaneATTresnet34Bdd100k_False --cfg $YAML_FILE # (LaneNet310) [anindra@gnode021 LaneATT]$ sbatch resnet34.sh Submitted batch job 340868 FALSE
 # python main.py train --exp_name LaneATTresnet34Bdd100k_True --cfg /cfgs/laneatt_bdd100k_resnet34.yml 
 
