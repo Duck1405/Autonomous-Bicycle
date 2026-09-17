@@ -258,6 +258,7 @@ def main(args):
     ])
     hnet_tf = A.Compose([
         A.Resize(args.hnet_height, args.hnet_width),
+        A.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225]),
         ToTensorV2(),
     ]) if hnet else None
 
@@ -293,10 +294,12 @@ def main(args):
         rgb = cv2.cvtColor(bgr, cv2.COLOR_BGR2RGB)
         lt  = lane_tf(image=rgb)["image"]
         ht  = hnet_tf(image=rgb)["image"] if hnet_tf else None
+        
+        
 
-        out, labels = process_frame(lanenet, hnet, lt, ht, rgb, device, args)
-        writer.write(out)
-        count += 1
+        # out, labels = process_frame(lanenet, hnet, lt, ht, rgb, device, args)
+        # writer.write(out)
+        # count += 1
 
         if args.debug_every > 0 and count % args.debug_every == 0:
             n = len([l for l in np.unique(labels) if l != 0])

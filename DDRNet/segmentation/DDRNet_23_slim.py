@@ -345,7 +345,7 @@ class DualResNet(nn.Module):
 def DualResNet_imagenet(pretrained=False):
     model = DualResNet(BasicBlock, [2, 2, 2, 2], num_classes=19, planes=32, spp_planes=128, head_planes=64, augment=True)
     if pretrained:
-        model_location = Path("models") /  Path("best_val.pth")
+        model_location = Path("models") /  Path("best_val_smaller.pth") # Autonomous-Bicycle/DDRNet/segmentation/models/DDRNet23_imagenet.pth
         
         device = "cuda" if torch.cuda.is_available() else "cpu"
         

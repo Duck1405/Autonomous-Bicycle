@@ -48,7 +48,8 @@ class DDRNetTrain:
             
         
            
-    def train(self):
+    # def train(self):
+    #     optimier 
 
 
 
