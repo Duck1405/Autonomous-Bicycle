@@ -107,6 +107,18 @@ def parse_args():
                         help="skip two-threshold hysteresis before selecting the ego lanes")
     parser.add_argument("--json", type=Path, default="Benchmark",
                         help="also write the results here as JSON")
+    parser.add_argument("--conf_threshold", type=float, required=True, default=0.5,
+                        help="conf_threshold")
+    parser.add_argument("--nms_thres", type=float, required=False, default=50,
+                        help="nms_thres")
+    parser.add_argument("--nms_topk", type=float, required=False, default=4,
+                        help="nms_topk")
+    parser.add_argument("--match_tolerance", type=float, required=False, default=0.05,
+                        help="match_tolerance")
+    parser.add_argument("--keep_threshold", type=float, required=False, default=0.05,
+                        help="keep_threshold")
+    
+    
     return parser.parse_args()
 
 
@@ -146,11 +158,11 @@ def main():
         pipeline = VideoInference(video_path=str(args.video), frame_limit=args.frames,
                                   device="TensorRT", model_path=args.laneatt_engine,
                                   initialize_models=False, 
-                                        conf_threshold=0.3,
-                                        keep_threshold=0.3,
-                                        nms_thres=50,
-                                        nms_topk=4,
-                                        match_tolerance=0.05,
+                                        conf_threshold=args.conf_threshold,
+                                        keep_threshold=args.keep_threshold,
+                                        nms_thres=args.nms_thres,
+                                        nms_topk=args.nms_topk,
+                                        match_tolerance=args.match_tolerance,
                                   )
         if any(label == "yolo" for label, _, _ in models):
             pipeline.yolo = DecodedYoloDrawing()
