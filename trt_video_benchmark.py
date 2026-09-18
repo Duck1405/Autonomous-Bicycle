@@ -22,19 +22,19 @@ selection and drawing. Output shows original and annotated frames side by side.
 Needs: tensorrt (10.x), numpy, cv2. Run from the Autonomous-Bicycle repository root. Cluster env: LaneNetCuda_12_6. Jetson env: LaneNet310.
 """
 import argparse
+import importlib
 import json
+import math
 import sys
 import time
 from pathlib import Path
 
 import cv2
 from types import SimpleNamespace
-import tensorrt as trt
 
 from jetson_tools.postprocess import (LaneHysteresis, depth_colorize,  # noqa: E402
                          laneatt_decode, yolo_decode)
 from jetson_tools.preprocess import pre_depth, pre_laneatt, pre_yolo_meta  # noqa: E402
-from jetson_tools.trt_runner import CudaRT, TrtEngine  # noqa: E402
 
 # Use the same VideoInference as LaneATT/inference.py, regardless of cwd.
 sys.path.insert(0, str(Path(__file__).resolve().parent / "LaneATT"))
@@ -67,7 +67,7 @@ def str2bool(value):
     raise argparse.ArgumentTypeError(f"expected a boolean string, got {value!r}")
 
 
-def parse_args():
+def parse_args(argv=None):
     parser = argparse.ArgumentParser(
         description="Sequential per-frame TensorRT benchmark of the LaneATT / "
                     "YOLO / depth engines over a real video, optionally "
@@ -106,32 +106,53 @@ def parse_args():
     parser.add_argument("--no-hysteresis", action="store_true",
                         help="skip two-threshold hysteresis before selecting the ego lanes")
     parser.add_argument("--json", type=Path, default="Benchmark",
-                        help="also write the results here as JSON")
-    parser.add_argument("--conf_threshold", type=float, required=True, default=0.5,
-                        help="conf_threshold")
+                        help="JSON filename, or directory for numbered Benchmark_N.json results")
+    parser.add_argument("--conf_threshold", type=float, default=0.5,
+                        help="minimum confidence to acquire a lane (or accept one without hysteresis)")
     parser.add_argument("--nms_thres", type=float, required=False, default=50,
-                        help="nms_thres")
-    parser.add_argument("--nms_topk", type=float, required=False, default=4,
-                        help="nms_topk")
+                        help="lane-distance suppression threshold in model-input pixels")
+    parser.add_argument("--nms_topk", type=int, required=False, default=4,
+                        help="maximum number of lanes retained by NMS")
     parser.add_argument("--match_tolerance", type=float, required=False, default=0.05,
-                        help="match_tolerance")
-    parser.add_argument("--keep_threshold", type=float, required=False, default=0.05,
-                        help="keep_threshold")
+                        help="hysteresis matching tolerance in normalized image x")
+    parser.add_argument("--keep_threshold", type=float, required=False, default=0.3,
+                        help="minimum confidence to retain a previously accepted lane")
     
     
-    return parser.parse_args()
+    args = parser.parse_args(argv)
+    if args.frames <= 0 or args.start_frame < 0 or args.warmup < 0:
+        parser.error('--frames must be positive; --start-frame and --warmup must be non-negative')
+    if args.nms_topk <= 0:
+        parser.error('--nms_topk must be a positive integer')
+    for name in ('conf_threshold', 'keep_threshold', 'match_tolerance'):
+        value = getattr(args, name)
+        if not math.isfinite(value) or not 0 <= value <= 1:
+            parser.error(f'--{name} must be finite and between 0 and 1')
+    if not math.isfinite(args.nms_thres) or args.nms_thres < 0:
+        parser.error('--nms_thres must be finite and non-negative')
+    if not args.no_hysteresis and args.keep_threshold > args.conf_threshold:
+        parser.error('--keep_threshold must not exceed --conf_threshold with hysteresis enabled')
+    if len(args.codec) != 4:
+        parser.error('--codec must be a four-character code')
+    wanted = [m.strip() for m in args.models.split(',') if m.strip()]
+    if set(wanted) - set(LABELS):
+        parser.error(f'unknown --models entries {sorted(set(wanted) - set(LABELS))}')
+    if not any(getattr(args, f'{label}_on') for label in wanted):
+        parser.error('No models enabled; select a model and enable its --<model>-on flag')
+    if args.no_render:
+        args.render = None
+    return args
 
 
 def main():
     args = parse_args()
-    if args.frames <= 0 or args.start_frame < 0 or args.warmup < 0:
-        raise SystemExit("--frames must be positive; --start-frame and --warmup must be non-negative")
-    if args.no_render:
-        args.render = None
     wanted = [m.strip() for m in args.models.split(",") if m.strip()]
-    unknown = set(wanted) - set(LABELS)
-    if unknown:
-        raise SystemExit(f"unknown --models entries {sorted(unknown)}")
+    if not args.video.is_file():
+        raise FileNotFoundError(f'Video path does not exist: {args.video}')
+    # Argument validation and --help must not require a CUDA installation.
+    trt = importlib.import_module("tensorrt")
+    runtime = importlib.import_module("jetson_tools.trt_runner")
+    CudaRT, TrtEngine = runtime.CudaRT, runtime.TrtEngine
     cuda = CudaRT()
     free, total = cuda.mem_info()
     cc = cuda.compute_capability()
@@ -157,16 +178,18 @@ def main():
             raise ValueError("No models enabled")
         pipeline = VideoInference(video_path=str(args.video), frame_limit=args.frames,
                                   device="TensorRT", model_path=args.laneatt_engine,
-                                  initialize_models=False, 
-                                        conf_threshold=args.conf_threshold,
-                                        keep_threshold=args.keep_threshold,
-                                        nms_thres=args.nms_thres,
-                                        nms_topk=args.nms_topk,
-                                        match_tolerance=args.match_tolerance,
-                                  )
+                                  initialize_models=False,
+                                  conf_threshold=args.conf_threshold,
+                                  keep_threshold=args.keep_threshold,
+                                  nms_thres=args.nms_thres,
+                                  nms_topk=args.nms_topk,
+                                  match_tolerance=args.match_tolerance)
         if any(label == "yolo" for label, _, _ in models):
             pipeline.yolo = DecodedYoloDrawing()
-        hysteresis = None if args.no_hysteresis else LaneHysteresis()
+        hysteresis = None if args.no_hysteresis else LaneHysteresis(
+            conf_threshold=args.conf_threshold,
+            keep_threshold=args.keep_threshold,
+            match_tolerance=args.match_tolerance)
         t_pre = {label: 0.0 for label, _, _ in models}
         t_eng = dict(t_pre)
         render_seconds = 0.0
@@ -198,7 +221,9 @@ def main():
             canvas = depth_colorize(raw["depth"][0], w, h) if "depth" in raw else frame
             evaluation = []
             if "laneatt" in raw:
-                lanes = laneatt_decode(raw["laneatt"][0], conf_threshold=pipeline.keep_threshold,
+                decode_threshold = (pipeline.keep_threshold if hysteresis is not None
+                                    else pipeline.conf_threshold)
+                lanes = laneatt_decode(raw["laneatt"][0], conf_threshold=decode_threshold,
                                        nms_thres=pipeline.nms_thres, nms_topk=pipeline.nms_topk)
                 if hysteresis is not None:
                     lanes = hysteresis(lanes)
@@ -216,6 +241,8 @@ def main():
                                     codec=args.codec, frame_processor=process, warmup=warmup,
                                     render=args.render is not None)
         done = stats["frames"]
+        if done <= 0:
+            raise RuntimeError("No frames processed; cannot calculate benchmark statistics")
         elapsed = stats["elapsed_seconds"]
         total_eng = sum(t_eng.values())
         def ms(seconds):
@@ -226,6 +253,11 @@ def main():
         result = {
             "frames": done, "start_frame": args.start_frame, "video": str(args.video),
             "tensorrt": trt.__version__,
+            "laneatt_parameters": {
+                "conf_threshold": args.conf_threshold, "keep_threshold": args.keep_threshold,
+                "nms_thres": args.nms_thres, "nms_topk": args.nms_topk,
+                "match_tolerance": args.match_tolerance, "hysteresis": not args.no_hysteresis,
+            },
             "compute_capability": f"sm{cc[0]}{cc[1]}" if cc else None,
             "render": stats["output"], "read_ms": ms(stats["read_seconds"]),
             "models": {label: {"preprocess_ms": ms(t_pre[label]), "engine_ms": ms(t_eng[label])}
@@ -235,12 +267,16 @@ def main():
         }
         print(json.dumps(result, indent=2))
         if args.json:
-            folder = args.json.parent if args.json.is_file() else args.json
-            folder.mkdir(parents=True, exist_ok=True)
-            n = 1
-            while (folder / f"Benchmark_{n}.json").exists():
-                n += 1
-            path = folder / f"Benchmark_{n}.json"
+            if args.json.suffix.lower() == '.json':
+                path = args.json
+                path.parent.mkdir(parents=True, exist_ok=True)
+            else:
+                folder = args.json
+                folder.mkdir(parents=True, exist_ok=True)
+                n = 1
+                while (folder / f"Benchmark_{n}.json").exists():
+                    n += 1
+                path = folder / f"Benchmark_{n}.json"
             path.write_text(json.dumps(result, indent=2) + "\n")
             print(f"Wrote {path}")
     finally:
