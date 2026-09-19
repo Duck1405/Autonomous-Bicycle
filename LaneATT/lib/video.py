@@ -215,7 +215,20 @@ class VideoInference():
         frame_processor(frame) returns an annotated frame (or None for timing
         without rendering). The default runs the PyTorch backends. warmup(first)
         runs before timing and does not consume any output frames.
+        Each input is resized to 1600x800 and centered on a black 1920x960
+        canvas before warmup/inference. Side-by-side output is 3840x960.
         """
+        canvas_w, canvas_h = 1920, 960
+        new_w, new_h = 1600, 800
+
+        def prepare_frame(frame):
+            resized = cv2.resize(frame, (new_w, new_h), interpolation=cv2.INTER_AREA)
+            canvas = np.zeros((canvas_h, canvas_w, 3), dtype=np.uint8)
+            x = (canvas_w - new_w) // 2
+            y = (canvas_h - new_h) // 2
+            canvas[y:y + new_h, x:x + new_w] = resized
+            return canvas
+
         if self.frame_limit <= 0 or start_frame < 0:
             raise ValueError("frame_limit must be positive and start_frame non-negative")
         if self.video_path is None or not Path(self.video_path).is_file():
@@ -253,7 +266,7 @@ class VideoInference():
                 fourcc = getattr(cv2.VideoWriter, "fourcc", None)
                 if fourcc is None:
                     fourcc = cv2.VideoWriter_fourcc
-                h, w = first.shape[:2]
+                h, w = canvas_h, canvas_w
                 writer = cv2.VideoWriter(str(output_path), fourcc(*codec), fps, (w * 2, h))
                 if not writer.isOpened():
                     raise RuntimeError(f"Cannot open video writer: {output_path} ({codec})")
@@ -262,7 +275,7 @@ class VideoInference():
                 self.laneatt.reset_video_state()
             self.angle.reset_video_state()
             if warmup is not None:
-                warmup(first)
+                warmup(prepare_frame(first))
             self.logger.info("video=%s start_frame=%s frame_limit=%s model=%s device=%s",
                              self.video_path, start_frame, self.frame_limit, self.model_path, self.device)
             for name, backend in (("LaneATT", self.laneatt), ("YOLO", self.yolo)):
@@ -273,6 +286,7 @@ class VideoInference():
             done = 0
             read_seconds = write_seconds = 0.0
             started = time.perf_counter()
+
             while done < self.frame_limit:
                 t0 = time.perf_counter()
                 if done == 0:
@@ -283,6 +297,9 @@ class VideoInference():
                         print(f"End of video after {done} frames")
                         break
                 read_seconds += time.perf_counter() - t0
+
+                frame = prepare_frame(frame)
+
                 original = frame.copy() if render else None
                 if frame_processor is None:
                     annotated = self.get_frame(frame)
