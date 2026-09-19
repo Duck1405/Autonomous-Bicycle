@@ -443,7 +443,7 @@ class LaneATTNode(Node):
         height = frame.shape[0]
         
         t2 = time.perf_counter()
-        evaluation = self.frame_eval(frame, conf_threshold = 0.3, nms_thres = 50, nms_topk =4)
+        evaluation = self.frame_eval(frame, conf_threshold = 0.2, nms_thres = 50, nms_topk =4)
         t3 = time.perf_counter()
         self.get_logger().info(f'Image inference and decode took {t3 - t2:.4f} seconds')
         self.get_logger().info(f'Detected {len(evaluation)} lanes after confidence filtering and NMS')
