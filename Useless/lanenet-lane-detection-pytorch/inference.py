@@ -58,6 +58,8 @@ def get_args():
     p.add_argument("--hnet_height", type=int, default=64)
     p.add_argument("--hnet_curve_thickness", type=int, default=4)
     p.add_argument("--video_file", default=None)
+    p.add_argument("--image_file", default=None,
+                   help="If set, run single-image inference instead of video inference.")
     p.add_argument("--output_file")
     p.add_argument("--width",  type=int, default=512)
     p.add_argument("--height", type=int, default=256)
@@ -86,7 +88,7 @@ def _load_weights(model, path, device):
     print(path)
     print(device)
     print("-------")
-    
+
     try:
         w = torch.load(path, map_location=device, weights_only=True)
     except TypeError:
@@ -113,47 +115,51 @@ def process_frame(lanenet, hnet, input_tensor, hnet_tensor, frame_bgr, device, a
     return out, binary_pred
 
 
-def main(args):
-    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-    print("Device:", device)
+def make_run_dir(model_path, base_dir="newOutput"):
+    """<base_dir>/<model_name>/testN — testN is the next unused number for this model."""
+    model_name = Path(model_path).stem
+    model_dir = Path(base_dir) / model_name
+    model_dir.mkdir(parents=True, exist_ok=True)
 
-    lanenet = LaneNet(arch=args.model_type)
-    _load_weights(lanenet, args.model, device)
-    lanenet.eval().to(device)
+    num = 1
+    while (model_dir / f"test{num}").exists():
+        num += 1
+    run_dir = model_dir / f"test{num}"
+    run_dir.mkdir(parents=True)
+    return run_dir
 
-    lane_tf = A.Compose([
-        A.Resize(args.height, args.width),
-        A.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225]),
-        ToTensorV2(),
-    ])
-    cap    = cv2.VideoCapture(args.video_file)
+
+def save_run_config(args, run_dir):
+    config_path = run_dir / "config.json"
+    with open(config_path, "w") as f:
+        json.dump(vars(args), f, indent=2)
+    print("Config saved to:", config_path)
+
+
+def video_inference(lanenet, lane_tf, device, args, run_dir):
+    cap = cv2.VideoCapture(args.video_file)
     if not cap.isOpened():
         raise RuntimeError(f"Cannot open input video: {args.video_file}")
-    fps    = cap.get(cv2.CAP_PROP_FPS)
-    w      = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-    h      = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-    total  = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+    fps   = cap.get(cv2.CAP_PROP_FPS)
+    w     = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+    h     = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+    total = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
     print("FPS: {}  Size: {}x{}  Frames: {}".format(fps, w, h, total))
 
-    file_output = Path(args.output_file)
-    num = 1
-    while os.path.isfile(file_output):
-        file_name = file_output.stem
-        parent = file_output.parent
-        print(f"While Loop: file_output: {file_name}")
-        file_name = file_name + "_" + str(num) + file_output.suffix
-        file_output = parent / file_name
-        num += 1
-        
-    
-    print(f"Confirmed Output File: {file_output}")
+    # Only cap at max_frames if the video actually has that many frames.
+    if args.max_frames > 0 and total > 0:
+        frame_limit = min(args.max_frames, total)
+    else:
+        frame_limit = args.max_frames
+
+    file_output = run_dir / (Path(args.video_file).stem + "_output.mp4")
 
     writer = cv2.VideoWriter(str(file_output), cv2.VideoWriter_fourcc(*"mp4v"), fps, (2 * w, h))
     if not writer.isOpened():
         cap.release()
         raise RuntimeError(f"Cannot open output video: {file_output}")
-    count  = 0
-    prog   = max(math.floor(total / 25), 1)
+    count = 0
+    prog = max(math.floor(total / 25), 1) if total > 0 else 1
 
     while True:
         ok, bgr = cap.read()
@@ -169,7 +175,7 @@ def main(args):
         if args.debug_every > 0 and count % args.debug_every == 0:
             print("Frame {}: {} lane pixels (model resolution)".format(
                 count, np.count_nonzero(mask)))
-        if args.max_frames > 0 and count >= args.max_frames:
+        if frame_limit > 0 and count >= frame_limit:
             break
         if count % prog == 0:
             print("{}/{}".format(count, total))
@@ -177,7 +183,49 @@ def main(args):
     cap.release()
     writer.release()
     print("Done ->", file_output)
-    args.output_file = str(file_output)
+    return str(file_output)
+
+
+def image_inference(lanenet, lane_tf, device, args, run_dir):
+    bgr = cv2.imread(args.image_file)
+    if bgr is None:
+        raise RuntimeError(f"Cannot open input image: {args.image_file}")
+
+    rgb = cv2.cvtColor(bgr, cv2.COLOR_BGR2RGB)
+    lt  = lane_tf(image=rgb)["image"]
+    out, mask = process_frame(lanenet, None, lt, None, bgr, device, args)
+
+    file_output = run_dir / (Path(args.image_file).stem + "_output.png")
+    cv2.imwrite(str(file_output), np.hstack((bgr, out)))
+    print("Done ->", file_output)
+    return str(file_output)
+
+
+def main(args):
+    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+    print("Device:", device)
+
+    lanenet = LaneNet(arch=args.model_type)
+    _load_weights(lanenet, args.model, device)
+    lanenet.eval().to(device)
+
+    lane_tf = A.Compose([
+        A.Resize(args.height, args.width),
+        A.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225]),
+        ToTensorV2(),
+    ])
+
+    if getattr(args, "image_file", None):
+        run_dir = make_run_dir(args.model, base_dir="newOutputImage")
+        print(f"Run directory: {run_dir}")
+        file_output = image_inference(lanenet, lane_tf, device, args, run_dir)
+    else:
+        run_dir = make_run_dir(args.model, base_dir="newOutput")
+        print(f"Run directory: {run_dir}")
+        file_output = video_inference(lanenet, lane_tf, device, args, run_dir)
+
+    args.output_file = file_output
+    save_run_config(args, run_dir)
     save_run_log(args)
 
 
